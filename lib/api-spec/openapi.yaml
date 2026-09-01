@@ -10,6 +10,8 @@ servers:
 tags:
   - name: health
     description: Health operations
+  - name: calendar
+    description: Central availability calendar operations
 paths:
   /healthz:
     get:
@@ -24,6 +26,37 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+  /calendar/sync:
+    post:
+      operationId: syncCalendars
+      tags: [calendar]
+      summary: Sync OTA calendar feeds
+      description: Fetches configured Booking.com, Airbnb, and MakeMyTrip iCal feeds and merges their busy periods.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CalendarSyncInput"
+      responses:
+        "200":
+          description: Calendar feeds synced
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CalendarSyncResponse"
+        "400":
+          description: Invalid calendar feed configuration
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "502":
+          description: Calendar feed could not be reached
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CalendarSyncResponse"
 components:
   schemas:
     HealthStatus:
@@ -33,4 +66,73 @@ components:
           type: string
       required:
         - status
+    CalendarSyncInput:
+      type: object
+      properties:
+        bookingCom:
+          type: ["string", "null"]
+        airbnb:
+          type: ["string", "null"]
+        makeMyTrip:
+          type: ["string", "null"]
+      additionalProperties: false
+    CalendarEvent:
+      type: object
+      properties:
+        id:
+          type: string
+        source:
+          type: string
+          enum: [bookingCom, airbnb, makeMyTrip]
+        title:
+          type: ["string", "null"]
+        start:
+          type: string
+          format: date
+        end:
+          type: string
+          format: date
+        allDay:
+          type: boolean
+      required: [id, source, title, start, end, allDay]
+    CalendarSourceStatus:
+      type: object
+      properties:
+        source:
+          type: string
+          enum: [bookingCom, airbnb, makeMyTrip]
+        label:
+          type: string
+        status:
+          type: string
+          enum: [connected, missing, error]
+        eventCount:
+          type: number
+        message:
+          type: string
+        lastSyncedAt:
+          type: ["string", "null"]
+          format: date-time
+      required: [source, label, status, eventCount, message, lastSyncedAt]
+    CalendarSyncResponse:
+      type: object
+      properties:
+        syncedAt:
+          type: string
+          format: date-time
+        events:
+          type: array
+          items:
+            $ref: "#/components/schemas/CalendarEvent"
+        sources:
+          type: array
+          items:
+            $ref: "#/components/schemas/CalendarSourceStatus"
+      required: [syncedAt, events, sources]
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+      required: [error]
 

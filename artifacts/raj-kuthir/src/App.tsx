@@ -1,11 +1,15 @@
-import { useMemo, useState, type FormEvent, type ReactNode } from 'react';
+import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { type CalendarEvent, type CalendarSourceStatus, useSyncCalendars } from '@workspace/api-client-react';
 import {
   ArrowRight,
   ArrowUpRight,
+  AlertCircle,
   Baby,
   BedDouble,
   CalendarDays,
+  ChevronLeft,
+  ChevronRight,
   Car,
   Check,
   ChevronDown,
@@ -26,7 +30,9 @@ import {
   Phone,
   Quote,
   Refrigerator,
+  RefreshCw,
   Send,
+  Settings2,
   Sparkles,
   Star,
   Users,
@@ -67,7 +73,29 @@ const NAV_ITEMS = [
   { label: 'Food', href: '#food' },
   { label: 'Gallery', href: '#gallery' },
   { label: 'Location', href: '#location' },
+  { label: 'Availability', href: '#availability' },
   { label: 'Reviews', href: '#reviews' },
+];
+
+type FeedKey = 'bookingCom' | 'airbnb' | 'makeMyTrip';
+type BusyPeriod = {
+  id: string;
+  source: string;
+  label: string;
+  start: string;
+  end: string;
+};
+
+const CALENDAR_FEEDS: Array<{ key: FeedKey; label: string; hint: string }> = [
+  { key: 'bookingCom', label: 'Booking.com', hint: 'Paste the property iCal export URL' },
+  { key: 'airbnb', label: 'Airbnb', hint: 'Paste the listing calendar export URL' },
+  { key: 'makeMyTrip', label: 'MakeMyTrip', hint: 'Paste an iCal link if your partner account provides one' },
+];
+
+const DEMO_BOOKINGS: BusyPeriod[] = [
+  { id: 'demo-kalpana', source: 'Direct', label: 'Confirmed booking', start: '2026-09-02', end: '2026-09-05' },
+  { id: 'demo-biman', source: 'MakeMyTrip', label: 'OTA booking', start: '2026-09-05', end: '2026-09-08' },
+  { id: 'demo-reetuparna', source: 'Direct', label: 'Offline booking', start: '2026-09-17', end: '2026-09-25' },
 ];
 
 const galleryItems = [
@@ -107,11 +135,76 @@ const currency = (amount: number) =>
 
 const phoneHref = (phone: string) => `tel:${phone.replace(/\s/g, '')}`;
 
+const CALENDAR_STORAGE_KEY = 'raj-kuthir-calendar-feeds';
+
+const sourceLabel = (source: string) =>
+  CALENDAR_FEEDS.find((feed) => feed.key === source)?.label ?? source;
+
+const dateKey = (date: Date) => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
+const displayDate = (date: Date) =>
+  new Intl.DateTimeFormat('en-IN', { day: 'numeric', month: 'short' }).format(date);
+
+const eventDateKey = (value: string | Date) =>
+  typeof value === 'string' ? value.slice(0, 10) : value.toISOString().slice(0, 10);
+
+const calendarDays = (month: Date) => {
+  const first = new Date(month.getFullYear(), month.getMonth(), 1);
+  const start = new Date(first);
+  start.setDate(1 - first.getDay());
+  return Array.from({ length: 42 }, (_, index) => {
+    const day = new Date(start);
+    day.setDate(start.getDate() + index);
+    return day;
+  });
+};
+
+const eventTouchesDay = (event: BusyPeriod, day: string) =>
+  day >= event.start && day < event.end;
+
+const toBusyPeriod = (event: CalendarEvent): BusyPeriod => ({
+  id: event.id,
+  source: sourceLabel(event.source),
+  label: event.title || 'OTA booking',
+  start: eventDateKey(event.start),
+  end: eventDateKey(event.end),
+});
+
 function Home() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [galleryFilter, setGalleryFilter] = useState('All');
   const [openFaq, setOpenFaq] = useState<number | null>(0);
   const [submitted, setSubmitted] = useState(false);
+  const [calendarMonth, setCalendarMonth] = useState(() => new Date(new Date().getFullYear(), new Date().getMonth(), 1));
+  const [feeds, setFeeds] = useState<Record<FeedKey, string>>(() => {
+    if (typeof window === 'undefined') {
+      return { bookingCom: '', airbnb: '', makeMyTrip: '' };
+    }
+    try {
+      const stored = JSON.parse(window.localStorage.getItem(CALENDAR_STORAGE_KEY) || '{}') as Partial<Record<FeedKey, string>>;
+      return {
+        bookingCom: stored.bookingCom || '',
+        airbnb: stored.airbnb || '',
+        makeMyTrip: stored.makeMyTrip || '',
+      };
+    } catch {
+      return { bookingCom: '', airbnb: '', makeMyTrip: '' };
+    }
+  });
+  const [syncedEvents, setSyncedEvents] = useState<BusyPeriod[]>([]);
+  const [sourceStatuses, setSourceStatuses] = useState<CalendarSourceStatus[]>([]);
+  const [lastSyncedAt, setLastSyncedAt] = useState<string | null>(null);
+  const calendarSync = useSyncCalendars();
+
+  useEffect(() => {
+    window.localStorage.setItem(CALENDAR_STORAGE_KEY, JSON.stringify(feeds));
+  }, [feeds]);
+
   const [form, setForm] = useState({
     name: '',
     phone: '',
@@ -141,6 +234,9 @@ function Home() {
   const advance = Math.round(total * CONFIG.advanceShare);
   const balance = total - advance;
   const filteredGallery = galleryFilter === 'All' ? galleryItems : galleryItems.filter((item) => item.category === galleryFilter);
+  const busyPeriods = useMemo(() => [...DEMO_BOOKINGS, ...syncedEvents], [syncedEvents]);
+  const daysInView = useMemo(() => calendarDays(calendarMonth), [calendarMonth]);
+  const calendarMonthLabel = new Intl.DateTimeFormat('en-IN', { month: 'long', year: 'numeric' }).format(calendarMonth);
   const whatsappCopy = encodeURIComponent(
     `Hello Raj Kuthir, I would like to enquire about Sobuj Potro.\nName: ${form.name || 'To be shared'}\nDates: ${form.checkIn || 'To be confirmed'} to ${form.checkOut || 'To be confirmed'}${nights ? ` (${nights} night${nights === 1 ? '' : 's'})` : ''}\nGuests: ${form.adults} adults, ${form.children} children, ${form.pets} pets\nPhone: ${form.phone || 'To be shared'}`
   );
@@ -154,6 +250,23 @@ function Home() {
   const submitEnquiry = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setSubmitted(true);
+  };
+
+  const syncCalendarFeeds = () => {
+    calendarSync.mutate(
+      { data: feeds },
+      {
+        onSuccess: (response) => {
+          setSyncedEvents(response.events.map(toBusyPeriod));
+          setSourceStatuses(response.sources);
+          setLastSyncedAt(new Date(response.syncedAt).toISOString());
+        },
+      },
+    );
+  };
+
+  const shiftCalendarMonth = (amount: number) => {
+    setCalendarMonth((current) => new Date(current.getFullYear(), current.getMonth() + amount, 1));
   };
 
   return (
@@ -387,6 +500,110 @@ function Home() {
           <div className="section-shell grid items-center gap-12 lg:grid-cols-[1fr_1fr] lg:gap-24">
             <div><p className="eyebrow mb-5 text-secondary">Find your way here</p><h2 id="location-title" className="font-journal text-5xl leading-[.94] md:text-7xl">A softer<br /><em>kind of away.</em></h2><p className="mt-8 max-w-[425px] text-lg leading-8 text-primary-foreground/70">In Bolpur / Shantiniketan, West Bengal. Follow the map, then let the pace change.</p><div className="mt-9 flex flex-wrap gap-3"><a href={CONFIG.mapsUrl} target="_blank" rel="noreferrer" className="flex items-center gap-2 rounded-full bg-secondary px-5 py-3 text-xs font-bold uppercase tracking-[.1em] text-primary transition-transform hover:-translate-y-1" data-testid="link-directions"><Navigation size={15} /> Open directions</a><a href={phoneHref(CONFIG.caretakerPhone)} className="flex items-center gap-2 rounded-full border border-primary-foreground/25 px-5 py-3 text-xs font-bold uppercase tracking-[.1em] text-primary-foreground transition-colors hover:bg-primary-foreground/10" data-testid="link-caretaker-call"><Phone size={15} /> Call caretaker</a></div></div>
             <div className="image-placeholder min-h-[380px] rounded-[2rem] p-6 md:min-h-[460px]"><div className="relative flex h-full min-h-[328px] flex-col justify-between rounded-[1.4rem] border border-primary-foreground/25 p-6 text-primary-foreground md:min-h-[408px]"><div className="flex items-center justify-between"><MapPin size={26} className="text-secondary" /><span className="eyebrow">Map visual to be added</span></div><div><p className="font-journal text-4xl">Shantiniketan image to be added</p><p className="mt-3 text-sm text-primary-foreground/65">Use a real, owner-approved local view here.</p></div></div></div>
+          </div>
+        </section>
+
+        <section id="availability" className="scroll-mt-24 section-shell py-24 md:py-36" aria-labelledby="availability-title">
+          <div className="flex flex-col justify-between gap-8 md:flex-row md:items-end">
+            <div>
+              <p className="eyebrow mb-5 text-accent">One clear calendar</p>
+              <h2 id="availability-title" className="max-w-[650px] font-journal text-5xl leading-[.94] text-primary md:text-7xl">See every<br /><em>stay in one place.</em></h2>
+            </div>
+            <p className="max-w-[330px] text-sm leading-6 text-muted-foreground">Connect your OTA calendar feeds and keep one simple view of blocked dates for Sobuj Potro.</p>
+          </div>
+
+          <div className="mt-14 grid gap-5 lg:grid-cols-[.78fr_1.22fr]">
+            <div className="rounded-[1.5rem] bg-primary p-6 text-primary-foreground md:p-8">
+              <div className="flex items-start justify-between gap-4 border-b border-primary-foreground/15 pb-6">
+                <div>
+                  <p className="eyebrow text-secondary">Calendar sources</p>
+                  <p className="mt-3 font-journal text-3xl">Sync your OTAs.</p>
+                </div>
+                <Settings2 size={22} className="text-secondary" strokeWidth={1.4} />
+              </div>
+              <div className="mt-6 space-y-5">
+                {CALENDAR_FEEDS.map((feed) => {
+                  const status = sourceStatuses.find((item) => item.source === feed.key);
+                  return (
+                    <label key={feed.key} className="block">
+                      <span className="flex items-center justify-between gap-3 text-xs font-bold text-primary-foreground">
+                        <span>{feed.label}</span>
+                        {status && (
+                          <span className={`flex items-center gap-1.5 text-[10px] font-medium uppercase tracking-[.08em] ${status.status === 'connected' ? 'text-secondary' : status.status === 'error' ? 'text-[#f0a184]' : 'text-primary-foreground/50'}`}>
+                            {status.status === 'connected' ? <Check size={12} /> : status.status === 'error' ? <AlertCircle size={12} /> : null}
+                            {status.status}
+                          </span>
+                        )}
+                      </span>
+                      <input
+                        type="url"
+                        value={feeds[feed.key]}
+                        onChange={(event) => setFeeds((current) => ({ ...current, [feed.key]: event.target.value }))}
+                        placeholder={feed.hint}
+                        className="mt-2 w-full rounded-lg border border-primary-foreground/20 bg-primary-foreground/10 px-3 py-3 text-xs text-primary-foreground outline-none placeholder:text-primary-foreground/40 focus:border-secondary"
+                        aria-label={`${feed.label} iCal feed URL`}
+                        data-testid={`input-calendar-${feed.key}`}
+                      />
+                      {status?.message && <span className={`mt-2 block text-[10px] leading-4 ${status.status === 'error' ? 'text-[#f0a184]' : 'text-primary-foreground/55'}`}>{status.message}</span>}
+                    </label>
+                  );
+                })}
+              </div>
+              <button
+                type="button"
+                onClick={syncCalendarFeeds}
+                disabled={calendarSync.isPending}
+                className="mt-7 flex w-full items-center justify-center gap-2 rounded-full bg-secondary px-5 py-4 text-xs font-bold uppercase tracking-[.11em] text-primary transition-transform hover:-translate-y-0.5 disabled:cursor-wait disabled:opacity-70"
+                data-testid="button-sync-calendars"
+              >
+                <RefreshCw size={15} className={calendarSync.isPending ? 'animate-spin' : ''} />
+                {calendarSync.isPending ? 'Syncing feeds' : 'Sync calendars'}
+              </button>
+              {calendarSync.isError && <p className="mt-3 text-center text-[10px] leading-4 text-[#f0a184]">The calendar service could not be reached. Please try again.</p>}
+              <p className="mt-5 text-[10px] leading-4 text-primary-foreground/50">Use the calendar export / iCal link from each partner extranet. Feed links stay in this browser until a private owner dashboard is added.</p>
+            </div>
+
+            <div className="rounded-[1.5rem] border border-border bg-card p-5 md:p-8">
+              <div className="flex flex-col justify-between gap-4 border-b border-border pb-5 sm:flex-row sm:items-center">
+                <div>
+                  <p className="eyebrow text-accent">Availability</p>
+                  <p className="mt-2 font-journal text-3xl text-primary">{calendarMonthLabel}</p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button type="button" onClick={() => shiftCalendarMonth(-1)} className="grid h-9 w-9 place-items-center rounded-full border border-border text-primary transition-colors hover:border-primary" aria-label="Previous month" data-testid="button-calendar-previous"><ChevronLeft size={16} /></button>
+                  <button type="button" onClick={() => setCalendarMonth(new Date(new Date().getFullYear(), new Date().getMonth(), 1))} className="rounded-full border border-border px-3 py-2 text-[10px] font-bold uppercase tracking-[.1em] text-muted-foreground transition-colors hover:border-primary hover:text-primary" data-testid="button-calendar-today">Today</button>
+                  <button type="button" onClick={() => shiftCalendarMonth(1)} className="grid h-9 w-9 place-items-center rounded-full border border-border text-primary transition-colors hover:border-primary" aria-label="Next month" data-testid="button-calendar-next"><ChevronRight size={16} /></button>
+                </div>
+              </div>
+
+              <div className="mt-6 grid grid-cols-7 gap-1.5 text-center">
+                {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((day) => <p key={day} className="pb-2 font-mono-ui text-[9px] uppercase tracking-[.08em] text-muted-foreground">{day}</p>)}
+                {daysInView.map((day) => {
+                  const key = dateKey(day);
+                  const dayEvents = busyPeriods.filter((event) => eventTouchesDay(event, key));
+                  const isOutsideMonth = day.getMonth() !== calendarMonth.getMonth();
+                  const isToday = key === dateKey(new Date());
+                  return (
+                    <div key={key} className={`min-h-[76px] rounded-lg border p-2 text-left transition-colors ${isOutsideMonth ? 'border-transparent bg-background/40 opacity-35' : dayEvents.length ? 'border-accent/35 bg-secondary/40' : 'border-border bg-background'} ${isToday ? 'ring-2 ring-accent/60 ring-offset-1 ring-offset-card' : ''}`} data-testid={`calendar-day-${key}`}>
+                      <p className={`text-xs font-bold ${isToday ? 'text-accent' : 'text-primary'}`}>{day.getDate()}</p>
+                      <div className="mt-2 space-y-1">
+                        {dayEvents.slice(0, 2).map((event) => <div key={`${event.id}-${key}`} className={`truncate rounded px-1.5 py-1 text-[9px] font-bold leading-none text-primary ${event.source === 'Airbnb' ? 'bg-[#e7aa84]' : event.source === 'Booking.com' ? 'bg-[#9eb5a7]' : event.source === 'MakeMyTrip' ? 'bg-[#e4c9a4]' : 'bg-[#c8a89a]'}`} title={`${event.source}: ${event.label}`}>{event.source}</div>)}
+                        {dayEvents.length > 2 && <p className="text-[9px] font-bold text-muted-foreground">+{dayEvents.length - 2} more</p>}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              <div className="mt-6 flex flex-wrap gap-x-5 gap-y-2 border-t border-border pt-5 text-[10px] font-bold uppercase tracking-[.08em] text-muted-foreground">
+                <span className="flex items-center gap-2"><i className="h-2 w-2 rounded-full bg-[#c8a89a]" />Existing booking</span>
+                <span className="flex items-center gap-2"><i className="h-2 w-2 rounded-full bg-[#9eb5a7]" />Booking.com</span>
+                <span className="flex items-center gap-2"><i className="h-2 w-2 rounded-full bg-[#e7aa84]" />Airbnb</span>
+                <span className="flex items-center gap-2"><i className="h-2 w-2 rounded-full bg-[#e4c9a4]" />MakeMyTrip</span>
+              </div>
+              <p className="mt-4 text-[10px] leading-4 text-muted-foreground">Demo blocks from the current planning data are shown in September 2026 until live feeds are connected. OTA events are treated as blocked dates; checkout dates remain available.</p>
+              {lastSyncedAt && <p className="mt-2 text-[10px] text-accent">Last synced {new Intl.DateTimeFormat('en-IN', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(lastSyncedAt))}</p>}
+            </div>
           </div>
         </section>
 

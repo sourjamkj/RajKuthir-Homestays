@@ -1,0 +1,1 @@
+- [API codegen and Zod compatibility](api-codegen-zod-compat.md) — validate generated schemas against the installed Zod version; newer Orval helpers may not exist.
