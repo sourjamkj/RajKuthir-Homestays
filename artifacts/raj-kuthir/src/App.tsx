@@ -26,6 +26,7 @@ import {
   Instagram,
   Landmark,
   Leaf,
+  LockKeyhole,
   MapPin,
   Menu,
   MessageCircle,
@@ -375,6 +376,12 @@ function Home() {
               <button onClick={scrollToBooking} className="mt-2 rounded-full bg-primary px-5 py-3 text-xs font-bold uppercase tracking-[.12em] text-primary-foreground" data-testid="button-mobile-book">
                 Check availability
               </button>
+              <div className="mt-3 border-t border-border pt-4">
+                <a href={`${basePath}/sign-in`} onClick={() => setMenuOpen(false)} className="flex items-center gap-2 text-xs font-bold uppercase tracking-[.1em] text-primary" data-testid="link-mobile-admin-login">
+                  <LockKeyhole size={15} /> Admin login
+                </a>
+                <p className="mt-2 pl-6 text-[10px] leading-4 text-muted-foreground">Private owner access to calendar controls</p>
+              </div>
             </nav>
           </div>
         )}
@@ -769,7 +776,17 @@ function AdminFeedLink() {
 
 function SignInPage() {
   return (
-    <div className="flex min-h-[100dvh] items-center justify-center bg-background px-4 py-10">
+    <div className="flex min-h-[100dvh] flex-col items-center justify-center bg-background px-4 py-10">
+      <div className="mb-5 flex w-full max-w-[440px] items-center justify-between">
+        <a href={`${basePath}/`} className="flex items-center gap-2 text-xs font-bold uppercase tracking-[.1em] text-primary" data-testid="link-sign-in-back">
+          <ArrowRight size={14} className="rotate-180" /> Back to site
+        </a>
+        <span className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-[.12em] text-accent"><LockKeyhole size={13} /> Owner access</span>
+      </div>
+      <div className="mb-5 w-full max-w-[440px] rounded-2xl border border-border bg-card px-5 py-4 text-center">
+        <p className="font-journal text-2xl text-primary">Raj Kuthir admin login</p>
+        <p className="mt-1 text-xs leading-5 text-muted-foreground">Sign in to manage private calendar feeds and copy the outbound iCal link.</p>
+      </div>
       <SignIn routing="path" path={`${basePath}/sign-in`} />
     </div>
   );
