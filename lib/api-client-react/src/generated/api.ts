@@ -20,9 +20,11 @@ import type {
 } from '@tanstack/react-query';
 
 import type {
+  CalendarFeedInfo,
   CalendarSyncInput,
   CalendarSyncResponse,
   ErrorResponse,
+  GetCalendarFeedParams,
   HealthStatus
 } from './api.schemas';
 
@@ -202,4 +204,167 @@ export const useSyncCalendars = <TError = ErrorType<ErrorResponse | CalendarSync
       > => {
       return useMutation(getSyncCalendarsMutationOptions(options));
     }
+
+export const getGetCalendarFeedInfoUrl = () => {
+
+
+
+
+  return `/api/calendar/feed-info`
+}
+
+/**
+ * Returns the private iCal subscription URL for authenticated calendar administrators.
+ * @summary Get the outbound calendar feed link
+ */
+export const getCalendarFeedInfo = async ( options?: Parameters<typeof customFetch>[1]): Promise<CalendarFeedInfo> => {
+
+  return customFetch<CalendarFeedInfo>(getGetCalendarFeedInfoUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetCalendarFeedInfoQueryKey = () => {
+    return [
+    `/api/calendar/feed-info`
+    ] as const;
+    }
+
+
+export const getGetCalendarFeedInfoQueryOptions = <TData = Awaited<ReturnType<typeof getCalendarFeedInfo>>, TError = ErrorType<void>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getCalendarFeedInfo>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetCalendarFeedInfoQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getCalendarFeedInfo>>> = ({ signal }) => getCalendarFeedInfo({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getCalendarFeedInfo>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetCalendarFeedInfoQueryResult = NonNullable<Awaited<ReturnType<typeof getCalendarFeedInfo>>>
+export type GetCalendarFeedInfoQueryError = ErrorType<void>
+
+
+/**
+ * @summary Get the outbound calendar feed link
+ */
+
+export function useGetCalendarFeedInfo<TData = Awaited<ReturnType<typeof getCalendarFeedInfo>>, TError = ErrorType<void>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getCalendarFeedInfo>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetCalendarFeedInfoQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getGetCalendarFeedUrl = (params: GetCalendarFeedParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/calendar/feed?${stringifiedParams}` : `/api/calendar/feed`
+}
+
+/**
+ * Returns a token-protected iCal feed containing the merged blocked periods from the connected OTA calendars.
+ * @summary Read the merged outbound iCal feed
+ */
+export const getCalendarFeed = async (params: GetCalendarFeedParams, options?: Parameters<typeof customFetch>[1]): Promise<string> => {
+
+  return customFetch<string>(getGetCalendarFeedUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetCalendarFeedQueryKey = (params?: GetCalendarFeedParams,) => {
+    return [
+    `/api/calendar/feed`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getGetCalendarFeedQueryOptions = <TData = Awaited<ReturnType<typeof getCalendarFeed>>, TError = ErrorType<void>>(params: GetCalendarFeedParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getCalendarFeed>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetCalendarFeedQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getCalendarFeed>>> = ({ signal }) => getCalendarFeed(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getCalendarFeed>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetCalendarFeedQueryResult = NonNullable<Awaited<ReturnType<typeof getCalendarFeed>>>
+export type GetCalendarFeedQueryError = ErrorType<void>
+
+
+/**
+ * @summary Read the merged outbound iCal feed
+ */
+
+export function useGetCalendarFeed<TData = Awaited<ReturnType<typeof getCalendarFeed>>, TError = ErrorType<void>>(
+ params: GetCalendarFeedParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getCalendarFeed>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetCalendarFeedQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
 

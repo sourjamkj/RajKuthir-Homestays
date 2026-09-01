@@ -71,7 +71,15 @@ export interface CalendarSyncResponse {
   sources: CalendarSourceStatus[];
 }
 
+export interface CalendarFeedInfo {
+  feedUrl: string;
+}
+
 export interface ErrorResponse {
   error: string;
 }
+
+export type GetCalendarFeedParams = {
+token: string;
+};
 

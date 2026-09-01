@@ -48,3 +48,23 @@ export const SyncCalendarsResponse = zod.object({
 })
 
 
+/**
+ * Returns the private iCal subscription URL for authenticated calendar administrators.
+ * @summary Get the outbound calendar feed link
+ */
+export const GetCalendarFeedInfoResponse = zod.object({
+  "feedUrl": zod.string()
+})
+
+
+/**
+ * Returns a token-protected iCal feed containing the merged blocked periods from the connected OTA calendars.
+ * @summary Read the merged outbound iCal feed
+ */
+export const GetCalendarFeedQueryParams = zod.object({
+  "token": zod.coerce.string()
+})
+
+export const GetCalendarFeedResponse = zod.unknown()
+
+

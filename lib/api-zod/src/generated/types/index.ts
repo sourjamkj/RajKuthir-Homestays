@@ -8,10 +8,12 @@
 
 export * from './calendarEvent';
 export * from './calendarEventSource';
+export * from './calendarFeedInfo';
 export * from './calendarSourceStatus';
 export * from './calendarSourceStatusSource';
 export * from './calendarSourceStatusStatus';
 export * from './calendarSyncInput';
 export * from './calendarSyncResponse';
 export * from './errorResponse';
+export * from './getCalendarFeedParams';
 export * from './healthStatus';

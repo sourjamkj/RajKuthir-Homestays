@@ -57,6 +57,44 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/CalendarSyncResponse"
+  /calendar/feed-info:
+    get:
+      operationId: getCalendarFeedInfo
+      tags: [calendar]
+      summary: Get the outbound calendar feed link
+      description: Returns the private iCal subscription URL for authenticated calendar administrators.
+      responses:
+        "200":
+          description: Outbound calendar feed link
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CalendarFeedInfo"
+        "401":
+          description: Admin sign-in required
+        "503":
+          description: Outbound calendar feed is not configured
+  /calendar/feed:
+    get:
+      operationId: getCalendarFeed
+      tags: [calendar]
+      summary: Read the merged outbound iCal feed
+      description: Returns a token-protected iCal feed containing the merged blocked periods from the connected OTA calendars.
+      parameters:
+        - name: token
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Merged iCal calendar
+          content:
+            text/calendar:
+              schema:
+                type: string
+        "401":
+          description: Invalid calendar feed token
 components:
   schemas:
     HealthStatus:
@@ -129,6 +167,13 @@ components:
           items:
             $ref: "#/components/schemas/CalendarSourceStatus"
       required: [syncedAt, events, sources]
+    CalendarFeedInfo:
+      type: object
+      properties:
+        feedUrl:
+          type: string
+          format: uri
+      required: [feedUrl]
     ErrorResponse:
       type: object
       properties:

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { type CalendarEvent, type CalendarSourceStatus, useSyncCalendars } from '@workspace/api-client-react';
+import { getGetCalendarFeedInfoQueryKey, type CalendarEvent, type CalendarSourceStatus, useGetCalendarFeedInfo, useSyncCalendars } from '@workspace/api-client-react';
 import { ClerkProvider, Show, SignIn, useAuth, useClerk } from '@clerk/react';
 import { publishableKeyFromHost } from '@clerk/react/internal';
 import { shadcn } from '@clerk/themes';
@@ -729,31 +729,15 @@ function AdminSignOutButton() {
 
 function AdminFeedLink() {
   const { isSignedIn } = useAuth();
-  const [feedUrl, setFeedUrl] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
-
-  useEffect(() => {
-    if (!isSignedIn) {
-      setFeedUrl(null);
-      return;
-    }
-
-    let active = true;
-    fetch(`${basePath}/api/calendar/feed-info`, { credentials: 'include' })
-      .then(async (response) => {
-        const payload = await response.json() as { feedUrl?: string; error?: string };
-        if (!response.ok) throw new Error(payload.error || 'Outbound feed is not configured.');
-        if (active) setFeedUrl(payload.feedUrl || null);
-      })
-      .catch((reason: unknown) => {
-        if (active) setError(reason instanceof Error ? reason.message : 'Outbound feed is not configured.');
-      });
-
-    return () => {
-      active = false;
-    };
-  }, [isSignedIn]);
+  const { data, error, isLoading } = useGetCalendarFeedInfo({
+    query: {
+      enabled: isSignedIn,
+      queryKey: getGetCalendarFeedInfoQueryKey(),
+    },
+  });
+  const feedUrl = data?.feedUrl || null;
+  const errorMessage = error instanceof Error ? error.message : 'Outbound feed is not configured.';
 
   if (!isSignedIn) return null;
 
@@ -776,7 +760,7 @@ function AdminFeedLink() {
           </button>
         </div>
       ) : (
-        <p className="mt-3 text-[10px] leading-4 text-[#f0a184]">{error || 'Loading private feed link...'}</p>
+        <p className="mt-3 text-[10px] leading-4 text-[#f0a184]">{isLoading ? 'Loading private feed link...' : errorMessage}</p>
       )}
       <p className="mt-2 text-[10px] leading-4 text-primary-foreground/45">Keep this URL private. Anyone with the link can read blocked dates.</p>
     </div>
