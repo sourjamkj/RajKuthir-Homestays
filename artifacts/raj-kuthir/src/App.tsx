@@ -562,7 +562,7 @@ function Home() {
               <p className="eyebrow mb-5 text-accent">One clear calendar</p>
               <h2 id="availability-title" className="max-w-[650px] font-journal text-5xl leading-[.94] text-primary md:text-7xl">See every<br /><em>stay in one place.</em></h2>
             </div>
-            <p className="max-w-[330px] text-sm leading-6 text-muted-foreground">Connect your OTA calendar feeds and keep one simple view of blocked dates for Sobuj Potro.</p>
+            <p className="max-w-[330px] text-sm leading-6 text-muted-foreground">Check the calendar before you plan your stay at Sobuj Potro.</p>
           </div>
 
           <div className="mt-14 grid gap-5 lg:grid-cols-[.78fr_1.22fr]">
@@ -626,7 +626,7 @@ function Home() {
                 <div>
                   <p className="eyebrow text-accent">Guest view</p>
                   <p className="mt-4 max-w-[300px] font-journal text-4xl leading-tight text-primary">Availability is managed privately by the host.</p>
-                  <p className="mt-5 max-w-[320px] text-sm leading-6 text-muted-foreground">Browse the calendar here. The calendar feed setup is reserved for the Raj Kuthir admin.</p>
+                  <p className="mt-5 max-w-[320px] text-sm leading-6 text-muted-foreground">Browse the calendar here. Dates are updated by the host as reservations change.</p>
                 </div>
                 <a href={`${basePath}/sign-in`} className="mt-8 inline-flex w-fit items-center gap-2 rounded-full bg-primary px-5 py-3 text-xs font-bold uppercase tracking-[.1em] text-primary-foreground transition-transform hover:-translate-y-0.5" data-testid="link-admin-sign-in">Admin sign in <ArrowUpRight size={15} /></a>
               </div>
@@ -656,7 +656,7 @@ function Home() {
                     <div key={key} className={`min-h-[76px] rounded-lg border p-2 text-left transition-colors ${isOutsideMonth ? 'border-transparent bg-background/40 opacity-35' : dayEvents.length ? 'border-accent/35 bg-secondary/40' : 'border-border bg-background'} ${isToday ? 'ring-2 ring-accent/60 ring-offset-1 ring-offset-card' : ''}`} data-testid={`calendar-day-${key}`}>
                       <p className={`text-xs font-bold ${isToday ? 'text-accent' : 'text-primary'}`}>{day.getDate()}</p>
                       <div className="mt-2 space-y-1">
-                        {dayEvents.slice(0, 2).map((event) => <div key={`${event.id}-${key}`} className={`truncate rounded px-1.5 py-1 text-[9px] font-bold leading-none text-primary ${event.source === 'Airbnb' ? 'bg-[#e7aa84]' : event.source === 'Booking.com' ? 'bg-[#9eb5a7]' : event.source === 'MakeMyTrip' ? 'bg-[#e4c9a4]' : 'bg-[#c8a89a]'}`} title={`${event.source}: ${event.label}`}>{event.source}</div>)}
+                        {dayEvents.slice(0, 2).map((event) => <div key={`${event.id}-${key}`} className={`truncate rounded px-1.5 py-1 text-[9px] font-bold leading-none text-primary ${event.source === 'Airbnb' ? 'bg-[#e7aa84]' : event.source === 'Booking.com' ? 'bg-[#9eb5a7]' : event.source === 'MakeMyTrip' ? 'bg-[#e4c9a4]' : 'bg-[#c8a89a]'}`} title={`${event.source}: ${event.label}`}><Show when="signed-in">{event.source}</Show><Show when="signed-out">Booked</Show></div>)}
                         {dayEvents.length > 2 && <p className="text-[9px] font-bold text-muted-foreground">+{dayEvents.length - 2} more</p>}
                       </div>
                     </div>
@@ -664,14 +664,19 @@ function Home() {
                 })}
               </div>
 
-              <div className="mt-6 flex flex-wrap gap-x-5 gap-y-2 border-t border-border pt-5 text-[10px] font-bold uppercase tracking-[.08em] text-muted-foreground">
-                <span className="flex items-center gap-2"><i className="h-2 w-2 rounded-full bg-[#c8a89a]" />Existing booking</span>
-                <span className="flex items-center gap-2"><i className="h-2 w-2 rounded-full bg-[#9eb5a7]" />Booking.com</span>
-                <span className="flex items-center gap-2"><i className="h-2 w-2 rounded-full bg-[#e7aa84]" />Airbnb</span>
-                <span className="flex items-center gap-2"><i className="h-2 w-2 rounded-full bg-[#e4c9a4]" />MakeMyTrip</span>
-              </div>
-              <p className="mt-4 text-[10px] leading-4 text-muted-foreground">Demo blocks from the current planning data are shown in September 2026 until live feeds are connected. OTA events are treated as blocked dates; checkout dates remain available.</p>
-              {lastSyncedAt && <p className="mt-2 text-[10px] text-accent">Last synced {new Intl.DateTimeFormat('en-IN', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(lastSyncedAt))}</p>}
+              <Show when="signed-in">
+                <div className="mt-6 flex flex-wrap gap-x-5 gap-y-2 border-t border-border pt-5 text-[10px] font-bold uppercase tracking-[.08em] text-muted-foreground">
+                  <span className="flex items-center gap-2"><i className="h-2 w-2 rounded-full bg-[#c8a89a]" />Existing booking</span>
+                  <span className="flex items-center gap-2"><i className="h-2 w-2 rounded-full bg-[#9eb5a7]" />Booking.com</span>
+                  <span className="flex items-center gap-2"><i className="h-2 w-2 rounded-full bg-[#e7aa84]" />Airbnb</span>
+                  <span className="flex items-center gap-2"><i className="h-2 w-2 rounded-full bg-[#e4c9a4]" />MakeMyTrip</span>
+                </div>
+                <p className="mt-4 text-[10px] leading-4 text-muted-foreground">Demo blocks from the current planning data are shown in September 2026. Synced OTA events are treated as blocked dates; checkout dates remain available.</p>
+                {lastSyncedAt && <p className="mt-2 text-[10px] text-accent">Last synced {new Intl.DateTimeFormat('en-IN', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(lastSyncedAt))}</p>}
+              </Show>
+              <Show when="signed-out">
+                <p className="mt-6 border-t border-border pt-5 text-[10px] leading-4 text-muted-foreground">Dates marked as booked are currently unavailable. Checkout dates remain available.</p>
+              </Show>
             </div>
           </div>
         </section>
