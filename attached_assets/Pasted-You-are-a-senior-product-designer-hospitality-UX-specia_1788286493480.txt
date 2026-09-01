@@ -1,0 +1,922 @@
+You are a senior product designer, hospitality UX specialist, brand strategist, SEO specialist and full-stack web developer.
+
+I want you to DESIGN AND BUILD a production-quality official website for my property:
+
+RAJ KUTHIR HOMESTAYS – SOBUJ POTRO
+Bolpur / Shantiniketan, West Bengal, India
+
+This is NOT a generic hotel website. The website should feel like the official digital identity of a boutique, nature-oriented, pet-friendly Shantiniketan homestay.
+
+====================================================
+1. PRIMARY OBJECTIVE
+====================================================
+
+Build a premium, fast, mobile-first official website that:
+
+1. Introduces Raj Kuthir Homestays beautifully.
+2. Communicates that this is a private, comfortable, nature-oriented, PET-FRIENDLY homestay.
+3. Shows the accommodation and amenities clearly.
+4. Helps guests understand the location and nearby attractions.
+5. Makes direct enquiries/bookings easy through WhatsApp, phone and a booking/enquiry form.
+6. Provides a strong alternative to depending entirely on Booking.com/Airbnb/MakeMyTrip.
+7. Is SEO-friendly for searches around:
+   - Shantiniketan homestay
+   - Bolpur homestay
+   - pet friendly homestay Shantiniketan
+   - pet friendly stay Bolpur
+   - private villa Shantiniketan
+   - family stay Shantiniketan
+   - weekend stay Shantiniketan
+   - nature stay Shantiniketan
+8. Can later be expanded into a proper direct-booking engine and guest-management system.
+
+The website must feel trustworthy enough that a guest who discovers us on Google or Instagram would be comfortable booking directly.
+
+====================================================
+2. BRAND PERSONALITY
+====================================================
+
+Brand:
+RAJ KUTHIR HOMESTAYS
+Property:
+SOBUJ POTRO
+
+Core brand ideas:
+
+NATURE
+COMFORT
+PRIVACY
+SLOW LIVING
+PET-FRIENDLY TRAVEL
+SHANTINIKETAN
+WARM BENGALI HOSPITALITY
+
+Visual personality:
+
+- Earthy
+- Elegant
+- Warm
+- Organic
+- Premium but not pretentious
+- Boutique rather than corporate
+- Strong connection to nature
+- Subtle Bengali/Shantiniketan character
+- Lots of breathing space
+- Natural textures
+- Warm wood
+- Off-white / ivory
+- Terracotta accents
+- Muted greens
+- Brown / walnut
+- Soft warm lighting
+
+DO NOT make it look like:
+- A generic budget hotel
+- A corporate resort
+- A flashy Booking.com clone
+- An overly colourful tourist website
+- A stereotypical "Indian ethnic" website
+
+The design should communicate:
+"Your own little home in the heart of nature around Shantiniketan."
+
+====================================================
+3. SUGGESTED TAGLINE DIRECTION
+====================================================
+
+Use one of these directions, but choose the strongest final wording yourself:
+
+"Nature. Comfort. You."
+
+or
+
+"Where nature feels like home."
+
+or
+
+"Stay close to what matters."
+
+The tagline should not feel cheesy.
+
+====================================================
+4. WEBSITE STRUCTURE
+====================================================
+
+Create the following pages/sections:
+
+HOME
+STAY
+AMENITIES
+PET-FRIENDLY
+EXPERIENCE / EXPLORE SHANTINIKETAN
+FOOD
+GALLERY
+LOCATION
+REVIEWS
+CONTACT / BOOK NOW
+
+Potential additional pages:
+ABOUT US
+FAQ
+PRIVACY POLICY
+TERMS & CONDITIONS
+
+The navigation should remain simple.
+
+Desktop:
+Logo | Stay | Experience | Pet Friendly | Food | Gallery | Location | Reviews | Book Now
+
+Mobile:
+Use a clean hamburger menu and a persistent "Book / WhatsApp" CTA.
+
+====================================================
+5. HOMEPAGE
+====================================================
+
+The homepage should immediately communicate:
+
+RAJ KUTHIR HOMESTAYS
+SOBUJ POTRO
+BOLPUR • SHANTINIKETAN
+
+Hero section:
+
+Use a large, beautiful full-width property/nature image.
+
+Overlay:
+
+"Nature. Comfort. You."
+
+Supporting text:
+
+"A private, pet-friendly homestay in the serene surroundings of Shantiniketan."
+
+Primary CTA:
+"Check Availability"
+
+Secondary CTA:
+"WhatsApp Us"
+
+Do NOT overcrowd the hero.
+
+Below hero, create a concise trust/value strip:
+
+PRIVATE BUNGALOW
+PET FRIENDLY
+PRIVATE GARDEN
+ON-PREMISE PARKING
+CAFE SOI
+WI-FI
+
+====================================================
+6. PROPERTY INTRODUCTION
+====================================================
+
+Create a section introducing Raj Kuthir.
+
+Suggested copy direction:
+
+"Raj Kuthir – Sobuj Potro is a warm, private homestay designed for guests who want to slow down and experience Shantiniketan at their own pace."
+
+Mention:
+- private accommodation
+- garden
+- peaceful surroundings
+- family-friendly
+- pet-friendly
+- comfortable stay
+- suitable for couples/families/longer stays/workations
+
+Do NOT make unsupported claims such as "luxury resort", "5-star", "best in Shantiniketan", etc.
+
+====================================================
+7. ACCOMMODATION
+====================================================
+
+Primary accommodation:
+
+ENTIRE TWO-BEDROOM VILLA
+
+Create a visually strong accommodation card.
+
+Show:
+- 2 bedrooms
+- suitable guest capacity based on actual configured property information
+- private villa
+- garden
+- cooking facilities
+- Wi-Fi
+- parking
+- pet-friendly
+
+IMPORTANT:
+Do not invent room dimensions, bed sizes, occupancy limits, AC availability, toiletries, TV, pool, or other amenities unless they are explicitly provided later.
+
+Create an architecture that allows me to easily update these details through a central data/config file or CMS later.
+
+CTA:
+"Check Availability"
+
+====================================================
+8. PET-FRIENDLY SECTION
+====================================================
+
+This is one of the most important sections.
+
+Pet-friendly should not be treated as a tiny amenity.
+
+Create an emotionally strong section around:
+
+"Bring the ones who make every journey better."
+
+Concept:
+Pets are not merely allowed.
+They are welcomed.
+
+Use:
+- pet imagery
+- garden imagery
+- nature
+- walking/exploring
+- relaxed environment
+
+Possible copy:
+
+"A little more nature.
+A little more freedom.
+And a place where every paw feels at home."
+
+Clearly state:
+"Pet-friendly stay"
+
+If there are pet-related charges or rules, create a section that can later be configured without hardcoding assumptions.
+
+====================================================
+9. FOOD & SELF-COOKING
+====================================================
+
+Create a dedicated Food section.
+
+CAFE SOI:
+Cafe Soi is located INSIDE THE PROPERTY PREMISES.
+
+Explain:
+"Guests can enjoy food and beverages at our in-house Cafe Soi."
+
+HOME-COOKED MEALS:
+Guests may discuss home-cooked dishes directly with the designated caretaker after arrival.
+Menu and charges are discussed directly with the caretaker.
+
+ZOMATO:
+Zomato is widely available in the area with numerous restaurant options.
+Delivery availability/timing may vary depending on weather and time.
+
+SELF COOKING:
+Basic utensils are available for simple meals.
+
+For elaborate/full-course meals:
+Additional utensils may be arranged subject to availability.
+
+Guests may bring their own:
+- induction-compatible cookware
+- microwave-compatible cookware
+
+DO NOT claim a fully equipped commercial kitchen unless I explicitly provide that information.
+
+====================================================
+10. AMENITIES
+====================================================
+
+Create a beautiful icon-based amenities section.
+
+Currently known amenities/information:
+
+- Pet-friendly
+- Private garden
+- On-premise parking
+- Wi-Fi / high-speed Wi-Fi
+- Cafe Soi
+- Basic cooking utensils
+- Induction-compatible basic cooking setup
+- Microwave
+- Refrigerator
+- Water filter
+- Home-cooked meal option via caretaker
+- Zomato availability
+
+IMPORTANT:
+Only display amenities that are actually confirmed.
+Build the data structure so amenities can easily be added/removed later.
+
+====================================================
+11. SHANTINIKETAN EXPERIENCE
+====================================================
+
+This should be a major website section.
+
+Position Raj Kuthir not simply as "a place to sleep" but as a base for experiencing Shantiniketan.
+
+Potential nearby experiences/visual themes:
+
+- Sonajhuri
+- local markets
+- Shantiniketan landscapes
+- Vishva-Bharati
+- Basanta Utsav
+- Bengali culture
+- traditional architecture
+- local food
+- train journey / Bolpur experience
+- Prarthana Ghar
+- nature walks
+
+Do not invent exact distances unless supplied.
+
+One known positioning detail:
+A local market/main attraction has previously been described as approximately 3 km from the homestay.
+
+Another property marketing detail previously used:
+Sonajhuri approximately 4 km away.
+
+Treat these as editable data rather than hardcoded truth.
+
+Create attraction cards with:
+IMAGE
+NAME
+SHORT DESCRIPTION
+DISTANCE (editable)
+CTA / MAP
+
+====================================================
+12. LOCATION
+====================================================
+
+Create a dedicated location section.
+
+Official Google Maps direct link:
+
+https://maps.app.goo.gl/D1tUUb3JfpVdcHwu5
+
+Make the location CTA prominent.
+
+Include:
+"Get Directions"
+
+Also include a map embed if technically appropriate.
+
+Do NOT expose internal/technical embed parameters unnecessarily.
+
+====================================================
+13. GUEST CONTACT
+====================================================
+
+Official contact:
+
+HOST:
++91 62903 99165
+
+DESIGNATED CARETAKER:
++91 78726 85558
+
+IMPORTANT:
+The caretaker number is +91 78726 85558.
+
+Do not accidentally use any old manager/employee number.
+
+Create:
+CALL NOW
+WHATSAPP
+GET DIRECTIONS
+
+buttons.
+
+====================================================
+14. INSTAGRAM
+====================================================
+
+Official Instagram:
+
+https://www.instagram.com/rajkuthirhomestays?igsh=MTBkOWljNTZmbWttdg==
+
+Use Instagram CTA:
+
+"Follow our journey"
+
+Do not use a fake Instagram feed if API integration is unavailable.
+
+Instead, create a beautiful gallery/social section with a link to the official Instagram.
+
+====================================================
+15. GOOGLE REVIEWS
+====================================================
+
+Official Google Review link:
+
+https://maps.app.goo.gl/Ptrm6eaXuXNoiXBbA?g_st=ac
+
+Create a "Loved your stay?" CTA.
+
+Button:
+"Leave us a Google Review"
+
+Create a review section where actual reviews can later be added.
+
+DO NOT fabricate guest reviews.
+
+If no API is available, create manually editable review cards with placeholder data clearly marked for me to replace.
+
+====================================================
+16. DIRECT BOOKING SYSTEM
+====================================================
+
+This is extremely important.
+
+I eventually want the website to reduce dependency on OTAs.
+
+Build the architecture so it can support:
+
+DATE SELECTION
+GUEST COUNT
+AVAILABILITY
+RATE
+TOTAL
+ADVANCE
+BALANCE
+BOOKING REQUEST
+WHATSAPP CONFIRMATION
+ADMIN MANAGEMENT
+
+For V1, if a full payment gateway/calendar sync is too complex, create a professional enquiry/booking request flow.
+
+Booking form fields:
+
+Guest Name
+Phone
+Email
+Check-in
+Check-out
+Adults
+Children
+Pets
+Special Requests
+
+Calculate:
+Number of nights
+Applicable rate
+Total amount
+
+Show:
+Total booking amount
+Advance required
+Balance due
+
+DO NOT process real payments until I configure a payment gateway.
+
+====================================================
+17. RATE ENGINE
+====================================================
+
+DO NOT hardcode one universal rate.
+
+The property has historically used date/guest-specific rates.
+
+Known historical examples include:
+₹3,250/night
+₹3,500/night
+₹3,800/night
+₹4,000/night
+₹3,200/night
+
+These are NOT necessarily the current universal tariff.
+
+Create a central pricing configuration:
+
+const pricingRules = {
+  baseRate: ...,
+  weekdayRate: ...,
+  weekendRate: ...,
+  peakRate: ...,
+  specialDates: [...]
+}
+
+Allow:
+- date-specific pricing
+- weekday/weekend pricing
+- special-event pricing
+- guest-specific overrides if necessary
+- promotional rates
+- direct booking rates
+
+The admin should eventually be able to change rates without editing multiple pages.
+
+====================================================
+18. BOOKING CALENDAR
+====================================================
+
+Create a visual availability calendar.
+
+It should eventually support:
+
+AVAILABLE
+BOOKED
+BLOCKED
+PENDING
+MAINTENANCE
+
+Current known September 2026 bookings:
+
+Sep 2–5:
+Kalpana Chatterjee
+4 adults
+3 nights
+₹3,200/night
+₹9,600 total
+Confirmed
+Payment on site
+
+Sep 5–8:
+Biman Roy
+3 adults
+3 nights
+3 adults
+Two-Bedroom Villa
+MakeMyTrip
+₹6,399 gross
+₹5,039.85 net after MMT deductions
+Paid online
+
+Sep 17–25:
+Reetuparna Bhattacharjee
+2 adults
+8 nights
+Offline booking
+₹15,000 total
+₹1,000 advance
+₹14,000 balance
+
+These should be stored as seed/demo data only and made editable.
+
+====================================================
+19. ADMIN DASHBOARD
+====================================================
+
+Design the application so a future admin dashboard can manage:
+
+Bookings
+Availability
+Rates
+Guest details
+Payments
+Pending balances
+Blocked dates
+Maintenance dates
+Reviews
+Gallery
+Amenities
+Nearby attractions
+Contact information
+
+Dashboard widgets:
+
+Today's check-ins
+Today's check-outs
+Current guests
+Upcoming bookings
+Pending payments
+Occupancy %
+Monthly revenue
+Available nights
+Booked nights
+
+Revenue calculations MUST distinguish:
+
+GROSS BOOKING VALUE
+OTA COMMISSION
+NET PROPERTY REVENUE
+ADVANCE RECEIVED
+BALANCE DUE
+
+Never mix gross OTA revenue and net revenue.
+
+====================================================
+20. BOOKING CONFIRMATION GENERATOR
+====================================================
+
+Create a future/admin feature to generate WhatsApp-ready booking confirmations.
+
+Use this structure:
+
+Greetings from Raj Kuthir Homestays – Sobuj Potro, Shantiniketan! 🌿
+
+Dear [Guest Name],
+
+Thank you for choosing Raj Kuthir Homestays – Sobuj Potro. We are pleased to confirm your booking.
+
+Check-in
+Check-out
+Guests
+Accommodation
+Duration
+
+Total Booking Amount
+Advance Received
+Balance Due
+
+Google Maps
+Host
+Designated Caretaker
+
+Additional Information:
+- valid ID required
+- PAN Card not accepted
+- refundable ₹2,500 security deposit
+- ₹350 extra bed charge if required
+- Cafe Soi
+- home-cooked meal option
+- Zomato availability
+- basic cooking utensils
+- additional utensils subject to availability
+- induction/microwave-compatible cookware recommendation
+
+Closing:
+We look forward to hosting you and wish you a wonderful stay at Raj Kuthir Homestays – Sobuj Potro.
+
+Warm regards,
+Team Raj Kuthir Homestays – Sobuj Potro
+
+The system should generate this dynamically.
+
+====================================================
+21. POST-CHECKOUT FLOW
+====================================================
+
+Create a future admin button:
+
+"Send Review Request"
+
+Generate a WhatsApp-ready message.
+
+Include:
+- thank you
+- mention security deposit returned if applicable
+- Instagram link
+- Google Review link
+
+Official Instagram:
+https://www.instagram.com/rajkuthirhomestays?igsh=MTBkOWljNTZmbWttdg==
+
+Google Review:
+https://maps.app.goo.gl/Ptrm6eaXuXNoiXBbA?g_st=ac
+
+====================================================
+22. WEBSITE COPY
+====================================================
+
+Do NOT use generic AI hotel copy.
+
+Copy should feel:
+- human
+- warm
+- concise
+- premium
+- rooted in Shantiniketan
+- nature-focused
+- pet-friendly
+
+Avoid exaggerated phrases:
+"ultimate luxury"
+"world-class"
+"best hotel"
+"unparalleled experience"
+unless supported by actual evidence.
+
+====================================================
+23. SEO
+====================================================
+
+Implement proper technical SEO.
+
+Include:
+
+Title:
+Raj Kuthir Homestays – Sobuj Potro | Pet-Friendly Homestay in Shantiniketan
+
+Meta description along the lines of:
+"Stay amidst nature at Raj Kuthir Homestays – Sobuj Potro, a private pet-friendly homestay in Bolpur, Shantiniketan with a garden, Cafe Soi, Wi-Fi and comfortable accommodation."
+
+Create structured data / Schema.org where appropriate:
+LodgingBusiness
+Hotel / Resort only if technically appropriate
+LocalBusiness
+FAQPage where applicable
+BreadcrumbList
+
+Use:
+canonical URLs
+Open Graph metadata
+Twitter/X metadata
+robots.txt
+sitemap.xml
+semantic headings
+alt text
+optimized image names
+
+====================================================
+24. PERFORMANCE
+====================================================
+
+This must be FAST.
+
+Optimize for mobile first.
+
+Use:
+- WebP/AVIF where appropriate
+- lazy loading
+- responsive images
+- minimal JavaScript
+- optimized fonts
+- no unnecessary animations
+- avoid huge video backgrounds
+- avoid bloated libraries
+
+Target excellent Lighthouse performance.
+
+====================================================
+25. RESPONSIVE DESIGN
+====================================================
+
+Mobile is extremely important.
+
+Most guests will discover the property through:
+Instagram
+WhatsApp
+Google
+Booking platforms
+
+Therefore mobile UX must be exceptional.
+
+On mobile:
+- persistent WhatsApp button
+- clear Book Now button
+- easy gallery browsing
+- easy directions
+- easy call button
+- readable rates
+- fast loading
+
+====================================================
+26. VISUAL DESIGN SYSTEM
+====================================================
+
+Suggested palette:
+
+Warm Ivory
+#F7F2E8
+
+Walnut Brown
+#5A3E2B
+
+Terracotta
+#A65E45
+
+Muted Sage
+#7A8065
+
+Deep Forest
+#28382D
+
+Charcoal
+#272522
+
+Use colors sparingly.
+
+Typography:
+Use an elegant serif for major headings and a clean modern sans-serif for body/UI.
+
+The combination should feel:
+Bengali heritage + modern boutique hospitality.
+
+====================================================
+27. GALLERY
+====================================================
+
+Build a premium gallery.
+
+Categories:
+
+PROPERTY
+ROOMS
+GARDEN
+PETS
+FOOD
+SHANTINIKETAN
+EXPERIENCES
+
+Use real supplied images when I provide them.
+
+DO NOT generate fake images and present them as actual property photographs.
+
+Create an easy-to-update gallery data structure.
+
+====================================================
+28. WEBSITE IMAGE STRATEGY
+====================================================
+
+Prioritize authentic photography.
+
+Hero:
+property / garden / nature.
+
+Pet section:
+real pet-friendly property images.
+
+Food:
+Cafe Soi / real food.
+
+Experience:
+real Shantiniketan images.
+
+Avoid generic stock photography wherever possible.
+
+If an image is not available, create a tasteful placeholder that is clearly intended to be replaced.
+
+====================================================
+29. FAQ
+====================================================
+
+Build an FAQ section around actual known information.
+
+Examples:
+
+Is Raj Kuthir pet-friendly?
+Yes.
+
+Is there a cafe?
+Yes, Cafe Soi is located inside the premises.
+
+Can guests cook?
+Basic utensils are available for simple meals.
+
+Can additional cooking utensils be arranged?
+Possibly, subject to availability.
+
+Can guests order food?
+Yes. Zomato is widely available, and home-cooked meals can be discussed with the caretaker.
+
+Is parking available?
+Yes, on-premise parking is available.
+
+Is Wi-Fi available?
+Yes.
+
+What ID is required?
+Valid photo ID. PAN Card is not accepted as valid ID.
+
+Is there a security deposit?
+Yes, ₹2,500 refundable security deposit.
+
+Are extra beds available?
+If required, ₹350 per extra bed.
+
+IMPORTANT:
+Keep FAQ content editable.
+
+====================================================
+30. WHATSAPP INTEGRATION
+====================================================
+
+Create WhatsApp CTAs.
+
+Use:
++91 62903 99165
+
+Buttons:
+"Chat on WhatsApp"
+"Enquire Now"
+"Check Availability"
+
+Generate prefilled WhatsApp messages such as:
+
+"Hi Raj Kuthir Homestays, I would like to enquire about availability for [date] to [date] for [guests]."
+
+====================================================
+31. CONTACT PAGE
+====================================================
+
+Include:
+
+Raj Kuthir Homestays – Sobuj Potro
+Bolpur / Shantiniketan
+West Bengal, India
+
+Host:
++91 62903 99165
+
+Designated Caretaker:
++91 78726 85558
+
+Instagram:
+https://www.instagram.com/rajkuthirhomestays?igsh=MTBkOWljNTZmbWttdg==
+
+Google Maps:
+https://maps.app.go

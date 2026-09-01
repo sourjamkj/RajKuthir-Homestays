@@ -1,0 +1,28 @@
+kind = "web"
+previewPath = "/"
+title = "Raj Kuthir Homestays"
+description = "The official website for Raj Kuthir Homestays – Sobuj Potro in Bolpur, Shantiniketan. A warm, nature-oriented, pet-friendly stay with direct enquiry and booking support."
+version = "1.0.0"
+id = "artifacts/raj-kuthir"
+router = "path"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 25039
+
+[services.development]
+run = "pnpm --filter @workspace/raj-kuthir run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/raj-kuthir", "run", "build" ]
+serve = "static"
+publicDir = "artifacts/raj-kuthir/dist/public"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "25039"
+BASE_PATH = "/"
