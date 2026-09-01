@@ -1,5 +1,6 @@
 import { Router, type IRouter } from "express";
 import { SyncCalendarsBody, SyncCalendarsResponse } from "@workspace/api-zod";
+import { getAuth } from "@clerk/express";
 
 type CalendarSource = "bookingCom" | "airbnb" | "makeMyTrip";
 
@@ -21,7 +22,24 @@ const SOURCE_DEFINITIONS: Array<{
   { key: "makeMyTrip", label: "MakeMyTrip" },
 ];
 
+const SECURE_FEED_URLS: Partial<Record<CalendarSource, string | undefined>> = {
+  bookingCom: process.env.RAJ_KUTHIR_BOOKING_ICAL_URL,
+  airbnb: process.env.RAJ_KUTHIR_AIRBNB_ICAL_URL,
+  makeMyTrip: process.env.RAJ_KUTHIR_MAKEMYTRIP_ICAL_URL,
+};
+
 const router: IRouter = Router();
+
+const requireAdmin = (req: any, res: any, next: any) => {
+  const auth = getAuth(req);
+  const userId = auth?.sessionClaims?.userId || auth?.userId;
+  if (!userId) {
+    res.status(401).json({ error: "Admin sign-in required." });
+    return;
+  }
+  req.userId = userId;
+  next();
+};
 
 function isSafeFeedUrl(value: string): boolean {
   try {
@@ -167,7 +185,7 @@ async function fetchFeed(url: string): Promise<string> {
   }
 }
 
-router.post("/calendar/sync", async (req, res) => {
+router.post("/calendar/sync", requireAdmin, async (req, res) => {
   const body = SyncCalendarsBody.safeParse(req.body);
   if (!body.success) {
     res.status(400).json({ error: "Please provide valid calendar feed settings." });
@@ -179,7 +197,7 @@ router.post("/calendar/sync", async (req, res) => {
   const sources = [];
 
   for (const definition of SOURCE_DEFINITIONS) {
-    const url = body.data[definition.key];
+    const url = body.data[definition.key] || SECURE_FEED_URLS[definition.key];
     if (!url) {
       sources.push({
         source: definition.key,

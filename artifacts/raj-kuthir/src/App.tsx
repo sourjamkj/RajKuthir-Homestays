@@ -1,6 +1,9 @@
 import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { type CalendarEvent, type CalendarSourceStatus, useSyncCalendars } from '@workspace/api-client-react';
+import { ClerkProvider, Show, SignIn, useClerk } from '@clerk/react';
+import { publishableKeyFromHost } from '@clerk/react/internal';
+import { shadcn } from '@clerk/themes';
 import {
   ArrowRight,
   ArrowUpRight,
@@ -47,6 +50,56 @@ import NotFound from '@/pages/not-found';
 import { Route, Switch, useLocation, Router as WouterRouter } from 'wouter';
 
 const queryClient = new QueryClient();
+
+const clerkPubKey = publishableKeyFromHost(
+  window.location.hostname,
+  import.meta.env.VITE_CLERK_PUBLISHABLE_KEY,
+);
+const clerkProxyUrl = import.meta.env.VITE_CLERK_PROXY_URL;
+const basePath = import.meta.env.BASE_URL.replace(/\/$/, '');
+
+if (!clerkPubKey) {
+  throw new Error('Missing VITE_CLERK_PUBLISHABLE_KEY in environment.');
+}
+
+const clerkAppearance = {
+  theme: shadcn,
+  cssLayerName: 'clerk',
+  options: {
+    logoPlacement: 'inside' as const,
+    logoLinkUrl: basePath || '/',
+    logoImageUrl: `${window.location.origin}${basePath}/favicon.svg`,
+  },
+  variables: {
+    colorPrimary: '#2d6658',
+    colorForeground: '#23493f',
+    colorMutedForeground: '#65766f',
+    colorDanger: '#a4513c',
+    colorBackground: '#f6f0e7',
+    colorInput: '#fffdf8',
+    colorInputForeground: '#23493f',
+    colorNeutral: '#d9cfc1',
+    fontFamily: 'Manrope, sans-serif',
+    borderRadius: '0.75rem',
+  },
+  elements: {
+    rootBox: 'w-full flex justify-center',
+    cardBox: 'bg-[#f6f0e7] rounded-2xl w-[440px] max-w-full overflow-hidden',
+    card: '!shadow-none !border-0 !bg-transparent !rounded-none',
+    footer: '!shadow-none !border-0 !bg-transparent !rounded-none',
+    headerTitle: 'text-[#23493f] font-serif',
+    headerSubtitle: 'text-[#65766f]',
+    socialButtonsBlockButtonText: 'text-[#23493f]',
+    formFieldLabel: 'text-[#23493f]',
+    footerActionLink: 'text-[#2d6658]',
+    footerActionText: 'text-[#65766f]',
+    dividerText: 'text-[#65766f]',
+    formButtonPrimary: 'bg-[#2d6658] hover:bg-[#23493f]',
+    formFieldInput: 'bg-[#fffdf8] border-[#d9cfc1] text-[#23493f]',
+    footerAction: 'hidden',
+    dividerLine: 'bg-[#d9cfc1]',
+  },
+};
 
 // EDITABLE OWNER CONFIG: update rate, contact details and planning notes here.
 const CONFIG = {
@@ -513,13 +566,18 @@ function Home() {
           </div>
 
           <div className="mt-14 grid gap-5 lg:grid-cols-[.78fr_1.22fr]">
-            <div className="rounded-[1.5rem] bg-primary p-6 text-primary-foreground md:p-8">
+            <Show when="signed-in">
+              <div className="rounded-[1.5rem] bg-primary p-6 text-primary-foreground md:p-8">
               <div className="flex items-start justify-between gap-4 border-b border-primary-foreground/15 pb-6">
                 <div>
                   <p className="eyebrow text-secondary">Calendar sources</p>
                   <p className="mt-3 font-journal text-3xl">Sync your OTAs.</p>
                 </div>
                 <Settings2 size={22} className="text-secondary" strokeWidth={1.4} />
+              </div>
+              <div className="mt-4 flex items-center justify-between gap-4 text-[10px] uppercase tracking-[.08em] text-primary-foreground/55">
+                <span>Admin controls</span>
+                <AdminSignOutButton />
               </div>
               <div className="mt-6 space-y-5">
                 {CALENDAR_FEEDS.map((feed) => {
@@ -560,8 +618,19 @@ function Home() {
                 {calendarSync.isPending ? 'Syncing feeds' : 'Sync calendars'}
               </button>
               {calendarSync.isError && <p className="mt-3 text-center text-[10px] leading-4 text-[#f0a184]">The calendar service could not be reached. Please try again.</p>}
-              <p className="mt-5 text-[10px] leading-4 text-primary-foreground/50">Use the calendar export / iCal link from each partner extranet. Feed links stay in this browser until a private owner dashboard is added.</p>
-            </div>
+                <p className="mt-5 text-[10px] leading-4 text-primary-foreground/50">Leave a field blank to use the securely stored owner feed. Any URL entered here is sent only when you press Sync calendars and is not shown to guests.</p>
+              </div>
+            </Show>
+            <Show when="signed-out">
+              <div className="flex min-h-[420px] flex-col justify-between rounded-[1.5rem] border border-border bg-card p-6 md:p-8">
+                <div>
+                  <p className="eyebrow text-accent">Guest view</p>
+                  <p className="mt-4 max-w-[300px] font-journal text-4xl leading-tight text-primary">Availability is managed privately by the host.</p>
+                  <p className="mt-5 max-w-[320px] text-sm leading-6 text-muted-foreground">Browse the calendar here. The calendar feed setup is reserved for the Raj Kuthir admin.</p>
+                </div>
+                <a href={`${basePath}/sign-in`} className="mt-8 inline-flex w-fit items-center gap-2 rounded-full bg-primary px-5 py-3 text-xs font-bold uppercase tracking-[.1em] text-primary-foreground transition-transform hover:-translate-y-0.5" data-testid="link-admin-sign-in">Admin sign in <ArrowUpRight size={15} /></a>
+              </div>
+            </Show>
 
             <div className="rounded-[1.5rem] border border-border bg-card p-5 md:p-8">
               <div className="flex flex-col justify-between gap-4 border-b border-border pb-5 sm:flex-row sm:items-center">
@@ -642,12 +711,29 @@ function RoutedErrorBoundary({ children }: { children: ReactNode }) {
   return <ErrorBoundary resetKey={location}>{children}</ErrorBoundary>;
 }
 
+function AdminSignOutButton() {
+  const { signOut } = useClerk();
+  return (
+    <button type="button" onClick={() => signOut({ redirectUrl: basePath || "/" })} className="text-secondary underline underline-offset-4 transition-colors hover:text-primary-foreground" data-testid="button-admin-sign-out">
+      Sign out
+    </button>
+  );
+}
+
+function SignInPage() {
+  return (
+    <div className="flex min-h-[100dvh] items-center justify-center bg-background px-4 py-10">
+      <SignIn routing="path" path={`${basePath}/sign-in`} />
+    </div>
+  );
+}
+
 function Router() {
-  return <RoutedErrorBoundary><Switch><Route path="/" component={Home} /><Route component={NotFound} /></Switch></RoutedErrorBoundary>;
+  return <RoutedErrorBoundary><Switch><Route path="/" component={Home} /><Route path="/sign-in/*?" component={SignInPage} /><Route component={NotFound} /></Switch></RoutedErrorBoundary>;
 }
 
 function App() {
-  return <QueryClientProvider client={queryClient}><TooltipProvider><WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, '')}><Router /></WouterRouter><Toaster /></TooltipProvider></QueryClientProvider>;
+  return <ClerkProvider publishableKey={clerkPubKey} proxyUrl={clerkProxyUrl} appearance={clerkAppearance} signInUrl={`${basePath}/sign-in`}><QueryClientProvider client={queryClient}><TooltipProvider><WouterRouter base={basePath}><Router /></WouterRouter><Toaster /></TooltipProvider></QueryClientProvider></ClerkProvider>;
 }
 
 export default App;
