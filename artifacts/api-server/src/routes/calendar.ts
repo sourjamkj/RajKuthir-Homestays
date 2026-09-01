@@ -1,6 +1,7 @@
 import { Router, type IRouter } from "express";
 import { SyncCalendarsBody, SyncCalendarsResponse } from "@workspace/api-zod";
 import { getAuth } from "@clerk/express";
+import crypto from "node:crypto";
 
 type CalendarSource = "bookingCom" | "airbnb" | "makeMyTrip";
 
@@ -27,6 +28,7 @@ const SECURE_FEED_URLS: Partial<Record<CalendarSource, string | undefined>> = {
   airbnb: process.env.RAJ_KUTHIR_AIRBNB_ICAL_URL,
   makeMyTrip: process.env.RAJ_KUTHIR_MAKEMYTRIP_ICAL_URL,
 };
+const CALENDAR_FEED_TOKEN = process.env.RAJ_KUTHIR_CALENDAR_FEED_TOKEN;
 
 const router: IRouter = Router();
 
@@ -184,6 +186,89 @@ async function fetchFeed(url: string): Promise<string> {
     clearTimeout(timeout);
   }
 }
+
+async function collectSecureEvents(): Promise<ParsedEvent[]> {
+  const events: ParsedEvent[] = [];
+  for (const definition of SOURCE_DEFINITIONS) {
+    const url = SECURE_FEED_URLS[definition.key];
+    if (!url) continue;
+    try {
+      events.push(...parseIcsFeed(definition.key, await fetchFeed(url)));
+    } catch {
+      // One unavailable OTA should not prevent the aggregate feed from serving
+      // events from the other connected sources.
+    }
+  }
+  return Array.from(new Map(events.map((event) => [event.id, event])).values()).sort((left, right) => left.start.localeCompare(right.start));
+}
+
+function isValidFeedToken(value: unknown): value is string {
+  if (!CALENDAR_FEED_TOKEN || typeof value !== "string") return false;
+  const expected = Buffer.from(CALENDAR_FEED_TOKEN);
+  const received = Buffer.from(value);
+  return expected.length === received.length && crypto.timingSafeEqual(expected, received);
+}
+
+function escapeIcsText(value: string): string {
+  return value.replace(/\\/g, "\\\\").replace(/;/g, "\\;").replace(/,/g, "\\,").replace(/\r?\n/g, "\\n");
+}
+
+function toIcsDate(value: string): string {
+  return value.replaceAll("-", "");
+}
+
+function renderIcsFeed(events: ParsedEvent[]): string {
+  const stamp = new Date().toISOString().replace(/[-:]/g, "").replace(/\.\d{3}Z$/, "Z");
+  const rows = [
+    "BEGIN:VCALENDAR",
+    "VERSION:2.0",
+    "PRODID:-//Raj Kuthir Homestays//Sobuj Potro//EN",
+    "CALSCALE:GREGORIAN",
+    "METHOD:PUBLISH",
+    "X-WR-CALNAME:Raj Kuthir Sobuj Potro",
+    "X-WR-TIMEZONE:Asia/Kolkata",
+  ];
+
+  for (const event of events) {
+    rows.push(
+      "BEGIN:VEVENT",
+      `UID:${escapeIcsText(event.id)}@rajkuthirhomestays`,
+      `DTSTAMP:${stamp}`,
+      `DTSTART;VALUE=DATE:${toIcsDate(event.start)}`,
+      `DTEND;VALUE=DATE:${toIcsDate(event.end)}`,
+      "SUMMARY:Reserved - Raj Kuthir",
+      "END:VEVENT",
+    );
+  }
+
+  rows.push("END:VCALENDAR");
+  return `${rows.join("\r\n")}\r\n`;
+}
+
+router.get("/calendar/feed-info", requireAdmin, (req, res) => {
+  if (!CALENDAR_FEED_TOKEN) {
+    res.status(503).json({ error: "Outbound calendar feed is not configured yet." });
+    return;
+  }
+
+  const protocol = req.headers["x-forwarded-proto"]?.toString().split(",")[0].trim() || req.protocol;
+  const host = req.headers["x-forwarded-host"]?.toString().split(",")[0].trim() || req.get("host");
+  const feedUrl = new URL("/api/calendar/feed", `${protocol}://${host}`);
+  feedUrl.searchParams.set("token", CALENDAR_FEED_TOKEN);
+  res.setHeader("Cache-Control", "no-store");
+  res.json({ feedUrl: feedUrl.toString() });
+});
+
+router.get("/calendar/feed", async (req, res) => {
+  if (!isValidFeedToken(req.query.token)) {
+    res.status(401).type("text/plain").send("Invalid calendar feed token.");
+    return;
+  }
+
+  const events = await collectSecureEvents();
+  res.setHeader("Cache-Control", "no-cache, max-age=0");
+  res.type("text/calendar").send(renderIcsFeed(events));
+});
 
 router.post("/calendar/sync", requireAdmin, async (req, res) => {
   const body = SyncCalendarsBody.safeParse(req.body);

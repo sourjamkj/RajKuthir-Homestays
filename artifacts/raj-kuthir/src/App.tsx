@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { type CalendarEvent, type CalendarSourceStatus, useSyncCalendars } from '@workspace/api-client-react';
-import { ClerkProvider, Show, SignIn, useClerk } from '@clerk/react';
+import { ClerkProvider, Show, SignIn, useAuth, useClerk } from '@clerk/react';
 import { publishableKeyFromHost } from '@clerk/react/internal';
 import { shadcn } from '@clerk/themes';
 import {
@@ -18,6 +18,7 @@ import {
   ChevronDown,
   CircleCheck,
   CookingPot,
+  Copy,
   Dog,
   ExternalLink,
   GalleryHorizontalEnd,
@@ -618,6 +619,7 @@ function Home() {
                 {calendarSync.isPending ? 'Syncing feeds' : 'Sync calendars'}
               </button>
               {calendarSync.isError && <p className="mt-3 text-center text-[10px] leading-4 text-[#f0a184]">The calendar service could not be reached. Please try again.</p>}
+              <AdminFeedLink />
                 <p className="mt-5 text-[10px] leading-4 text-primary-foreground/50">Leave a field blank to use the securely stored owner feed. Any URL entered here is sent only when you press Sync calendars and is not shown to guests.</p>
               </div>
             </Show>
@@ -722,6 +724,62 @@ function AdminSignOutButton() {
     <button type="button" onClick={() => signOut({ redirectUrl: basePath || "/" })} className="text-secondary underline underline-offset-4 transition-colors hover:text-primary-foreground" data-testid="button-admin-sign-out">
       Sign out
     </button>
+  );
+}
+
+function AdminFeedLink() {
+  const { isSignedIn } = useAuth();
+  const [feedUrl, setFeedUrl] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+
+  useEffect(() => {
+    if (!isSignedIn) {
+      setFeedUrl(null);
+      return;
+    }
+
+    let active = true;
+    fetch(`${basePath}/api/calendar/feed-info`, { credentials: 'include' })
+      .then(async (response) => {
+        const payload = await response.json() as { feedUrl?: string; error?: string };
+        if (!response.ok) throw new Error(payload.error || 'Outbound feed is not configured.');
+        if (active) setFeedUrl(payload.feedUrl || null);
+      })
+      .catch((reason: unknown) => {
+        if (active) setError(reason instanceof Error ? reason.message : 'Outbound feed is not configured.');
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [isSignedIn]);
+
+  if (!isSignedIn) return null;
+
+  const copyFeedUrl = async () => {
+    if (!feedUrl) return;
+    await navigator.clipboard.writeText(feedUrl);
+    setCopied(true);
+    window.setTimeout(() => setCopied(false), 1800);
+  };
+
+  return (
+    <div className="mt-6 border-t border-primary-foreground/15 pt-5">
+      <p className="text-xs font-bold text-primary-foreground">Outbound calendar feed</p>
+      <p className="mt-2 text-[10px] leading-4 text-primary-foreground/55">Paste this private link into any aggregator that accepts an iCal subscription.</p>
+      {feedUrl ? (
+        <div className="mt-3 flex gap-2">
+          <input readOnly value={feedUrl} className="min-w-0 flex-1 rounded-lg border border-primary-foreground/20 bg-primary-foreground/10 px-3 py-2 text-[10px] text-primary-foreground outline-none" aria-label="Outbound calendar feed URL" data-testid="input-outbound-calendar-feed" />
+          <button type="button" onClick={copyFeedUrl} className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-secondary text-primary" aria-label="Copy outbound calendar feed URL" data-testid="button-copy-calendar-feed">
+            {copied ? <Check size={14} /> : <Copy size={14} />}
+          </button>
+        </div>
+      ) : (
+        <p className="mt-3 text-[10px] leading-4 text-[#f0a184]">{error || 'Loading private feed link...'}</p>
+      )}
+      <p className="mt-2 text-[10px] leading-4 text-primary-foreground/45">Keep this URL private. Anyone with the link can read blocked dates.</p>
+    </div>
   );
 }
 
