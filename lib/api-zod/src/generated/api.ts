@@ -29,9 +29,9 @@ export const SyncCalendarsBody = zod.object({
 
 export const SyncCalendarsResponse = zod.object({
   "syncedAt": zod.coerce.date(),
-  "totalEvents": zod.int(),
+  "totalEvents": zod.number().int(),
   "events": zod.array(zod.object({
-  "id": zod.uuid(),
+  "id": zod.string(),
   "source": zod.enum(['manual', 'direct', 'bookingCom', 'airbnb', 'makeMyTrip']),
   "title": zod.string().nullable(),
   "note": zod.string().nullable(),
@@ -55,7 +55,7 @@ export const SyncCalendarsResponse = zod.object({
  */
 export const ListCalendarEventsResponse = zod.object({
   "events": zod.array(zod.object({
-  "id": zod.uuid(),
+  "id": zod.string(),
   "source": zod.enum(['manual', 'direct', 'bookingCom', 'airbnb', 'makeMyTrip']),
   "title": zod.string().nullable(),
   "note": zod.string().nullable(),
@@ -95,7 +95,7 @@ export const BlockCalendarDatesBody = zod.object({
 })
 
 export const BlockCalendarDatesResponse = zod.object({
-  "id": zod.uuid(),
+  "id": zod.string(),
   "source": zod.enum(['manual', 'direct', 'bookingCom', 'airbnb', 'makeMyTrip']),
   "title": zod.string().nullable(),
   "note": zod.string().nullable(),
@@ -109,7 +109,7 @@ export const BlockCalendarDatesResponse = zod.object({
  * @summary Remove a manual calendar block
  */
 export const UnblockCalendarDatesParams = zod.object({
-  "id": zod.uuid()
+  "id": zod.string()
 })
 
 export const UnblockCalendarDatesResponse = zod.void()
@@ -120,10 +120,10 @@ export const UnblockCalendarDatesResponse = zod.void()
  * @summary Get the outbound calendar feed link
  */
 export const GetCalendarFeedInfoResponse = zod.object({
-  "feedUrl": zod.url(),
-  "bookingCom": zod.url(),
-  "airbnb": zod.url(),
-  "makeMyTrip": zod.url()
+  "feedUrl": zod.string(),
+  "bookingCom": zod.string(),
+  "airbnb": zod.string(),
+  "makeMyTrip": zod.string()
 })
 
 

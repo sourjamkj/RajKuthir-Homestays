@@ -1,6 +1,16 @@
-import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react';
+import { useMemo, useState, type FormEvent, type ReactNode } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { getGetCalendarFeedInfoQueryKey, type CalendarEvent, type CalendarSourceStatus, useGetCalendarFeedInfo, useSyncCalendars } from '@workspace/api-client-react';
+import {
+  getGetCalendarFeedInfoQueryKey,
+  getGetPublicCalendarQueryKey,
+  getListCalendarEventsQueryKey,
+  type CalendarEvent,
+  type CalendarSourceStatus,
+  useGetCalendarFeedInfo,
+  useGetPublicCalendar,
+  useListCalendarEvents,
+  useSyncCalendars,
+} from '@workspace/api-client-react';
 import { ClerkProvider, Show, SignIn, useAuth, useClerk } from '@clerk/react';
 import { publishableKeyFromHost } from '@clerk/react/internal';
 import { shadcn } from '@clerk/themes';
@@ -46,6 +56,7 @@ import {
   X,
 } from 'lucide-react';
 import { ErrorBoundary } from '@/components/error-boundary';
+import { AdminCalendar } from '@/components/AdminCalendar';
 import { Toaster } from '@/components/ui/toaster';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import NotFound from '@/pages/not-found';
@@ -147,12 +158,6 @@ const CALENDAR_FEEDS: Array<{ key: FeedKey; label: string; hint: string }> = [
   { key: 'makeMyTrip', label: 'MakeMyTrip', hint: 'Paste an iCal link if your partner account provides one' },
 ];
 
-const DEMO_BOOKINGS: BusyPeriod[] = [
-  { id: 'demo-kalpana', source: 'Direct', label: 'Confirmed booking', start: '2026-09-02', end: '2026-09-05' },
-  { id: 'demo-biman', source: 'MakeMyTrip', label: 'OTA booking', start: '2026-09-05', end: '2026-09-08' },
-  { id: 'demo-reetuparna', source: 'Direct', label: 'Offline booking', start: '2026-09-17', end: '2026-09-25' },
-];
-
 const galleryItems = [
   { title: 'The villa', category: 'Home', note: 'Property photography to be added', tone: 'sage' },
   { title: 'Garden hour', category: 'Nature', note: 'Property photography to be added', tone: 'clay' },
@@ -190,10 +195,12 @@ const currency = (amount: number) =>
 
 const phoneHref = (phone: string) => `tel:${phone.replace(/\s/g, '')}`;
 
-const CALENDAR_STORAGE_KEY = 'raj-kuthir-calendar-feeds';
-
 const sourceLabel = (source: string) =>
-  CALENDAR_FEEDS.find((feed) => feed.key === source)?.label ?? source;
+  source === 'manual'
+    ? 'Host block'
+    : source === 'direct'
+      ? 'Direct booking'
+      : CALENDAR_FEEDS.find((feed) => feed.key === source)?.label ?? source;
 
 const dateKey = (date: Date) => {
   const year = date.getFullYear();
@@ -226,39 +233,41 @@ const toBusyPeriod = (event: CalendarEvent): BusyPeriod => ({
   id: event.id,
   source: sourceLabel(event.source),
   label: event.title || 'OTA booking',
-  start: eventDateKey(event.start),
-  end: eventDateKey(event.end),
+  start: eventDateKey(event.startDate),
+  end: eventDateKey(event.endDate),
 });
 
 function Home() {
+  const { isSignedIn } = useAuth();
   const [menuOpen, setMenuOpen] = useState(false);
   const [galleryFilter, setGalleryFilter] = useState('All');
   const [openFaq, setOpenFaq] = useState<number | null>(0);
   const [submitted, setSubmitted] = useState(false);
   const [calendarMonth, setCalendarMonth] = useState(() => new Date(new Date().getFullYear(), new Date().getMonth(), 1));
   const [feeds, setFeeds] = useState<Record<FeedKey, string>>(() => {
-    if (typeof window === 'undefined') {
-      return { bookingCom: '', airbnb: '', makeMyTrip: '' };
-    }
-    try {
-      const stored = JSON.parse(window.localStorage.getItem(CALENDAR_STORAGE_KEY) || '{}') as Partial<Record<FeedKey, string>>;
-      return {
-        bookingCom: stored.bookingCom || '',
-        airbnb: stored.airbnb || '',
-        makeMyTrip: stored.makeMyTrip || '',
-      };
-    } catch {
-      return { bookingCom: '', airbnb: '', makeMyTrip: '' };
-    }
+    return { bookingCom: '', airbnb: '', makeMyTrip: '' };
   });
   const [syncedEvents, setSyncedEvents] = useState<BusyPeriod[]>([]);
   const [sourceStatuses, setSourceStatuses] = useState<CalendarSourceStatus[]>([]);
   const [lastSyncedAt, setLastSyncedAt] = useState<string | null>(null);
   const calendarSync = useSyncCalendars();
-
-  useEffect(() => {
-    window.localStorage.setItem(CALENDAR_STORAGE_KEY, JSON.stringify(feeds));
-  }, [feeds]);
+  const publicCalendar = useGetPublicCalendar({
+    query: {
+      queryKey: getGetPublicCalendarQueryKey(),
+      staleTime: 60_000,
+      refetchInterval: 5 * 60_000,
+      refetchOnMount: 'always',
+    },
+  });
+  const adminCalendar = useListCalendarEvents({
+    query: {
+      queryKey: getListCalendarEventsQueryKey(),
+      enabled: Boolean(isSignedIn),
+      retry: false,
+      staleTime: 30_000,
+    },
+  });
+  const isCalendarAdmin = adminCalendar.isSuccess;
 
   const [form, setForm] = useState({
     name: '',
@@ -289,7 +298,30 @@ function Home() {
   const advance = Math.round(total * CONFIG.advanceShare);
   const balance = total - advance;
   const filteredGallery = galleryFilter === 'All' ? galleryItems : galleryItems.filter((item) => item.category === galleryFilter);
-  const busyPeriods = useMemo(() => [...DEMO_BOOKINGS, ...syncedEvents], [syncedEvents]);
+  const persistedBusyPeriods = useMemo(
+    () =>
+      (publicCalendar.data?.blocks ?? []).map((block, index) => ({
+        id: `public-block-${index}-${block.startDate}`,
+        source: 'Booked',
+        label: 'Unavailable',
+        start: eventDateKey(block.startDate),
+        end: eventDateKey(block.endDate),
+      })),
+    [publicCalendar.data?.blocks],
+  );
+  const adminBusyPeriods = useMemo(
+    () => (adminCalendar.data?.events ?? []).map(toBusyPeriod),
+    [adminCalendar.data?.events],
+  );
+  const busyPeriods = useMemo(
+    () =>
+      isCalendarAdmin
+        ? adminBusyPeriods
+        : persistedBusyPeriods.length > 0
+          ? persistedBusyPeriods
+          : syncedEvents,
+    [adminBusyPeriods, isCalendarAdmin, persistedBusyPeriods, syncedEvents],
+  );
   const daysInView = useMemo(() => calendarDays(calendarMonth), [calendarMonth]);
   const calendarMonthLabel = new Intl.DateTimeFormat('en-IN', { month: 'long', year: 'numeric' }).format(calendarMonth);
   const whatsappCopy = encodeURIComponent(
@@ -575,7 +607,7 @@ function Home() {
 
           <div className="mt-14 grid gap-5 lg:grid-cols-[.78fr_1.22fr]">
             <Show when="signed-in">
-              <div className="rounded-[1.5rem] bg-primary p-6 text-primary-foreground md:p-8">
+              {isCalendarAdmin && <div className="rounded-[1.5rem] bg-primary p-6 text-primary-foreground md:p-8">
               <div className="flex items-start justify-between gap-4 border-b border-primary-foreground/15 pb-6">
                 <div>
                   <p className="eyebrow text-secondary">Calendar sources</p>
@@ -628,7 +660,7 @@ function Home() {
               {calendarSync.isError && <p className="mt-3 text-center text-[10px] leading-4 text-[#f0a184]">The calendar service could not be reached. Please try again.</p>}
               <AdminFeedLink />
                 <p className="mt-5 text-[10px] leading-4 text-primary-foreground/50">Leave a field blank to use the securely stored owner feed. Any URL entered here is sent only when you press Sync calendars and is not shown to guests.</p>
-              </div>
+              </div>}
             </Show>
             <Show when="signed-out">
               <div className="flex min-h-[420px] flex-col justify-between rounded-[1.5rem] border border-border bg-card p-6 md:p-8">
@@ -665,7 +697,7 @@ function Home() {
                     <div key={key} className={`min-h-[76px] rounded-lg border p-2 text-left transition-colors ${isOutsideMonth ? 'border-transparent bg-background/40 opacity-35' : dayEvents.length ? 'border-accent/35 bg-secondary/40' : 'border-border bg-background'} ${isToday ? 'ring-2 ring-accent/60 ring-offset-1 ring-offset-card' : ''}`} data-testid={`calendar-day-${key}`}>
                       <p className={`text-xs font-bold ${isToday ? 'text-accent' : 'text-primary'}`}>{day.getDate()}</p>
                       <div className="mt-2 space-y-1">
-                        {dayEvents.slice(0, 2).map((event) => <div key={`${event.id}-${key}`} className={`truncate rounded px-1.5 py-1 text-[9px] font-bold leading-none text-primary ${event.source === 'Airbnb' ? 'bg-[#e7aa84]' : event.source === 'Booking.com' ? 'bg-[#9eb5a7]' : event.source === 'MakeMyTrip' ? 'bg-[#e4c9a4]' : 'bg-[#c8a89a]'}`} title={`${event.source}: ${event.label}`}><Show when="signed-in">{event.source}</Show><Show when="signed-out">Booked</Show></div>)}
+                        {dayEvents.slice(0, 2).map((event) => <div key={`${event.id}-${key}`} className={`truncate rounded px-1.5 py-1 text-[9px] font-bold leading-none text-primary ${event.source === 'Airbnb' ? 'bg-[#e7aa84]' : event.source === 'Booking.com' ? 'bg-[#9eb5a7]' : event.source === 'MakeMyTrip' ? 'bg-[#e4c9a4]' : 'bg-[#c8a89a]'}`} title={`${event.source}: ${event.label}`}><Show when="signed-in">{isCalendarAdmin ? event.source : 'Booked'}</Show><Show when="signed-out">Booked</Show></div>)}
                         {dayEvents.length > 2 && <p className="text-[9px] font-bold text-muted-foreground">+{dayEvents.length - 2} more</p>}
                       </div>
                     </div>
@@ -674,19 +706,26 @@ function Home() {
               </div>
 
               <Show when="signed-in">
+                {isCalendarAdmin && <>
                 <div className="mt-6 flex flex-wrap gap-x-5 gap-y-2 border-t border-border pt-5 text-[10px] font-bold uppercase tracking-[.08em] text-muted-foreground">
                   <span className="flex items-center gap-2"><i className="h-2 w-2 rounded-full bg-[#c8a89a]" />Existing booking</span>
                   <span className="flex items-center gap-2"><i className="h-2 w-2 rounded-full bg-[#9eb5a7]" />Booking.com</span>
                   <span className="flex items-center gap-2"><i className="h-2 w-2 rounded-full bg-[#e7aa84]" />Airbnb</span>
                   <span className="flex items-center gap-2"><i className="h-2 w-2 rounded-full bg-[#e4c9a4]" />MakeMyTrip</span>
                 </div>
-                <p className="mt-4 text-[10px] leading-4 text-muted-foreground">Demo blocks from the current planning data are shown in September 2026. Synced OTA events are treated as blocked dates; checkout dates remain available.</p>
+                <p className="mt-4 text-[10px] leading-4 text-muted-foreground">All blocks shown here are persisted on the server. Synced OTA events are read-only; checkout dates remain available.</p>
                 {lastSyncedAt && <p className="mt-2 text-[10px] text-accent">Last synced {new Intl.DateTimeFormat('en-IN', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(lastSyncedAt))}</p>}
+                </>}
               </Show>
               <Show when="signed-out">
                 <p className="mt-6 border-t border-border pt-5 text-[10px] leading-4 text-muted-foreground">Dates marked as booked are currently unavailable. Checkout dates remain available.</p>
               </Show>
-            </div>
+           </div>
+            <Show when="signed-in">
+              {isCalendarAdmin && <div className="lg:col-span-2">
+                <AdminCalendar />
+              </div>}
+            </Show>
           </div>
         </section>
 
@@ -736,40 +775,66 @@ function AdminSignOutButton() {
 
 function AdminFeedLink() {
   const { isSignedIn } = useAuth();
-  const [copied, setCopied] = useState(false);
+  const [copied, setCopied] = useState<string | null>(null);
   const { data, error, isLoading } = useGetCalendarFeedInfo({
     query: {
       enabled: isSignedIn,
       queryKey: getGetCalendarFeedInfoQueryKey(),
     },
   });
-  const feedUrl = data?.feedUrl || null;
   const errorMessage = error instanceof Error ? error.message : 'Outbound feed is not configured.';
 
   if (!isSignedIn) return null;
 
-  const copyFeedUrl = async () => {
-    if (!feedUrl) return;
-    await navigator.clipboard.writeText(feedUrl);
-    setCopied(true);
-    window.setTimeout(() => setCopied(false), 1800);
+  const feedLinks = data
+    ? [
+        { key: 'bookingCom', label: 'Booking.com', url: data.bookingCom },
+        { key: 'airbnb', label: 'Airbnb', url: data.airbnb },
+        { key: 'makeMyTrip', label: 'MakeMyTrip', url: data.makeMyTrip },
+        { key: 'all', label: 'All sources', url: data.feedUrl },
+      ]
+    : [];
+
+  const copyFeedUrl = async (key: string, url: string) => {
+    await navigator.clipboard.writeText(url);
+    setCopied(key);
+    window.setTimeout(() => setCopied(null), 1800);
   };
 
   return (
     <div className="mt-6 border-t border-primary-foreground/15 pt-5">
       <p className="text-xs font-bold text-primary-foreground">Outbound calendar feed</p>
-      <p className="mt-2 text-[10px] leading-4 text-primary-foreground/55">Paste this private link into any aggregator that accepts an iCal subscription.</p>
-      {feedUrl ? (
-        <div className="mt-3 flex gap-2">
-          <input readOnly value={feedUrl} className="min-w-0 flex-1 rounded-lg border border-primary-foreground/20 bg-primary-foreground/10 px-3 py-2 text-[10px] text-primary-foreground outline-none" aria-label="Outbound calendar feed URL" data-testid="input-outbound-calendar-feed" />
-          <button type="button" onClick={copyFeedUrl} className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-secondary text-primary" aria-label="Copy outbound calendar feed URL" data-testid="button-copy-calendar-feed">
-            {copied ? <Check size={14} /> : <Copy size={14} />}
-          </button>
+      <p className="mt-2 text-[10px] leading-4 text-primary-foreground/55">Use the matching URL for each aggregator. Each one excludes that aggregator’s own imported bookings to prevent feedback loops.</p>
+      {feedLinks.length > 0 ? (
+        <div className="mt-4 space-y-3">
+          {feedLinks.map((feed) => (
+            <div key={feed.key}>
+              <p className="mb-1 text-[10px] font-bold uppercase tracking-[.08em] text-primary-foreground/70">{feed.label}</p>
+              <div className="flex gap-2">
+                <input
+                  readOnly
+                  value={feed.url}
+                  className="min-w-0 flex-1 rounded-lg border border-primary-foreground/20 bg-primary-foreground/10 px-3 py-2 text-[10px] text-primary-foreground outline-none"
+                  aria-label={`${feed.label} outbound calendar feed URL`}
+                  data-testid={`input-outbound-calendar-feed-${feed.key}`}
+                />
+                <button
+                  type="button"
+                  onClick={() => copyFeedUrl(feed.key, feed.url)}
+                  className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-secondary text-primary"
+                  aria-label={`Copy ${feed.label} outbound calendar feed URL`}
+                  data-testid={`button-copy-calendar-feed-${feed.key}`}
+                >
+                  {copied === feed.key ? <Check size={14} /> : <Copy size={14} />}
+                </button>
+              </div>
+            </div>
+          ))}
         </div>
       ) : (
         <p className="mt-3 text-[10px] leading-4 text-[#f0a184]">{isLoading ? 'Loading private feed link...' : errorMessage}</p>
       )}
-      <p className="mt-2 text-[10px] leading-4 text-primary-foreground/45">Keep this URL private. Anyone with the link can read blocked dates.</p>
+      <p className="mt-3 text-[10px] leading-4 text-primary-foreground/45">Keep these URLs private. Anyone with a link can read blocked dates.</p>
     </div>
   );
 }
