@@ -132,6 +132,19 @@ const CONFIG = {
   ],
 } as const;
 
+// Image files that actually exist in artifacts/raj-kuthir/public/
+// (spaces URL-encoded as %20)
+const IMG = {
+  villaExterior: '/External%20Villa%20Morning.jpg',
+  bedroom: '/Bedroom.jpg',
+  dining: '/Dining%20Space.jpg',
+  pet: '/Pet%20View.jpg',
+  statue: '/Rabiguru%20Statue.jpg',
+  review1: '/Review%201.jpg',
+  review2: '/Review%202.jpg',
+  review3: '/Review%203.jpg',
+};
+
 const NAV_ITEMS = [
   { label: 'Stay', href: '#stay' },
   { label: 'Experience', href: '#experience' },
@@ -159,12 +172,12 @@ const CALENDAR_FEEDS: Array<{ key: FeedKey; label: string; hint: string }> = [
 ];
 
 const galleryItems = [
-  { title: 'The villa', category: 'Home', img: '/villa.jpg', tone: 'sage' },
-  { title: 'Morning light', category: 'Nature', img: '/External%20Villa%20Morning.jpg', tone: 'clay' },
-  { title: 'A quiet corner', category: 'Details', img: '/Bedroom.jpg', tone: 'ochre' },
-  { title: 'Shantiniketan', category: 'Nature', img: '/Rabiguru%20Statue.jpg', tone: 'ink' },
-  { title: 'Shared table', category: 'Details', img: '/Dining%20Space.jpg', tone: 'clay' },
-  { title: 'The whole home', category: 'Home', img: '/Villa%20Whole.jpg', tone: 'sage' },
+  { title: 'External villa', category: 'Home', img: IMG.villaExterior, tone: 'sage' },
+  { title: 'The bedroom', category: 'Home', img: IMG.bedroom, tone: 'clay' },
+  { title: 'Dining space', category: 'Details', img: IMG.dining, tone: 'ochre' },
+  { title: 'Rabindra statue', category: 'Nature', img: IMG.statue, tone: 'ink' },
+  { title: 'Pet friendly', category: 'Details', img: IMG.pet, tone: 'clay' },
+  { title: 'Morning light', category: 'Nature', img: IMG.villaExterior, tone: 'sage' },
 ];
 
 const faqs = [
@@ -443,8 +456,8 @@ function Home() {
             </div>
             <div className="reveal reveal-delay-2 relative">
               <img
-                src="/villa.jpg"
-                alt="Raj Kuthir Homestays villa at sunset"
+                src={IMG.villaExterior}
+                alt="Raj Kuthir Homestays villa exterior in the morning"
                 className="min-h-[410px] w-full rounded-[2rem] object-cover shadow-xl md:min-h-[560px]"
               />
               <div className="absolute -bottom-5 -left-4 hidden max-w-[190px] rounded-2xl bg-secondary px-5 py-4 text-primary shadow-lg sm:block">
@@ -495,8 +508,8 @@ function Home() {
             </div>
             <div className="mt-14 grid gap-5 md:grid-cols-[1.15fr_.85fr]">
               <img
-                src="/Drawing.jpg"
-                alt="Cosy living room at Raj Kuthir"
+                src={IMG.bedroom}
+                alt="Bedroom at Raj Kuthir"
                 className="min-h-[385px] w-full rounded-[1.5rem] object-cover md:min-h-[490px]"
               />
               <div className="grid gap-5 sm:grid-cols-2 md:grid-cols-1">
@@ -542,7 +555,7 @@ function Home() {
           <div className="section-shell grid items-center gap-12 lg:grid-cols-[1.1fr_.9fr] lg:gap-24">
             <div className="order-2 lg:order-1">
               <img
-                src="/Pet%20View.jpg"
+                src={IMG.pet}
                 alt="A pet relaxing at the door of Raj Kuthir"
                 className="min-h-[380px] w-full rounded-[2rem] object-cover shadow-md md:min-h-[490px]"
               />
@@ -593,8 +606,8 @@ function Home() {
           <div className="section-shell grid items-center gap-12 lg:grid-cols-[1fr_1fr] lg:gap-24">
             <div><p className="eyebrow mb-5 text-secondary">Find your way here</p><h2 id="location-title" className="font-journal text-5xl leading-[.94] md:text-7xl">A softer<br /><em>kind of away.</em></h2><p className="mt-8 max-w-[425px] text-lg leading-8 text-primary-foreground/70">In Bolpur / Shantiniketan, West Bengal. Follow the map, then let the pace change.</p><div className="mt-9 flex flex-wrap gap-3"><a href={CONFIG.mapsUrl} target="_blank" rel="noreferrer" className="flex items-center gap-2 rounded-full bg-secondary px-5 py-3 text-xs font-bold uppercase tracking-[.1em] text-primary transition-transform hover:-translate-y-1" data-testid="link-directions"><Navigation size={15} /> Open directions</a><a href={phoneHref(CONFIG.caretakerPhone)} className="flex items-center gap-2 rounded-full border border-primary-foreground/25 px-5 py-3 text-xs font-bold uppercase tracking-[.1em] text-primary-foreground transition-colors hover:bg-primary-foreground/10" data-testid="link-caretaker-call"><Phone size={15} /> Call caretaker</a></div></div>
             <img
-              src="/Shonajhuri.jpg"
-              alt="Sonajhuri, Shantiniketan near Raj Kuthir"
+              src={IMG.statue}
+              alt="Rabindra statue near Raj Kuthir, Shantiniketan"
               className="min-h-[380px] w-full rounded-[2rem] object-cover md:min-h-[460px]"
             />
           </div>
@@ -734,7 +747,7 @@ function Home() {
         </section>
 
         <section id="reviews" className="scroll-mt-24 section-shell py-24 md:py-32" aria-labelledby="reviews-title">
-          <div className="grid gap-12 lg:grid-cols-[.7fr_1.3fr] lg:gap-24"><div><p className="eyebrow mb-5 text-accent">From our guests</p><h2 id="reviews-title" className="font-journal text-5xl leading-[.94] text-primary md:text-6xl">Kind<br /><em>words.</em></h2><a href={CONFIG.reviewUrl} target="_blank" rel="noreferrer" className="mt-8 inline-flex items-center gap-2 text-xs font-bold uppercase tracking-[.1em] text-primary underline decoration-accent decoration-2 underline-offset-4" data-testid="link-google-review">Leave a Google review <ExternalLink size={14} /></a></div><div className="grid gap-4 sm:grid-cols-3"><img src="/Review%201.jpg" alt="Guest review for Raj Kuthir" className="w-full rounded-[1.4rem] object-cover shadow-sm" /><img src="/Review%202.jpg" alt="Guest review for Raj Kuthir" className="w-full rounded-[1.4rem] object-cover shadow-sm" /><img src="/Review%203.jpg" alt="Guest review for Raj Kuthir" className="w-full rounded-[1.4rem] object-cover shadow-sm" /></div></div>
+          <div className="grid gap-12 lg:grid-cols-[.7fr_1.3fr] lg:gap-24"><div><p className="eyebrow mb-5 text-accent">From our guests</p><h2 id="reviews-title" className="font-journal text-5xl leading-[.94] text-primary md:text-6xl">Kind<br /><em>words.</em></h2><a href={CONFIG.reviewUrl} target="_blank" rel="noreferrer" className="mt-8 inline-flex items-center gap-2 text-xs font-bold uppercase tracking-[.1em] text-primary underline decoration-accent decoration-2 underline-offset-4" data-testid="link-google-review">Leave a Google review <ExternalLink size={14} /></a></div><div className="grid gap-4 sm:grid-cols-3"><img src={IMG.review1} alt="Guest review for Raj Kuthir" className="w-full rounded-[1.4rem] object-cover shadow-sm" /><img src={IMG.review2} alt="Guest review for Raj Kuthir" className="w-full rounded-[1.4rem] object-cover shadow-sm" /><img src={IMG.review3} alt="Guest review for Raj Kuthir" className="w-full rounded-[1.4rem] object-cover shadow-sm" /></div></div>
         </section>
 
         <section className="border-t border-border bg-card py-24 md:py-32" aria-labelledby="faq-title">
