@@ -7,4 +7,4 @@ When adding OpenAPI schemas, prefer validator-compatible primitive hints unless 
 
 **Why:** The workspace currently generates Zod schemas with the installed package version, and newer Orval output can select helpers that are not present at runtime or during typechecking.
 
-**How to apply:** After codegen, run the library typecheck immediately; if generated schemas use unsupported helpers, remove nonessential OpenAPI format/integer hints and regenerate rather than editing generated files.
+**How to apply:** After codegen, run the library typecheck immediately; codegen can overwrite compatibility edits, so validate the regenerated output before moving on and keep the OpenAPI hints as conservative as practical.
