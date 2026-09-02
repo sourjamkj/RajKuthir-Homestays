@@ -6,12 +6,10 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export type CalendarEventSource = typeof CalendarEventSource[keyof typeof CalendarEventSource];
+export type GetCalendarFeedExclude = typeof GetCalendarFeedExclude[keyof typeof GetCalendarFeedExclude];
 
 
-export const CalendarEventSource = {
-  manual: 'manual',
-  direct: 'direct',
+export const GetCalendarFeedExclude = {
   bookingCom: 'bookingCom',
   airbnb: 'airbnb',
   makeMyTrip: 'makeMyTrip',

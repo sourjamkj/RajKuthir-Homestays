@@ -5,7 +5,12 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { GetCalendarFeedExclude } from './getCalendarFeedExclude';
 
 export type GetCalendarFeedParams = {
 token: string;
+/**
+ * Omit events imported from this source to prevent feedback loops.
+ */
+exclude?: GetCalendarFeedExclude;
 };

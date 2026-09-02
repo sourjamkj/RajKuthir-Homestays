@@ -10,6 +10,7 @@ import type { CalendarSourceStatus } from './calendarSourceStatus';
 
 export interface CalendarSyncResponse {
   syncedAt: Date;
+  totalEvents: number;
   events: CalendarEvent[];
   sources: CalendarSourceStatus[];
 }

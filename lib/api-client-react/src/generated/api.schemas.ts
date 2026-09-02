@@ -22,6 +22,8 @@ export type CalendarEventSource = typeof CalendarEventSource[keyof typeof Calend
 
 
 export const CalendarEventSource = {
+  manual: 'manual',
+  direct: 'direct',
   bookingCom: 'bookingCom',
   airbnb: 'airbnb',
   makeMyTrip: 'makeMyTrip',
@@ -32,9 +34,11 @@ export interface CalendarEvent {
   source: CalendarEventSource;
   /** @nullable */
   title: string | null;
-  start: string;
-  end: string;
-  allDay: boolean;
+  /** @nullable */
+  note: string | null;
+  startDate: string;
+  endDate: string;
+  editable: boolean;
 }
 
 export type CalendarSourceStatusSource = typeof CalendarSourceStatusSource[keyof typeof CalendarSourceStatusSource];
@@ -67,12 +71,44 @@ export interface CalendarSourceStatus {
 
 export interface CalendarSyncResponse {
   syncedAt: string;
+  totalEvents: number;
   events: CalendarEvent[];
   sources: CalendarSourceStatus[];
 }
 
 export interface CalendarFeedInfo {
   feedUrl: string;
+  bookingCom: string;
+  airbnb: string;
+  makeMyTrip: string;
+}
+
+export interface CalendarBlockInput {
+  startDate: string;
+  endDate: string;
+  /**
+     * @maxLength 120
+     * @nullable
+     */
+  title?: string | null;
+  /**
+     * @maxLength 500
+     * @nullable
+     */
+  note?: string | null;
+}
+
+export interface CalendarEventsResponse {
+  events: CalendarEvent[];
+}
+
+export interface PublicCalendarBlock {
+  startDate: string;
+  endDate: string;
+}
+
+export interface PublicCalendarResponse {
+  blocks: PublicCalendarBlock[];
 }
 
 export interface ErrorResponse {
@@ -81,5 +117,18 @@ export interface ErrorResponse {
 
 export type GetCalendarFeedParams = {
 token: string;
+/**
+ * Omit events imported from this source to prevent feedback loops.
+ */
+exclude?: GetCalendarFeedExclude;
 };
+
+export type GetCalendarFeedExclude = typeof GetCalendarFeedExclude[keyof typeof GetCalendarFeedExclude];
+
+
+export const GetCalendarFeedExclude = {
+  bookingCom: 'bookingCom',
+  airbnb: 'airbnb',
+  makeMyTrip: 'makeMyTrip',
+} as const;
 

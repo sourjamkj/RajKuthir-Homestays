@@ -12,7 +12,9 @@ export interface CalendarEvent {
   source: CalendarEventSource;
   /** @nullable */
   title: string | null;
-  start: Date;
-  end: Date;
-  allDay: boolean;
+  /** @nullable */
+  note: string | null;
+  startDate: Date;
+  endDate: Date;
+  editable: boolean;
 }

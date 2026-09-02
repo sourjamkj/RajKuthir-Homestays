@@ -5,10 +5,8 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { CalendarEvent } from './calendarEvent';
 
-export interface CalendarFeedInfo {
-  feedUrl: string;
-  bookingCom: string;
-  airbnb: string;
-  makeMyTrip: string;
+export interface CalendarEventsResponse {
+  events: CalendarEvent[];
 }

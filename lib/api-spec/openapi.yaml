@@ -31,9 +31,9 @@ paths:
       operationId: syncCalendars
       tags: [calendar]
       summary: Sync OTA calendar feeds
-      description: Fetches configured Booking.com, Airbnb, and MakeMyTrip iCal feeds and merges their busy periods.
+      description: Fetches configured OTA iCal feeds and persists their blocked date snapshots.
       requestBody:
-        required: true
+        required: false
         content:
           application/json:
             schema:
@@ -51,12 +51,106 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
-        "502":
-          description: Calendar feed could not be reached
+        "401":
+          description: Admin sign-in required
+        "403":
+          description: Account is not an authorised admin
+        "503":
+          description: Admin access is not configured
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/CalendarSyncResponse"
+                $ref: "#/components/schemas/ErrorResponse"
+  /calendar/events:
+    get:
+      operationId: listCalendarEvents
+      tags: [calendar]
+      summary: List calendar events for administrators
+      responses:
+        "200":
+          description: Persisted calendar events
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CalendarEventsResponse"
+        "401":
+          description: Admin sign-in required
+        "403":
+          description: Account is not an authorised admin
+        "503":
+          description: Admin access is not configured
+  /calendar/public:
+    get:
+      operationId: getPublicCalendar
+      tags: [calendar]
+      summary: Read public blocked date ranges
+      description: Returns only blocked ranges without sources, titles, or notes.
+      responses:
+        "200":
+          description: Public blocked date ranges
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PublicCalendarResponse"
+  /calendar/block:
+    post:
+      operationId: blockCalendarDates
+      tags: [calendar]
+      summary: Block dates manually
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CalendarBlockInput"
+      responses:
+        "201":
+          description: Calendar block created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CalendarEvent"
+        "400":
+          description: Invalid date range
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Admin sign-in required
+        "403":
+          description: Account is not an authorised admin
+  /calendar/block/{id}:
+    delete:
+      operationId: unblockCalendarDates
+      tags: [calendar]
+      summary: Remove a manual calendar block
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "204":
+          description: Calendar block removed
+        "400":
+          description: Invalid event id
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Admin sign-in required
+        "403":
+          description: Account is not an authorised admin
+        "404":
+          description: Event not found or not editable
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
   /calendar/feed-info:
     get:
       operationId: getCalendarFeedInfo
@@ -72,6 +166,8 @@ paths:
                 $ref: "#/components/schemas/CalendarFeedInfo"
         "401":
           description: Admin sign-in required
+        "403":
+          description: Account is not an authorised admin
         "503":
           description: Outbound calendar feed is not configured
   /calendar/feed:
@@ -86,6 +182,13 @@ paths:
           required: true
           schema:
             type: string
+        - name: exclude
+          in: query
+          required: false
+          description: Omit events imported from this source to prevent feedback loops.
+          schema:
+            type: string
+            enum: [bookingCom, airbnb, makeMyTrip]
       responses:
         "200":
           description: Merged iCal calendar
@@ -119,20 +222,23 @@ components:
       properties:
         id:
           type: string
+          format: uuid
         source:
           type: string
-          enum: [bookingCom, airbnb, makeMyTrip]
+          enum: [manual, direct, bookingCom, airbnb, makeMyTrip]
         title:
           type: ["string", "null"]
-        start:
+        note:
+          type: ["string", "null"]
+        startDate:
           type: string
           format: date
-        end:
+        endDate:
           type: string
           format: date
-        allDay:
+        editable:
           type: boolean
-      required: [id, source, title, start, end, allDay]
+      required: [id, source, title, note, startDate, endDate, editable]
     CalendarSourceStatus:
       type: object
       properties:
@@ -158,6 +264,8 @@ components:
         syncedAt:
           type: string
           format: date-time
+        totalEvents:
+          type: integer
         events:
           type: array
           items:
@@ -166,14 +274,65 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/CalendarSourceStatus"
-      required: [syncedAt, events, sources]
+      required: [syncedAt, totalEvents, events, sources]
     CalendarFeedInfo:
       type: object
       properties:
         feedUrl:
           type: string
           format: uri
-      required: [feedUrl]
+        bookingCom:
+          type: string
+          format: uri
+        airbnb:
+          type: string
+          format: uri
+        makeMyTrip:
+          type: string
+          format: uri
+      required: [feedUrl, bookingCom, airbnb, makeMyTrip]
+    CalendarBlockInput:
+      type: object
+      properties:
+        startDate:
+          type: string
+          format: date
+        endDate:
+          type: string
+          format: date
+        title:
+          type: ["string", "null"]
+          maxLength: 120
+        note:
+          type: ["string", "null"]
+          maxLength: 500
+      required: [startDate, endDate]
+    CalendarEventsResponse:
+      type: object
+      properties:
+        events:
+          type: array
+          items:
+            $ref: "#/components/schemas/CalendarEvent"
+      required: [events]
+    PublicCalendarBlock:
+      type: object
+      properties:
+        startDate:
+          type: string
+          format: date
+        endDate:
+          type: string
+          format: date
+      required: [startDate, endDate]
+    PublicCalendarResponse:
+      type: object
+      properties:
+        blocks:
+          type: array
+          items:
+            $ref: "#/components/schemas/PublicCalendarBlock"
+      required: [blocks]
     ErrorResponse:
       type: object
       properties:

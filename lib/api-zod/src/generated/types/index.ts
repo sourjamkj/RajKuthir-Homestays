@@ -6,8 +6,10 @@
  * OpenAPI spec version: 0.1.0
  */
 
+export * from './calendarBlockInput';
 export * from './calendarEvent';
 export * from './calendarEventSource';
+export * from './calendarEventsResponse';
 export * from './calendarFeedInfo';
 export * from './calendarSourceStatus';
 export * from './calendarSourceStatusSource';
@@ -15,5 +17,8 @@ export * from './calendarSourceStatusStatus';
 export * from './calendarSyncInput';
 export * from './calendarSyncResponse';
 export * from './errorResponse';
+export * from './getCalendarFeedExclude';
 export * from './getCalendarFeedParams';
 export * from './healthStatus';
+export * from './publicCalendarBlock';
+export * from './publicCalendarResponse';

@@ -18,7 +18,7 @@ export const HealthCheckResponse = zod.object({
 
 
 /**
- * Fetches configured Booking.com, Airbnb, and MakeMyTrip iCal feeds and merges their busy periods.
+ * Fetches configured OTA iCal feeds and persists their blocked date snapshots.
  * @summary Sync OTA calendar feeds
  */
 export const SyncCalendarsBody = zod.object({
@@ -29,13 +29,15 @@ export const SyncCalendarsBody = zod.object({
 
 export const SyncCalendarsResponse = zod.object({
   "syncedAt": zod.coerce.date(),
+  "totalEvents": zod.int(),
   "events": zod.array(zod.object({
-  "id": zod.string(),
-  "source": zod.enum(['bookingCom', 'airbnb', 'makeMyTrip']),
+  "id": zod.uuid(),
+  "source": zod.enum(['manual', 'direct', 'bookingCom', 'airbnb', 'makeMyTrip']),
   "title": zod.string().nullable(),
-  "start": zod.coerce.date(),
-  "end": zod.coerce.date(),
-  "allDay": zod.boolean()
+  "note": zod.string().nullable(),
+  "startDate": zod.coerce.date(),
+  "endDate": zod.coerce.date(),
+  "editable": zod.boolean()
 })),
   "sources": zod.array(zod.object({
   "source": zod.enum(['bookingCom', 'airbnb', 'makeMyTrip']),
@@ -49,11 +51,79 @@ export const SyncCalendarsResponse = zod.object({
 
 
 /**
+ * @summary List calendar events for administrators
+ */
+export const ListCalendarEventsResponse = zod.object({
+  "events": zod.array(zod.object({
+  "id": zod.uuid(),
+  "source": zod.enum(['manual', 'direct', 'bookingCom', 'airbnb', 'makeMyTrip']),
+  "title": zod.string().nullable(),
+  "note": zod.string().nullable(),
+  "startDate": zod.coerce.date(),
+  "endDate": zod.coerce.date(),
+  "editable": zod.boolean()
+}))
+})
+
+
+/**
+ * Returns only blocked ranges without sources, titles, or notes.
+ * @summary Read public blocked date ranges
+ */
+export const GetPublicCalendarResponse = zod.object({
+  "blocks": zod.array(zod.object({
+  "startDate": zod.coerce.date(),
+  "endDate": zod.coerce.date()
+}))
+})
+
+
+/**
+ * @summary Block dates manually
+ */
+export const blockCalendarDatesBodyTitleMax = 120;
+
+export const blockCalendarDatesBodyNoteMax = 500;
+
+
+
+export const BlockCalendarDatesBody = zod.object({
+  "startDate": zod.coerce.date(),
+  "endDate": zod.coerce.date(),
+  "title": zod.string().max(blockCalendarDatesBodyTitleMax).nullish(),
+  "note": zod.string().max(blockCalendarDatesBodyNoteMax).nullish()
+})
+
+export const BlockCalendarDatesResponse = zod.object({
+  "id": zod.uuid(),
+  "source": zod.enum(['manual', 'direct', 'bookingCom', 'airbnb', 'makeMyTrip']),
+  "title": zod.string().nullable(),
+  "note": zod.string().nullable(),
+  "startDate": zod.coerce.date(),
+  "endDate": zod.coerce.date(),
+  "editable": zod.boolean()
+})
+
+
+/**
+ * @summary Remove a manual calendar block
+ */
+export const UnblockCalendarDatesParams = zod.object({
+  "id": zod.uuid()
+})
+
+export const UnblockCalendarDatesResponse = zod.void()
+
+
+/**
  * Returns the private iCal subscription URL for authenticated calendar administrators.
  * @summary Get the outbound calendar feed link
  */
 export const GetCalendarFeedInfoResponse = zod.object({
-  "feedUrl": zod.string()
+  "feedUrl": zod.url(),
+  "bookingCom": zod.url(),
+  "airbnb": zod.url(),
+  "makeMyTrip": zod.url()
 })
 
 
@@ -62,7 +132,8 @@ export const GetCalendarFeedInfoResponse = zod.object({
  * @summary Read the merged outbound iCal feed
  */
 export const GetCalendarFeedQueryParams = zod.object({
-  "token": zod.coerce.string()
+  "token": zod.coerce.string(),
+  "exclude": zod.enum(['bookingCom', 'airbnb', 'makeMyTrip']).optional().describe('Omit events imported from this source to prevent feedback loops.')
 })
 
 export const GetCalendarFeedResponse = zod.unknown()

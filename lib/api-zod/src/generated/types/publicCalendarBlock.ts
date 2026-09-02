@@ -6,9 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export interface CalendarFeedInfo {
-  feedUrl: string;
-  bookingCom: string;
-  airbnb: string;
-  makeMyTrip: string;
+export interface PublicCalendarBlock {
+  startDate: Date;
+  endDate: Date;
 }
