@@ -159,12 +159,12 @@ const CALENDAR_FEEDS: Array<{ key: FeedKey; label: string; hint: string }> = [
 ];
 
 const galleryItems = [
-  { title: 'The villa', category: 'Home', note: 'Property photography to be added', tone: 'sage' },
-  { title: 'Garden hour', category: 'Nature', note: 'Property photography to be added', tone: 'clay' },
-  { title: 'A quiet corner', category: 'Details', note: 'Property photography to be added', tone: 'ochre' },
-  { title: 'Shantiniketan light', category: 'Nature', note: 'Shantiniketan image to be added', tone: 'ink' },
-  { title: 'Shared table', category: 'Details', note: 'Property photography to be added', tone: 'clay' },
-  { title: 'Arrive slowly', category: 'Home', note: 'Property photography to be added', tone: 'sage' },
+  { title: 'The villa', category: 'Home', img: '/villa.jpg', tone: 'sage' },
+  { title: 'Morning light', category: 'Nature', img: '/External%20Villa%20Morning.jpg', tone: 'clay' },
+  { title: 'A quiet corner', category: 'Details', img: '/Bedroom.jpg', tone: 'ochre' },
+  { title: 'Shantiniketan', category: 'Nature', img: '/Rabiguru%20Statue.jpg', tone: 'ink' },
+  { title: 'Shared table', category: 'Details', img: '/Dining%20Space.jpg', tone: 'clay' },
+  { title: 'The whole home', category: 'Home', img: '/Villa%20Whole.jpg', tone: 'sage' },
 ];
 
 const faqs = [
@@ -442,19 +442,11 @@ function Home() {
               <p className="mt-7 flex items-center gap-2 text-xs text-muted-foreground"><MapPin size={14} className="text-accent" /> {CONFIG.place}</p>
             </div>
             <div className="reveal reveal-delay-2 relative">
-              <div className="image-placeholder min-h-[410px] rounded-[2rem] p-6 shadow-xl md:min-h-[560px]" aria-label="Property photography placeholder">
-                <div className="relative flex h-full min-h-[358px] flex-col justify-between rounded-[1.45rem] border border-primary-foreground/30 p-6 text-primary-foreground md:min-h-[508px] md:p-8">
-                  <div className="flex items-start justify-between">
-                    <span className="eyebrow rounded-full border border-primary-foreground/30 px-3 py-2">Sobuj Potro · 01</span>
-                    <Sparkles size={20} strokeWidth={1.4} />
-                  </div>
-                  <div>
-                    <p className="eyebrow mb-3 text-secondary">Visual to come</p>
-                    <p className="max-w-[270px] font-journal text-4xl leading-[.95] md:text-5xl">Property photography to be added</p>
-                    <p className="mt-4 max-w-[260px] text-xs leading-5 text-primary-foreground/75">A considered frame of the villa, garden and the light around it will live here.</p>
-                  </div>
-                </div>
-              </div>
+              <img
+                src="/villa.jpg"
+                alt="Raj Kuthir Homestays villa at sunset"
+                className="min-h-[410px] w-full rounded-[2rem] object-cover shadow-xl md:min-h-[560px]"
+              />
               <div className="absolute -bottom-5 -left-4 hidden max-w-[190px] rounded-2xl bg-secondary px-5 py-4 text-primary shadow-lg sm:block">
                 <p className="font-journal text-xl leading-tight">A home, not a room.</p>
                 <p className="mt-2 font-mono-ui text-[9px] uppercase tracking-[.13em]">Entire villa · private garden</p>
@@ -502,11 +494,11 @@ function Home() {
               <p className="max-w-[300px] text-sm leading-6 text-primary-foreground/70">The whole two-bedroom villa is yours. Unpack once, then let the days open up.</p>
             </div>
             <div className="mt-14 grid gap-5 md:grid-cols-[1.15fr_.85fr]">
-              <div className="image-placeholder min-h-[385px] rounded-[1.5rem] p-6 md:min-h-[490px]">
-                <div className="relative flex h-full min-h-[333px] items-end rounded-[1rem] border border-primary-foreground/25 p-6 md:min-h-[438px]">
-                  <div><span className="eyebrow text-secondary">Replace with villa image</span><p className="mt-2 font-journal text-3xl">Property photography to be added</p></div>
-                </div>
-              </div>
+              <img
+                src="/Drawing.jpg"
+                alt="Cosy living room at Raj Kuthir"
+                className="min-h-[385px] w-full rounded-[1.5rem] object-cover md:min-h-[490px]"
+              />
               <div className="grid gap-5 sm:grid-cols-2 md:grid-cols-1">
                 <div className="rounded-[1.5rem] border border-primary-foreground/15 bg-primary-foreground/10 p-7">
                   <BedDouble size={25} className="mb-12 text-secondary" strokeWidth={1.4} />
@@ -549,12 +541,11 @@ function Home() {
         <section id="pet-friendly" className="scroll-mt-24 bg-secondary/60 py-24 md:py-32" aria-labelledby="pet-title">
           <div className="section-shell grid items-center gap-12 lg:grid-cols-[1.1fr_.9fr] lg:gap-24">
             <div className="order-2 lg:order-1">
-              <div className="image-placeholder min-h-[380px] rounded-[2rem] p-6 shadow-md md:min-h-[490px]" aria-label="Pet-friendly photography placeholder">
-                <div className="relative flex h-full min-h-[328px] flex-col justify-between rounded-[1.4rem] border border-primary-foreground/25 p-6 text-primary-foreground md:min-h-[438px]">
-                  <Dog size={31} strokeWidth={1.3} />
-                  <div><p className="eyebrow text-secondary">Replace with a real moment</p><p className="mt-2 font-journal text-3xl">Pet-friendly story image to be added</p></div>
-                </div>
-              </div>
+              <img
+                src="/Pet%20View.jpg"
+                alt="A pet relaxing at the door of Raj Kuthir"
+                className="min-h-[380px] w-full rounded-[2rem] object-cover shadow-md md:min-h-[490px]"
+              />
             </div>
             <div className="order-1 lg:order-2"><p className="eyebrow mb-5 text-accent">Bring everyone</p><h2 id="pet-title" className="font-journal text-5xl leading-[.94] text-primary md:text-7xl">Good stays<br /><em>include paws.</em></h2><p className="mt-8 max-w-[470px] text-lg leading-8 text-primary/75">This is a home where your pet is welcome, not an exception to negotiate. Tell us who is coming, and we will make the arrival feel comfortable for the whole family.</p><div className="mt-8 flex items-center gap-4 border-t border-primary/15 pt-6"><PawPrint size={23} className="text-accent" strokeWidth={1.5} /><p className="text-sm font-bold text-primary">A genuinely pet-welcoming stay</p></div></div>
           </div>
@@ -583,16 +574,29 @@ function Home() {
         </section>
 
         <section id="gallery" className="scroll-mt-24 section-shell py-24 md:py-36" aria-labelledby="gallery-title">
-          <div className="flex flex-col justify-between gap-8 md:flex-row md:items-end"><div><p className="eyebrow mb-5 text-accent">A visual diary</p><h2 id="gallery-title" className="font-journal text-5xl leading-[.94] text-primary md:text-7xl">Frames to<br /><em>fill later.</em></h2></div><div className="flex flex-wrap gap-2" role="tablist" aria-label="Gallery categories">{['All', 'Home', 'Nature', 'Details'].map((filter) => <button key={filter} onClick={() => setGalleryFilter(filter)} role="tab" aria-selected={galleryFilter === filter} className={`rounded-full border px-4 py-2 text-xs font-bold transition-colors ${galleryFilter === filter ? 'border-primary bg-primary text-primary-foreground' : 'border-border text-muted-foreground hover:border-primary hover:text-primary'}`} data-testid={`button-gallery-${filter.toLowerCase()}`}>{filter}</button>)}</div></div>
+          <div className="flex flex-col justify-between gap-8 md:flex-row md:items-end"><div><p className="eyebrow mb-5 text-accent">A visual diary</p><h2 id="gallery-title" className="font-journal text-5xl leading-[.94] text-primary md:text-7xl">A look<br /><em>around home.</em></h2></div><div className="flex flex-wrap gap-2" role="tablist" aria-label="Gallery categories">{['All', 'Home', 'Nature', 'Details'].map((filter) => <button key={filter} onClick={() => setGalleryFilter(filter)} role="tab" aria-selected={galleryFilter === filter} className={`rounded-full border px-4 py-2 text-xs font-bold transition-colors ${galleryFilter === filter ? 'border-primary bg-primary text-primary-foreground' : 'border-border text-muted-foreground hover:border-primary hover:text-primary'}`} data-testid={`button-gallery-${filter.toLowerCase()}`}>{filter}</button>)}</div></div>
           <div className="mt-12 grid grid-cols-2 gap-3 md:grid-cols-3 md:gap-5">
-            {filteredGallery.map((item) => <div key={item.title} className={`image-placeholder group min-h-[220px] rounded-[1.25rem] p-4 ${item.tone === 'clay' ? 'before:bg-accent/20' : ''} ${item.tone === 'ochre' ? 'before:bg-secondary/20' : ''} md:min-h-[300px]`} data-testid={`gallery-card-${item.title.toLowerCase().replace(/\s/g, '-')}`}><div className="relative flex h-full min-h-[188px] flex-col justify-between rounded-[.85rem] border border-primary-foreground/20 p-4 text-primary-foreground transition-transform group-hover:scale-[1.02] md:min-h-[268px]"><GalleryHorizontalEnd size={18} className="opacity-75" strokeWidth={1.4} /><div><p className="font-journal text-2xl leading-none">{item.title}</p><p className="mt-2 font-mono-ui text-[9px] uppercase tracking-[.1em] text-primary-foreground/70">{item.note}</p></div></div></div>)}
+            {filteredGallery.map((item) => (
+              <div key={item.title} className="group relative min-h-[220px] overflow-hidden rounded-[1.25rem] md:min-h-[300px]" data-testid={`gallery-card-${item.title.toLowerCase().replace(/\s/g, '-')}`}>
+                <img src={item.img} alt={item.title} className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.05]" />
+                <div className="absolute inset-0 bg-gradient-to-t from-black/55 via-black/10 to-transparent" />
+                <div className="absolute inset-x-0 bottom-0 p-4">
+                  <p className="font-journal text-2xl leading-none text-white">{item.title}</p>
+                  <p className="mt-1 font-mono-ui text-[9px] uppercase tracking-[.1em] text-white/80">{item.category}</p>
+                </div>
+              </div>
+            ))}
           </div>
         </section>
 
         <section id="location" className="scroll-mt-24 bg-primary py-24 text-primary-foreground md:py-32" aria-labelledby="location-title">
           <div className="section-shell grid items-center gap-12 lg:grid-cols-[1fr_1fr] lg:gap-24">
             <div><p className="eyebrow mb-5 text-secondary">Find your way here</p><h2 id="location-title" className="font-journal text-5xl leading-[.94] md:text-7xl">A softer<br /><em>kind of away.</em></h2><p className="mt-8 max-w-[425px] text-lg leading-8 text-primary-foreground/70">In Bolpur / Shantiniketan, West Bengal. Follow the map, then let the pace change.</p><div className="mt-9 flex flex-wrap gap-3"><a href={CONFIG.mapsUrl} target="_blank" rel="noreferrer" className="flex items-center gap-2 rounded-full bg-secondary px-5 py-3 text-xs font-bold uppercase tracking-[.1em] text-primary transition-transform hover:-translate-y-1" data-testid="link-directions"><Navigation size={15} /> Open directions</a><a href={phoneHref(CONFIG.caretakerPhone)} className="flex items-center gap-2 rounded-full border border-primary-foreground/25 px-5 py-3 text-xs font-bold uppercase tracking-[.1em] text-primary-foreground transition-colors hover:bg-primary-foreground/10" data-testid="link-caretaker-call"><Phone size={15} /> Call caretaker</a></div></div>
-            <div className="image-placeholder min-h-[380px] rounded-[2rem] p-6 md:min-h-[460px]"><div className="relative flex h-full min-h-[328px] flex-col justify-between rounded-[1.4rem] border border-primary-foreground/25 p-6 text-primary-foreground md:min-h-[408px]"><div className="flex items-center justify-between"><MapPin size={26} className="text-secondary" /><span className="eyebrow">Map visual to be added</span></div><div><p className="font-journal text-4xl">Shantiniketan image to be added</p><p className="mt-3 text-sm text-primary-foreground/65">Use a real, owner-approved local view here.</p></div></div></div>
+            <img
+              src="/Shonajhuri.jpg"
+              alt="Sonajhuri, Shantiniketan near Raj Kuthir"
+              className="min-h-[380px] w-full rounded-[2rem] object-cover md:min-h-[460px]"
+            />
           </div>
         </section>
 
@@ -730,7 +734,7 @@ function Home() {
         </section>
 
         <section id="reviews" className="scroll-mt-24 section-shell py-24 md:py-32" aria-labelledby="reviews-title">
-          <div className="grid gap-12 lg:grid-cols-[.7fr_1.3fr] lg:gap-24"><div><p className="eyebrow mb-5 text-accent">From guests, soon</p><h2 id="reviews-title" className="font-journal text-5xl leading-[.94] text-primary md:text-6xl">A page for<br /><em>good words.</em></h2><a href={CONFIG.reviewUrl} target="_blank" rel="noreferrer" className="mt-8 inline-flex items-center gap-2 text-xs font-bold uppercase tracking-[.1em] text-primary underline decoration-accent decoration-2 underline-offset-4" data-testid="link-google-review">Leave a Google review <ExternalLink size={14} /></a></div><div className="grid gap-4 md:grid-cols-2"><div className="rounded-[1.4rem] border border-border bg-card p-7 md:col-span-2"><div className="flex gap-1 text-accent">{[1, 2, 3, 4, 5].map((number) => <Star key={number} size={15} fill="currentColor" />)}</div><p className="mt-7 font-journal text-3xl leading-tight text-primary">Your first guest story belongs here.</p><p className="mt-4 max-w-[490px] text-sm leading-6 text-muted-foreground">Review placeholder — replace with an approved guest review before publishing.</p></div><div className="rounded-[1.4rem] bg-secondary p-7"><Quote size={23} className="text-primary/50" /><p className="mt-10 text-sm font-bold leading-6 text-primary">Review placeholder — owner to replace.</p></div><div className="rounded-[1.4rem] bg-primary p-7 text-primary-foreground"><Quote size={23} className="text-secondary/70" /><p className="mt-10 text-sm font-bold leading-6">Review placeholder — owner to replace.</p></div></div></div>
+          <div className="grid gap-12 lg:grid-cols-[.7fr_1.3fr] lg:gap-24"><div><p className="eyebrow mb-5 text-accent">From our guests</p><h2 id="reviews-title" className="font-journal text-5xl leading-[.94] text-primary md:text-6xl">Kind<br /><em>words.</em></h2><a href={CONFIG.reviewUrl} target="_blank" rel="noreferrer" className="mt-8 inline-flex items-center gap-2 text-xs font-bold uppercase tracking-[.1em] text-primary underline decoration-accent decoration-2 underline-offset-4" data-testid="link-google-review">Leave a Google review <ExternalLink size={14} /></a></div><div className="grid gap-4 sm:grid-cols-3"><img src="/Review%201.jpg" alt="Guest review for Raj Kuthir" className="w-full rounded-[1.4rem] object-cover shadow-sm" /><img src="/Review%202.jpg" alt="Guest review for Raj Kuthir" className="w-full rounded-[1.4rem] object-cover shadow-sm" /><img src="/Review%203.jpg" alt="Guest review for Raj Kuthir" className="w-full rounded-[1.4rem] object-cover shadow-sm" /></div></div>
         </section>
 
         <section className="border-t border-border bg-card py-24 md:py-32" aria-labelledby="faq-title">
