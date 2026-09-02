@@ -1,3 +1,4 @@
 - [API codegen and Zod compatibility](api-codegen-zod-compat.md) — validate generated schemas against the installed Zod version; newer Orval helpers may not exist.
 - [Vite HTML root URL handling](vite-html-root-url.md) — bare root-relative metadata URLs can trigger EISDIR during production HTML processing.
 - [Raj Kuthir public image references](raj-kuthir-public-image-refs.md) — property photos live in public/; reference by asset() URL, never ESM-import them.
+- [raj-kuthir-deploy-railway](raj-kuthir-deploy-railway.md) — hosted on Railway (Express serves the built frontend); frozen-lockfile install, www domain + DNS notes.

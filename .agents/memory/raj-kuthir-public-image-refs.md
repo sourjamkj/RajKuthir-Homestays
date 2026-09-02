@@ -18,3 +18,11 @@ added" placeholders. Fixed in 81bc9be.
 `asset('File%20Name.jpg')` (percent-encode spaces — this is a URL, not a path).
 Do not add `import ... from '../public/...'`. If a photo genuinely needs Vite
 asset hashing, move it into `src/` first and import with a literal space.
+
+**Local build note:** git-bash on Windows mangles `BASE_PATH=/ pnpm build` into
+`BASE_PATH=/Program Files/Git/...`. Prefix with `MSYS_NO_PATHCONV=1` or just omit
+`BASE_PATH` (vite.config defaults it to `/`). Railway (Linux) is unaffected.
+
+**Related:** any change to `package.json` / `pnpm-workspace.yaml` catalog/deps
+MUST be followed by `pnpm install` + committing `pnpm-lock.yaml` — Railway runs
+`pnpm install --frozen-lockfile` and hard-fails on any drift. See [[raj-kuthir-deploy-railway]].
