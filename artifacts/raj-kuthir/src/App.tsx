@@ -136,7 +136,7 @@ const CONFIG = {
 // (spaces URL-encoded as %20, prefixed with basePath so they resolve
 //  correctly whether the site is served at "/" or a sub-path).
 const IMG = {
-  villaExterior: `${basePath}/External%20Villa%20Morning.jpg`,
+  villaExterior: `${basePath}/public/External%20Villa%20Morning.jpg`,
   bedroom: `${basePath}/Bedroom.jpg`,
   dining: `${basePath}/Dining%20Space.jpg`,
   pet: `${basePath}/Pet%20View.jpg`,
