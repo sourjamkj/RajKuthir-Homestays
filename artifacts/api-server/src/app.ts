@@ -51,3 +51,34 @@ app.use(
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
+app.use("/api", router);
+
+const here = path.dirname(fileURLToPath(import.meta.url));
+
+const clientDistCandidates = [
+  process.env.CLIENT_DIST,
+  path.resolve(process.cwd(), "../raj-kuthir/dist/public"),
+  path.resolve(process.cwd(), "artifacts/raj-kuthir/dist/public"),
+  path.resolve(here, "../../raj-kuthir/dist/public"),
+  path.resolve(here, "../../../raj-kuthir/dist/public"),
+].filter(Boolean) as string[];
+
+const clientDist = clientDistCandidates.find((p) => existsSync(p));
+
+if (clientDist) {
+  logger.info({ clientDist }, "Serving frontend from disk");
+  app.use(express.static(clientDist));
+
+  app.use((req, res, next) => {
+    if (req.method !== "GET") return next();
+    if (req.path.startsWith("/api")) return next();
+    res.sendFile(path.join(clientDist, "index.html"));
+  });
+} else {
+  logger.warn(
+    { tried: clientDistCandidates },
+    "Frontend build not found — API will run without serving the site",
+  );
+}
+
+export default app;
