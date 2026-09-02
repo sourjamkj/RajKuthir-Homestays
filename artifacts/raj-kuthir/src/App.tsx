@@ -135,15 +135,25 @@ const CONFIG = {
 // Image files that actually exist in artifacts/raj-kuthir/public/
 // (spaces URL-encoded as %20, prefixed with basePath so they resolve
 //  correctly whether the site is served at "/" or a sub-path).
+// Replace the current IMG object with this:
+import villaExterior from '/External%20Villa%20Morning.jpg';
+import bedroom from '/Bedroom.jpg';
+import dining from '/Dining%20Space.jpg';
+import pet from '/Pet%20View.jpg';
+import statue from '/Rabiguru%20Statue.jpg';
+import review1 from '/Review%201.jpg';
+import review2 from '/Review%202.jpg';
+import review3 from '/Review%203.jpg';
+
 const IMG = {
-  villaExterior: `${basePath}/public/External%20Villa%20Morning.jpg`,
-  bedroom: `${basePath}/Bedroom.jpg`,
-  dining: `${basePath}/Dining%20Space.jpg`,
-  pet: `${basePath}/Pet%20View.jpg`,
-  statue: `${basePath}/Rabiguru%20Statue.jpg`,
-  review1: `${basePath}/Review%201.jpg`,
-  review2: `${basePath}/Review%202.jpg`,
-  review3: `${basePath}/Review%203.jpg`,
+  villaExterior,
+  bedroom,
+  dining,
+  pet,
+  statue,
+  review1,
+  review2,
+  review3,
 };
 
 const NAV_ITEMS = [
