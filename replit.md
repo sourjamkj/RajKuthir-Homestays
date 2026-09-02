@@ -1,6 +1,9 @@
-# [Project name]
+# (superseded — see /README.md)
 
-_Replace the heading above with the project's name, and this line with one sentence describing what this app does for users._
+This file was the original scaffolding template. Project docs, run/build
+commands, env vars and the repo map now live in `/README.md` at the repo
+root. This file is kept around only because it can't be deleted remotely;
+safe to delete by hand.
 
 ## Run & Operate
 

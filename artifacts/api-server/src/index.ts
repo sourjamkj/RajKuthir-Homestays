@@ -1,5 +1,6 @@
 import app from "./app";
 import { logger } from "./lib/logger";
+import { startCalendarCron } from "./lib/calendar-cron";
 
 const rawPort = process.env["PORT"];
 
@@ -22,4 +23,12 @@ app.listen(port, (err) => {
   }
 
   logger.info({ port }, "Server listening");
+
+  // Keep the OTA calendars in sync automatically. This was wired up in
+  // calendar-cron.ts but never actually started, so imports only ever ran
+  // when someone manually clicked "Sync calendars" in the admin UI — if
+  // that didn't happen regularly, feeds went stale and OTAs could double-book.
+  // Started unconditionally (not gated on NODE_ENV) so it runs no matter
+  // what env vars the hosting platform sets at runtime.
+  startCalendarCron();
 });
