@@ -132,25 +132,23 @@ const CONFIG = {
   ],
 } as const;
 
-// Use relative paths:
-import villaExterior from '../public/External%20Villa%20Morning.jpg';
-import bedroom from '../public/Bedroom.jpg';
-import dining from '../public/Dining%20Space.jpg';
-import pet from '../public/Pet%20View.jpg';
-import statue from '../public/Rabiguru%20Statue.jpg';
-import review1 from '../public/Review%201.jpg';
-import review2 from '../public/Review%202.jpg';
-import review3 from '../public/Review%203.jpg';
+// Photos live in artifacts/raj-kuthir/public/ and Vite copies that folder to
+// the site root verbatim, so they are referenced by URL rather than `import`.
+// (An ESM `import '../public/External%20Villa%20Morning.jpg'` does not resolve:
+// Rollup/Vite never percent-decode import specifiers, and importing out of
+// public/ is unsupported — this is what left the live build broken.)
+// `basePath` keeps the URLs correct when the app is served under a sub-path.
+const asset = (file: string) => `${basePath}/${file}`;
 
 const IMG = {
-  villaExterior,
-  bedroom,
-  dining,
-  pet,
-  statue,
-  review1,
-  review2,
-  review3,
+  villaExterior: asset('External%20Villa%20Morning.jpg'),
+  bedroom: asset('Bedroom.jpg'),
+  dining: asset('Dining%20Space.jpg'),
+  pet: asset('Pet%20View.jpg'),
+  statue: asset('Rabiguru%20Statue.jpg'),
+  review1: asset('Review%201.jpg'),
+  review2: asset('Review%202.jpg'),
+  review3: asset('Review%203.jpg'),
 };
 const NAV_ITEMS = [
   { label: 'Stay', href: '#stay' },
