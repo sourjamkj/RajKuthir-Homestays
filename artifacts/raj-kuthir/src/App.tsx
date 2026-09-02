@@ -133,16 +133,17 @@ const CONFIG = {
 } as const;
 
 // Image files that actually exist in artifacts/raj-kuthir/public/
-// (spaces URL-encoded as %20)
+// (spaces URL-encoded as %20, prefixed with basePath so they resolve
+//  correctly whether the site is served at "/" or a sub-path).
 const IMG = {
-  villaExterior: '/External%20Villa%20Morning.jpg',
-  bedroom: '/Bedroom.jpg',
-  dining: '/Dining%20Space.jpg',
-  pet: '/Pet%20View.jpg',
-  statue: '/Rabiguru%20Statue.jpg',
-  review1: '/Review%201.jpg',
-  review2: '/Review%202.jpg',
-  review3: '/Review%203.jpg',
+  villaExterior: `${basePath}/External%20Villa%20Morning.jpg`,
+  bedroom: `${basePath}/Bedroom.jpg`,
+  dining: `${basePath}/Dining%20Space.jpg`,
+  pet: `${basePath}/Pet%20View.jpg`,
+  statue: `${basePath}/Rabiguru%20Statue.jpg`,
+  review1: `${basePath}/Review%201.jpg`,
+  review2: `${basePath}/Review%202.jpg`,
+  review3: `${basePath}/Review%203.jpg`,
 };
 
 const NAV_ITEMS = [
