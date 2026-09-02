@@ -119,7 +119,7 @@ const CONFIG = {
   name: 'RAJ KUTHIR HOMESTAYS',
   chapter: 'SOBUJ POTRO',
   place: 'Bolpur / Shantiniketan, West Bengal',
-  ratePerNight: 6800,
+  ratePerNight: 3500,
   advanceShare: 0.3,
   hostPhone: '+91 62903 99165',
   caretakerPhone: '+91 78726 85558',
