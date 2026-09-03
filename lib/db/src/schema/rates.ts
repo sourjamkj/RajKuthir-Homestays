@@ -1,5 +1,6 @@
 import {
   pgTable,
+  pgEnum,
   date,
   index,
   integer,
@@ -35,6 +36,16 @@ export const nightlyRates = pgTable("nightly_rates", {
 
 export type NightlyRate = typeof nightlyRates.$inferSelect;
 
+/**
+ * How a peak period sets its prices.
+ *
+ * - `fixed`   exact rupee amounts per occupancy
+ * - `percent` a flat uplift over the standard rates
+ * - `demand`  an uplift that climbs from minPercent to maxPercent as enquiries
+ *             for those dates come in — priced by interest, not by guesswork
+ */
+export const rateModeEnum = pgEnum("rate_mode", ["fixed", "percent", "demand"]);
+
 export const rateOverrides = pgTable(
   "rate_overrides",
   {
@@ -42,13 +53,30 @@ export const rateOverrides = pgTable(
     startDate: date("start_date", { mode: "string" }).notNull(),
     endDate: date("end_date", { mode: "string" }).notNull(),
     label: text("label"),
+
+    mode: rateModeEnum("mode").notNull().default("fixed"),
+
     /**
-     * Per-guest prices for this period, in paise, keyed by guest count as a
-     * string: {"1": 300000, "2": 350000, ...}. Stored as one object rather
+     * `fixed` mode only: per-guest prices in paise, keyed by guest count as a
+     * string — {"1": 300000, "2": 350000, ...}. Stored as one object rather
      * than a row per occupancy so a peak period stays a single thing the
-     * owner can edit or delete as a unit.
+     * owner can edit or delete as a unit. Empty for the other two modes.
      */
     amounts: jsonb("amounts").$type<Record<string, number>>().notNull(),
+
+    /** `percent` mode: whole-number uplift over standard rates, e.g. 30 = +30%. */
+    percent: integer("percent"),
+
+    /** `demand` mode: the uplift floor and ceiling, as whole percentages. */
+    minPercent: integer("min_percent"),
+    maxPercent: integer("max_percent"),
+
+    /**
+     * `demand` mode: the number of enquiries for these dates at which the
+     * uplift reaches maxPercent. Below it the price scales linearly from
+     * minPercent, so a quiet period never charges the ceiling.
+     */
+    demandThreshold: integer("demand_threshold"),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),

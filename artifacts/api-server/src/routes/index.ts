@@ -4,6 +4,7 @@ import adminRouter from "./admin";
 import calendarRouter from "./calendar";
 import ratesRouter from "./rates";
 import ledgerRouter from "./ledger";
+import enquiriesRouter from "./enquiries";
 
 const router: IRouter = Router();
 
@@ -12,5 +13,6 @@ router.use(adminRouter);
 router.use(calendarRouter);
 router.use(ratesRouter);
 router.use(ledgerRouter);
+router.use(enquiriesRouter);
 
 export default router;

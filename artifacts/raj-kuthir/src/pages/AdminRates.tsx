@@ -12,14 +12,46 @@ import {
   Trash2,
 } from 'lucide-react';
 import { adminFetch, useAdminSession, useLogout } from '@/lib/admin-api';
-import { formatRupees, useRatePlan, RATES_KEY } from '@/lib/rates';
+import {
+  formatRupees,
+  useRatePlan,
+  RATES_KEY,
+  type RateMode,
+} from '@/lib/rates';
 
 const GUEST_COUNTS = [1, 2, 3, 4, 5];
+
+const MODE_OPTIONS: Array<{
+  value: RateMode;
+  title: string;
+  blurb: string;
+}> = [
+  {
+    value: 'percent',
+    title: 'Percentage',
+    blurb: 'Raise every standard rate by a set %. One number to maintain.',
+  },
+  {
+    value: 'demand',
+    title: 'Demand range',
+    blurb: 'Climbs from a floor % to a ceiling % as enquiries come in.',
+  },
+  {
+    value: 'fixed',
+    title: 'Exact prices',
+    blurb: 'Type the rupee price for each occupancy yourself.',
+  },
+];
 
 const emptyPeak = () => ({
   startDate: '',
   endDate: '',
   label: '',
+  mode: 'percent' as RateMode,
+  percent: '',
+  minPercent: '',
+  maxPercent: '',
+  demandThreshold: '',
   amounts: Object.fromEntries(GUEST_COUNTS.map((n) => [String(n), ''])) as Record<
     string,
     string
@@ -90,9 +122,24 @@ export default function AdminRates() {
           startDate: peak.startDate,
           endDate: peak.endDate,
           label: peak.label || null,
-          amounts: Object.fromEntries(
-            Object.entries(peak.amounts).filter(([, value]) => value !== ''),
-          ),
+          mode: peak.mode,
+          ...(peak.mode === 'percent' ? { percent: peak.percent } : {}),
+          ...(peak.mode === 'demand'
+            ? {
+                minPercent: peak.minPercent,
+                maxPercent: peak.maxPercent,
+                demandThreshold: Number(peak.demandThreshold),
+              }
+            : {}),
+          ...(peak.mode === 'fixed'
+            ? {
+                amounts: Object.fromEntries(
+                  Object.entries(peak.amounts).filter(
+                    ([, value]) => value !== '',
+                  ),
+                ),
+              }
+            : {}),
         }),
       }),
     onSuccess: () => {
@@ -267,36 +314,150 @@ export default function AdminRates() {
                 </Field>
               </div>
 
-              <div className="mt-5 grid gap-4 sm:grid-cols-3 lg:grid-cols-5">
-                {GUEST_COUNTS.map((guests) => (
-                  <Field
-                    key={guests}
-                    label={`${guests} ${guests === 1 ? 'guest' : 'guests'}`}
-                  >
-                    <div className="flex items-center rounded-lg border border-border bg-background focus-within:border-primary">
-                      <span className="pl-3 text-sm text-muted-foreground">
-                        ₹
+              <div className="mt-6">
+                <p className="mb-2 text-[10px] font-bold uppercase tracking-[.08em] text-muted-foreground">
+                  How should this period be priced?
+                </p>
+                <div className="grid gap-2 sm:grid-cols-3" role="radiogroup" aria-label="Pricing mode">
+                  {MODE_OPTIONS.map((option) => (
+                    <button
+                      key={option.value}
+                      type="button"
+                      role="radio"
+                      aria-checked={peak.mode === option.value}
+                      onClick={() => setPeak({ ...peak, mode: option.value })}
+                      className={`rounded-xl border p-4 text-left transition-colors ${peak.mode === option.value ? 'border-primary bg-primary/5' : 'border-border hover:border-primary/50'}`}
+                      data-testid={`button-peak-mode-${option.value}`}
+                    >
+                      <span className="flex items-center gap-2 text-sm font-bold text-primary">
+                        <span className={`grid h-4 w-4 shrink-0 place-items-center rounded-full border ${peak.mode === option.value ? 'border-primary' : 'border-border'}`}>
+                          {peak.mode === option.value && (
+                            <span className="h-2 w-2 rounded-full bg-primary" />
+                          )}
+                        </span>
+                        {option.title}
                       </span>
+                      <span className="mt-2 block text-[11px] leading-4 text-muted-foreground">
+                        {option.blurb}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {peak.mode === 'percent' && (
+                <div className="mt-5 max-w-[280px]">
+                  <Field label="Increase over standard rates">
+                    <div className="flex items-center rounded-lg border border-border bg-background focus-within:border-primary">
                       <input
                         type="number"
                         inputMode="numeric"
-                        value={peak.amounts[String(guests)] ?? ''}
+                        placeholder="30"
+                        value={peak.percent}
                         onChange={(event) =>
-                          setPeak({
-                            ...peak,
-                            amounts: {
-                              ...peak.amounts,
-                              [String(guests)]: event.target.value,
-                            },
-                          })
+                          setPeak({ ...peak, percent: event.target.value })
                         }
-                        className="w-full bg-transparent px-2 py-2.5 text-sm tabular-nums outline-none"
-                        data-testid={`input-peak-rate-${guests}`}
+                        className="w-full bg-transparent px-3 py-2.5 text-sm tabular-nums outline-none"
+                        data-testid="input-peak-percent"
                       />
+                      <span className="pr-3 text-sm text-muted-foreground">%</span>
                     </div>
                   </Field>
-                ))}
-              </div>
+                  <p className="mt-2 text-[11px] leading-4 text-muted-foreground">
+                    A negative number discounts instead — useful for a quiet season.
+                  </p>
+                </div>
+              )}
+
+              {peak.mode === 'demand' && (
+                <>
+                  <div className="mt-5 grid gap-4 sm:grid-cols-3">
+                    <Field label="Starting increase">
+                      <div className="flex items-center rounded-lg border border-border bg-background focus-within:border-primary">
+                        <input
+                          type="number"
+                          inputMode="numeric"
+                          placeholder="10"
+                          value={peak.minPercent}
+                          onChange={(event) =>
+                            setPeak({ ...peak, minPercent: event.target.value })
+                          }
+                          className="w-full bg-transparent px-3 py-2.5 text-sm tabular-nums outline-none"
+                          data-testid="input-peak-min-percent"
+                        />
+                        <span className="pr-3 text-sm text-muted-foreground">%</span>
+                      </div>
+                    </Field>
+                    <Field label="Maximum increase">
+                      <div className="flex items-center rounded-lg border border-border bg-background focus-within:border-primary">
+                        <input
+                          type="number"
+                          inputMode="numeric"
+                          placeholder="50"
+                          value={peak.maxPercent}
+                          onChange={(event) =>
+                            setPeak({ ...peak, maxPercent: event.target.value })
+                          }
+                          className="w-full bg-transparent px-3 py-2.5 text-sm tabular-nums outline-none"
+                          data-testid="input-peak-max-percent"
+                        />
+                        <span className="pr-3 text-sm text-muted-foreground">%</span>
+                      </div>
+                    </Field>
+                    <Field label="Enquiries to reach maximum">
+                      <input
+                        type="number"
+                        inputMode="numeric"
+                        placeholder="10"
+                        value={peak.demandThreshold}
+                        onChange={(event) =>
+                          setPeak({ ...peak, demandThreshold: event.target.value })
+                        }
+                        className="w-full rounded-lg border border-border bg-background px-3 py-2.5 text-sm tabular-nums outline-none focus:border-primary"
+                        data-testid="input-peak-threshold"
+                      />
+                    </Field>
+                  </div>
+                  <p className="mt-2 text-[11px] leading-5 text-muted-foreground">
+                    The price starts at the lower figure and rises towards the higher one
+                    as enquiries for these dates arrive, reaching the maximum at the
+                    number you set. It never goes above it.
+                  </p>
+                </>
+              )}
+
+              {peak.mode === 'fixed' && (
+                <div className="mt-5 grid gap-4 sm:grid-cols-3 lg:grid-cols-5">
+                  {GUEST_COUNTS.map((guests) => (
+                    <Field
+                      key={guests}
+                      label={`${guests} ${guests === 1 ? 'guest' : 'guests'}`}
+                    >
+                      <div className="flex items-center rounded-lg border border-border bg-background focus-within:border-primary">
+                        <span className="pl-3 text-sm text-muted-foreground">
+                          ₹
+                        </span>
+                        <input
+                          type="number"
+                          inputMode="numeric"
+                          value={peak.amounts[String(guests)] ?? ''}
+                          onChange={(event) =>
+                            setPeak({
+                              ...peak,
+                              amounts: {
+                                ...peak.amounts,
+                                [String(guests)]: event.target.value,
+                              },
+                            })
+                          }
+                          className="w-full bg-transparent px-2 py-2.5 text-sm tabular-nums outline-none"
+                          data-testid={`input-peak-rate-${guests}`}
+                        />
+                      </div>
+                    </Field>
+                  ))}
+                </div>
+              )}
 
               {peakError && (
                 <p className="mt-3 text-xs text-[#A65E45]" role="alert">
@@ -347,6 +508,25 @@ export default function AdminRates() {
                       {format(parseISO(override.startDate), 'd MMM yyyy')} →{' '}
                       {format(parseISO(override.endDate), 'd MMM yyyy')}
                     </p>
+
+                    <div className="mt-2 flex flex-wrap items-center gap-2">
+                      <span className="rounded-full border border-border px-2.5 py-1 text-[10px] font-bold uppercase tracking-[.07em] text-muted-foreground">
+                        {override.mode === 'percent'
+                          ? `+${override.percent}% over standard`
+                          : override.mode === 'demand'
+                            ? `Demand ${override.minPercent}–${override.maxPercent}%`
+                            : 'Exact prices'}
+                      </span>
+
+                      {override.mode === 'demand' && (
+                        <span className="rounded-full bg-primary/10 px-2.5 py-1 text-[10px] font-bold uppercase tracking-[.07em] text-primary">
+                          {override.enquiryCount ?? 0}{' '}
+                          {override.enquiryCount === 1 ? 'enquiry' : 'enquiries'}
+                          {' · now +'}
+                          {override.effectivePercent ?? override.minPercent}%
+                        </span>
+                      )}
+                    </div>
                   </div>
                   <button
                     type="button"
@@ -359,7 +539,10 @@ export default function AdminRates() {
                   </button>
                 </div>
 
-                <div className="mt-4 flex flex-wrap gap-x-6 gap-y-2 border-t border-border pt-4">
+                <p className="mt-4 border-t border-border pt-4 text-[10px] font-bold uppercase tracking-[.07em] text-muted-foreground">
+                  Charging now
+                </p>
+                <div className="mt-2 flex flex-wrap gap-x-6 gap-y-2">
                   {GUEST_COUNTS.map((guests) => {
                     const amount = override.amounts[String(guests)];
                     return (

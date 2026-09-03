@@ -53,6 +53,7 @@ import AdminDashboard from '@/pages/AdminDashboard';
 import AdminLogin from '@/pages/AdminLogin';
 import AdminEarnings from '@/pages/AdminEarnings';
 import AdminRates from '@/pages/AdminRates';
+import AdminGuests from '@/pages/AdminGuests';
 import {
   useRatePlan,
   rateForNight,
@@ -268,6 +269,29 @@ function Home() {
 
   const submitEnquiry = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+
+    // Record the enquiry so it reaches the owner even if the guest never
+    // clicks through to WhatsApp. Deliberately fire-and-forget: a guest who
+    // filled the form should always see the thank-you, whatever the server
+    // does, and the WhatsApp route still works if this fails.
+    void fetch('/api/enquiries', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name: form.name,
+        phone: form.phone,
+        email: form.email || null,
+        checkIn: form.checkIn || null,
+        checkOut: form.checkOut || null,
+        adults: form.adults || null,
+        children: form.children || null,
+        pets: form.pets || null,
+        requests: form.requests || null,
+      }),
+    }).catch(() => {
+      /* the guest is not the right person to show a server error to */
+    });
+
     setSubmitted(true);
   };
 
@@ -278,8 +302,8 @@ function Home() {
   return (
     <div className="min-h-[100dvh] bg-background text-foreground">
       <header className="fixed inset-x-0 top-0 z-50 border-b border-foreground/10 bg-background/90 backdrop-blur-md" data-testid="site-header">
-        <div className="section-shell flex h-[74px] items-center justify-between">
-          <a href="#top" className="group flex items-center gap-3" data-testid="link-brand">
+        <div className="section-shell flex h-[74px] items-center justify-between gap-6">
+          <a href="#top" className="group flex shrink-0 items-center gap-3" data-testid="link-brand">
             <span className="grid h-10 w-10 place-items-center rounded-full bg-primary text-primary-foreground">
               <Leaf size={19} strokeWidth={1.7} />
             </span>
@@ -289,7 +313,7 @@ function Home() {
             </span>
           </a>
 
-          <nav className="hidden items-center gap-5 lg:flex" aria-label="Main navigation">
+          <nav className="hidden min-w-0 items-center gap-4 xl:flex" aria-label="Main navigation">
             {NAV_ITEMS.map((item) => (
               <a key={item.href} href={item.href} className="text-[11px] font-bold uppercase tracking-[.1em] text-muted-foreground transition-colors hover:text-primary" data-testid={`link-nav-${item.label.toLowerCase().replace(/\s/g, '-')}`}>
                 {item.label}
@@ -297,14 +321,26 @@ function Home() {
             ))}
           </nav>
 
-          <div className="hidden items-center gap-4 md:flex">
-            <a href={phoneHref(CONFIG.hostPhone)} className="flex items-center gap-2 text-xs font-bold text-primary" data-testid="link-header-call">
-              <Phone size={14} /> Call host
+          <div className="hidden shrink-0 items-center gap-2 md:flex">
+            <a
+              href={phoneHref(CONFIG.hostPhone)}
+              className="grid h-10 w-10 place-items-center rounded-full border border-border text-primary transition-colors hover:border-primary hover:bg-primary/5"
+              aria-label={`Call the host on ${CONFIG.hostPhone}`}
+              title="Call host"
+              data-testid="link-header-call"
+            >
+              <Phone size={15} />
             </a>
-            <a href={`${basePath}/admin`} className="flex items-center gap-1.5 rounded-full border border-border px-4 py-2.5 text-[11px] font-bold uppercase tracking-[.1em] text-muted-foreground transition-colors hover:border-primary hover:text-primary" data-testid="link-header-admin">
-              <LockKeyhole size={13} /> Admin
+            <a
+              href={`${basePath}/admin`}
+              className="grid h-10 w-10 place-items-center rounded-full border border-border text-muted-foreground transition-colors hover:border-primary hover:text-primary"
+              aria-label="Owner sign in"
+              title="Owner sign in"
+              data-testid="link-header-admin"
+            >
+              <LockKeyhole size={14} />
             </a>
-            <button onClick={scrollToBooking} className="rounded-full bg-primary px-5 py-3 text-xs font-bold uppercase tracking-[.12em] text-primary-foreground transition-transform hover:-translate-y-0.5 active:scale-95" data-testid="button-header-book">
+            <button onClick={scrollToBooking} className="ml-1 rounded-full bg-primary px-5 py-3 text-xs font-bold uppercase tracking-[.12em] text-primary-foreground transition-transform hover:-translate-y-0.5 active:scale-95" data-testid="button-header-book">
               Check availability
             </button>
           </div>
@@ -649,6 +685,7 @@ function Router() {
         <Route path="/admin/login" component={AdminLogin} />
         <Route path="/admin/earnings" component={AdminEarnings} />
         <Route path="/admin/rates" component={AdminRates} />
+        <Route path="/admin/guests" component={AdminGuests} />
         {/* Legacy sign-in path, kept so existing bookmarks still land somewhere useful. */}
         <Route path="/sign-in/*?" component={AdminLogin} />
         <Route component={NotFound} />

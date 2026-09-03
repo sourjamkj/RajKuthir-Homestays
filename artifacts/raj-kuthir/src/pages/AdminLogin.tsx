@@ -1,11 +1,12 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { useLocation } from 'wouter';
-import { ArrowLeft, Loader2, LockKeyhole } from 'lucide-react';
+import { ArrowLeft, Eye, EyeOff, Loader2, LockKeyhole } from 'lucide-react';
 import { AdminApiError, useAdminSession, useLogin } from '@/lib/admin-api';
 
 export default function AdminLogin() {
   const [, navigate] = useLocation();
   const [password, setPassword] = useState('');
+  const [revealed, setRevealed] = useState(false);
   const session = useAdminSession();
   const login = useLogin();
 
@@ -81,16 +82,29 @@ export default function AdminLogin() {
               >
                 Password
               </label>
-              <input
-                id="admin-password"
-                type="password"
-                value={password}
-                onChange={(event) => setPassword(event.target.value)}
-                autoComplete="current-password"
-                autoFocus
-                className="mt-2 w-full rounded-xl border border-border bg-background px-4 py-3 text-sm text-foreground outline-none transition-colors focus:border-primary"
-                data-testid="input-admin-password"
-              />
+              <div className="relative mt-2">
+                <input
+                  id="admin-password"
+                  type={revealed ? 'text' : 'password'}
+                  value={password}
+                  onChange={(event) => setPassword(event.target.value)}
+                  autoComplete="current-password"
+                  autoFocus
+                  className="w-full rounded-xl border border-border bg-background py-3 pl-4 pr-12 text-sm text-foreground outline-none transition-colors focus:border-primary"
+                  data-testid="input-admin-password"
+                />
+                <button
+                  type="button"
+                  onClick={() => setRevealed((value) => !value)}
+                  className="absolute inset-y-0 right-0 grid w-12 place-items-center text-muted-foreground transition-colors hover:text-primary"
+                  aria-label={revealed ? 'Hide password' : 'Show password'}
+                  aria-pressed={revealed}
+                  tabIndex={-1}
+                  data-testid="button-toggle-password"
+                >
+                  {revealed ? <EyeOff size={16} /> : <Eye size={16} />}
+                </button>
+              </div>
 
               {errorMessage && (
                 <p

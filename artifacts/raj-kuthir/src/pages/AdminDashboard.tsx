@@ -7,6 +7,8 @@ import {
   CalendarDays,
   Check,
   CircleAlert,
+  ArrowDownToLine,
+  ArrowUpFromLine,
   Copy,
   ExternalLink,
   Link as LinkIcon,
@@ -120,6 +122,13 @@ export default function AdminDashboard() {
 
           <div className="flex items-center gap-3">
             <a
+              href="/admin/guests"
+              className="rounded-full border border-border px-4 py-2 text-[11px] font-bold uppercase tracking-[.09em] text-primary transition-colors hover:border-primary"
+              data-testid="link-admin-guests"
+            >
+              Guests
+            </a>
+            <a
               href="/admin/earnings"
               className="rounded-full border border-border px-4 py-2 text-[11px] font-bold uppercase tracking-[.09em] text-primary transition-colors hover:border-primary"
               data-testid="link-admin-earnings"
@@ -182,11 +191,6 @@ export default function AdminDashboard() {
           />
         </section>
 
-        <FeedSourcesPanel
-          sources={feedSources.data?.sources}
-          isLoading={feedSources.isLoading}
-        />
-
         <SyncPanel
           data={syncStatus.data}
           isLoading={syncStatus.isLoading}
@@ -206,11 +210,41 @@ export default function AdminDashboard() {
           </div>
         </section>
 
-        <FeedPanel
-          data={feedInfo.data}
-          isLoading={feedInfo.isLoading}
-          error={feedInfo.error}
-        />
+        {/*
+          Both directions of calendar plumbing live together. They were split
+          across the page before, which made two halves of one job look like
+          two unrelated features.
+        */}
+        <section className="mt-8 pb-4" aria-label="Calendar links">
+          <SectionHeading
+            icon={<LinkIcon size={15} />}
+            title="Calendar links"
+            description="The plumbing between your site and the booking channels. Set both directions once and the calendars stay in step on their own."
+          />
+
+          <div className="mt-4 grid gap-4 lg:grid-cols-2">
+            <div>
+              <p className="mb-3 flex items-center gap-2 text-xs font-bold text-primary">
+                <ArrowDownToLine size={14} /> Bringing bookings in
+              </p>
+              <FeedSourcesPanel
+                sources={feedSources.data?.sources}
+                isLoading={feedSources.isLoading}
+              />
+            </div>
+
+            <div>
+              <p className="mb-3 flex items-center gap-2 text-xs font-bold text-primary">
+                <ArrowUpFromLine size={14} /> Sending your dates out
+              </p>
+              <FeedPanel
+                data={feedInfo.data}
+                isLoading={feedInfo.isLoading}
+                error={feedInfo.error}
+              />
+            </div>
+          </div>
+        </section>
       </main>
     </div>
   );
@@ -262,14 +296,13 @@ function FeedSourcesPanel({
   isLoading: boolean;
 }) {
   return (
-    <section className="mt-6" aria-label="Channel connections">
-      <SectionHeading
-        icon={<LinkIcon size={15} />}
-        title="Channel connections"
-        description="Paste each channel's calendar export (iCal) link here so their bookings flow into your calendar. Find it in that channel's own dashboard under calendar sync or export. Saved here — no redeploy needed."
-      />
+    <div aria-label="Channel connections">
+      <p className="mb-3 text-xs leading-5 text-muted-foreground">
+        Paste each channel's calendar export (iCal) link here. Find it in that
+        channel's own dashboard under calendar sync or export.
+      </p>
 
-      <div className="mt-4 space-y-3">
+      <div className="space-y-3">
         {isLoading
           ? [0, 1, 2].map((key) => (
               <div
@@ -281,7 +314,7 @@ function FeedSourcesPanel({
               <FeedSourceRow key={source.source} source={source} />
             ))}
       </div>
-    </section>
+    </div>
   );
 }
 
@@ -511,14 +544,13 @@ function FeedPanel({
   };
 
   return (
-    <section className="mt-8 pb-4" aria-label="Outbound calendar feeds">
-      <SectionHeading
-        icon={<ExternalLink size={15} />}
-        title="Your export links"
-        description="Paste each link into that channel's own 'import calendar' field. Each one deliberately leaves out that channel's own bookings, so they never echo back and double-count."
-      />
+    <div aria-label="Outbound calendar feeds">
+      <p className="mb-3 text-xs leading-5 text-muted-foreground">
+        Paste each link into that channel's own "import calendar" field. Each
+        one leaves out that channel's own bookings, so they never echo back.
+      </p>
 
-      <div className="mt-4 rounded-2xl border border-border bg-card p-5 md:p-6">
+      <div className="rounded-2xl border border-border bg-card p-5 md:p-6">
         {isLoading && (
           <p className="flex items-center gap-2 text-sm text-muted-foreground">
             <Loader2 size={15} className="animate-spin" /> Loading your feed
@@ -573,6 +605,6 @@ function FeedPanel({
           </div>
         )}
       </div>
-    </section>
+    </div>
   );
 }

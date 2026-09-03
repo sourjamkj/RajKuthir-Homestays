@@ -11,12 +11,27 @@ import { useQuery } from '@tanstack/react-query';
 
 export const RATES_KEY = ['/api/rates'];
 
+export type RateMode = 'fixed' | 'percent' | 'demand';
+
 export type RateOverride = {
   id: string;
   startDate: string;
   endDate: string;
   label: string | null;
+  mode: RateMode;
+  /**
+   * Effective prices in paise, already resolved by the server for whichever
+   * mode this period uses. The browser never recomputes a percentage or a
+   * demand curve — that way the two can't disagree about what a night costs.
+   */
   amounts: Record<string, number>;
+  percent: number | null;
+  minPercent: number | null;
+  maxPercent: number | null;
+  demandThreshold: number | null;
+  /** demand mode only: what the server counted and what uplift it produced. */
+  enquiryCount?: number;
+  effectivePercent?: number;
 };
 
 export type RatePlan = {

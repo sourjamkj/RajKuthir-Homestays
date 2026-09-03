@@ -6,12 +6,25 @@ import {
   deleteOverride,
   getRatePlan,
   setNightlyRates,
+  type RateMode,
 } from "../lib/rates-repo";
 
 const router: IRouter = Router();
 
 const MAX_RUPEES = 1_000_000;
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
+const MODES: readonly RateMode[] = ["fixed", "percent", "demand"];
+
+/**
+ * A percentage uplift. Negative is allowed — a quiet-season discount is the
+ * same mechanism pointed the other way — but bounded so a stray keystroke
+ * cannot price the villa at zero or at a lakh a night.
+ */
+function parsePercent(value: unknown): number | null {
+  const percent = Number(value);
+  if (!Number.isFinite(percent) || percent < -90 || percent > 500) return null;
+  return Math.round(percent);
+}
 
 function isUuid(value: string): boolean {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
@@ -83,6 +96,7 @@ router.post("/rates/overrides", requireAdmin, async (req, res) => {
   const endDate = String(req.body?.endDate ?? "");
   const rawLabel = req.body?.label;
   const label = typeof rawLabel === "string" ? rawLabel.slice(0, 120) : null;
+  const mode = String(req.body?.mode ?? "fixed") as RateMode;
 
   if (!ISO_DATE.test(startDate) || !ISO_DATE.test(endDate)) {
     res.status(400).json({ error: "Choose a valid start and end date." });
@@ -94,16 +108,88 @@ router.post("/rates/overrides", requireAdmin, async (req, res) => {
     return;
   }
 
-  const amounts = parseAmounts(req.body?.amounts);
+  if (!MODES.includes(mode)) {
+    res.status(400).json({ error: "Choose a valid pricing mode." });
+    return;
+  }
 
-  if (Object.keys(amounts).length === 0) {
+  if (mode === "fixed") {
+    const amounts = parseAmounts(req.body?.amounts);
+
+    if (Object.keys(amounts).length === 0) {
+      res.status(400).json({
+        error: "Enter at least one peak price for this period.",
+      });
+      return;
+    }
+
+    const created = await createOverride({
+      startDate,
+      endDate,
+      label,
+      mode,
+      amounts,
+    });
+    res.status(201).json(created);
+    return;
+  }
+
+  if (mode === "percent") {
+    const percent = parsePercent(req.body?.percent);
+
+    if (percent === null) {
+      res.status(400).json({
+        error: "Enter a percentage between -90 and 500.",
+      });
+      return;
+    }
+
+    const created = await createOverride({
+      startDate,
+      endDate,
+      label,
+      mode,
+      percent,
+    });
+    res.status(201).json(created);
+    return;
+  }
+
+  // demand
+  const minPercent = parsePercent(req.body?.minPercent);
+  const maxPercent = parsePercent(req.body?.maxPercent);
+  const threshold = Number(req.body?.demandThreshold);
+
+  if (minPercent === null || maxPercent === null) {
     res.status(400).json({
-      error: "Enter at least one peak price for this period.",
+      error: "Enter both a minimum and maximum percentage.",
     });
     return;
   }
 
-  const created = await createOverride({ startDate, endDate, label, amounts });
+  if (maxPercent < minPercent) {
+    res.status(400).json({
+      error: "The maximum percentage must be at least the minimum.",
+    });
+    return;
+  }
+
+  if (!Number.isInteger(threshold) || threshold < 1 || threshold > 1000) {
+    res.status(400).json({
+      error: "Enter how many enquiries should reach the top price (1-1000).",
+    });
+    return;
+  }
+
+  const created = await createOverride({
+    startDate,
+    endDate,
+    label,
+    mode,
+    minPercent,
+    maxPercent,
+    demandThreshold: threshold,
+  });
   res.status(201).json(created);
 });
 

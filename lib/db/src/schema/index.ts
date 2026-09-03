@@ -21,3 +21,5 @@ export * from "./calendar";
 export * from "./settings";
 export * from "./rates";
 export * from "./bookings";
+export * from "./enquiries";
+export * from "./contacts";
