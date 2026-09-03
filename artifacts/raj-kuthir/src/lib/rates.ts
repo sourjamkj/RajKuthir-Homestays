@@ -40,15 +40,29 @@ export type RatePlan = {
   maxGuests: number;
 };
 
-export function useRatePlan() {
+/**
+ * `/api/rates` is public and carries `Cache-Control: max-age=300`, which is
+ * right for guests — every visitor hits it and the prices rarely move.
+ *
+ * It is wrong for the owner console. After saving a peak period the browser
+ * would serve its own cached copy back to the refetch, and the change would
+ * appear not to have happened at all. Admin screens therefore pass
+ * `fresh: true`, which bypasses the HTTP cache for that request only.
+ */
+export function useRatePlan(options?: { fresh?: boolean }) {
+  const fresh = options?.fresh === true;
+
   return useQuery({
-    queryKey: RATES_KEY,
+    queryKey: fresh ? [...RATES_KEY, 'fresh'] : RATES_KEY,
     queryFn: async (): Promise<RatePlan> => {
-      const response = await fetch('/api/rates');
+      const response = await fetch(
+        '/api/rates',
+        fresh ? { cache: 'no-store' } : undefined,
+      );
       if (!response.ok) throw new Error('Could not load rates.');
       return response.json();
     },
-    staleTime: 5 * 60_000,
+    staleTime: fresh ? 0 : 5 * 60_000,
     retry: false,
   });
 }

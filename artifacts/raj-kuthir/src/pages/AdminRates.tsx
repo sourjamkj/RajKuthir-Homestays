@@ -10,6 +10,7 @@ import {
   LogOut,
   Plus,
   Trash2,
+  TriangleAlert,
 } from 'lucide-react';
 import { adminFetch, useAdminSession, useLogout } from '@/lib/admin-api';
 import {
@@ -17,6 +18,7 @@ import {
   useRatePlan,
   RATES_KEY,
   type RateMode,
+  type RateOverride,
 } from '@/lib/rates';
 
 const GUEST_COUNTS = [1, 2, 3, 4, 5];
@@ -71,7 +73,7 @@ export default function AdminRates() {
     }
   }, [session.isSuccess, signedIn, navigate]);
 
-  const plan = useRatePlan();
+  const plan = useRatePlan({ fresh: true });
 
   const [standing, setStanding] = useState<Record<string, string>>({});
   const [touched, setTouched] = useState(false);
@@ -95,6 +97,7 @@ export default function AdminRates() {
   }, [plan.data, touched]);
 
   const invalidate = () => {
+    // Matches both the public key and the admin's ['...','fresh'] variant.
     queryClient.invalidateQueries({ queryKey: RATES_KEY });
   };
 
@@ -162,6 +165,16 @@ export default function AdminRates() {
       </div>
     );
   }
+
+  // Warn about a clash before the period is created, not after.
+  const draftClashes =
+    peak.startDate && peak.endDate && peak.endDate > peak.startDate
+      ? (plan.data?.overrides ?? []).filter(
+          (existing) =>
+            peak.startDate < existing.endDate &&
+            existing.startDate < peak.endDate,
+        )
+      : [];
 
   const standingError =
     saveStanding.error instanceof Error ? saveStanding.error.message : null;
@@ -459,6 +472,30 @@ export default function AdminRates() {
                 </div>
               )}
 
+              {draftClashes.length > 0 && (
+                <div
+                  className="mt-5 flex items-start gap-3 rounded-xl border border-[#d8a24a]/40 bg-[#d8a24a]/10 p-4"
+                  role="status"
+                  data-testid="warning-draft-overlap"
+                >
+                  <TriangleAlert
+                    size={15}
+                    className="mt-0.5 shrink-0 text-[#8a6320]"
+                  />
+                  <p className="text-xs leading-5 text-[#6b4d18]">
+                    These dates overlap{' '}
+                    <strong>
+                      {draftClashes
+                        .map((clash) => clash.label || 'an existing period')
+                        .join(', ')}
+                    </strong>
+                    . You can still save — this new period would take priority
+                    on the shared nights — but if that isn't deliberate, adjust
+                    the dates first.
+                  </p>
+                </div>
+              )}
+
               {peakError && (
                 <p className="mt-3 text-xs text-[#A65E45]" role="alert">
                   {peakError}
@@ -480,93 +517,12 @@ export default function AdminRates() {
             </div>
           )}
 
-          <div className="mt-4 space-y-3">
-            {plan.isLoading && (
-              <p className="text-sm text-muted-foreground">Loading…</p>
-            )}
-
-            {!plan.isLoading && (plan.data?.overrides.length ?? 0) === 0 && (
-              <div className="rounded-2xl border border-border bg-card p-5">
-                <p className="text-sm text-muted-foreground">
-                  No peak periods yet. Standard rates apply on every date.
-                </p>
-              </div>
-            )}
-
-            {(plan.data?.overrides ?? []).map((override) => (
-              <div
-                key={override.id}
-                className="rounded-2xl border border-border bg-card p-5"
-                data-testid={`row-peak-${override.id}`}
-              >
-                <div className="flex flex-wrap items-start justify-between gap-4">
-                  <div>
-                    <p className="font-journal text-xl text-primary">
-                      {override.label || 'Peak period'}
-                    </p>
-                    <p className="mt-1 text-xs text-muted-foreground">
-                      {format(parseISO(override.startDate), 'd MMM yyyy')} →{' '}
-                      {format(parseISO(override.endDate), 'd MMM yyyy')}
-                    </p>
-
-                    <div className="mt-2 flex flex-wrap items-center gap-2">
-                      <span className="rounded-full border border-border px-2.5 py-1 text-[10px] font-bold uppercase tracking-[.07em] text-muted-foreground">
-                        {override.mode === 'percent'
-                          ? `+${override.percent}% over standard`
-                          : override.mode === 'demand'
-                            ? `Demand ${override.minPercent}–${override.maxPercent}%`
-                            : 'Exact prices'}
-                      </span>
-
-                      {override.mode === 'demand' && (
-                        <span className="rounded-full bg-primary/10 px-2.5 py-1 text-[10px] font-bold uppercase tracking-[.07em] text-primary">
-                          {override.enquiryCount ?? 0}{' '}
-                          {override.enquiryCount === 1 ? 'enquiry' : 'enquiries'}
-                          {' · now +'}
-                          {override.effectivePercent ?? override.minPercent}%
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => removePeak.mutate(override.id)}
-                    disabled={removePeak.isPending}
-                    className="flex items-center gap-1.5 rounded-full border border-border px-3 py-1.5 text-[11px] font-semibold text-[#A65E45] transition-colors hover:bg-[#A65E45]/5 disabled:opacity-50"
-                    data-testid={`button-delete-peak-${override.id}`}
-                  >
-                    <Trash2 size={13} /> Remove
-                  </button>
-                </div>
-
-                <p className="mt-4 border-t border-border pt-4 text-[10px] font-bold uppercase tracking-[.07em] text-muted-foreground">
-                  Charging now
-                </p>
-                <div className="mt-2 flex flex-wrap gap-x-6 gap-y-2">
-                  {GUEST_COUNTS.map((guests) => {
-                    const amount = override.amounts[String(guests)];
-                    return (
-                      <span key={guests} className="text-xs">
-                        <span className="text-muted-foreground">
-                          {guests}
-                          {guests === 1 ? ' guest' : ' guests'}:{' '}
-                        </span>
-                        {typeof amount === 'number' ? (
-                          <span className="font-bold tabular-nums text-primary">
-                            {formatRupees(amount)}
-                          </span>
-                        ) : (
-                          <span className="text-muted-foreground/70">
-                            standard
-                          </span>
-                        )}
-                      </span>
-                    );
-                  })}
-                </div>
-              </div>
-            ))}
-          </div>
+          <PeakTable
+            overrides={plan.data?.overrides ?? []}
+            isLoading={plan.isLoading}
+            onRemove={(id) => removePeak.mutate(id)}
+            removing={removePeak.isPending}
+          />
         </section>
       </main>
     </div>
@@ -608,5 +564,203 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
       </span>
       {children}
     </label>
+  );
+}
+
+/**
+ * Two peak periods covering the same night is legal — a narrow "New Year's Eve"
+ * rule deliberately laid over a broad "Christmas week" one is a real pattern,
+ * and the later-created period wins. It is also the easiest way to price a
+ * night by accident. So overlaps are detected and shown rather than blocked.
+ *
+ * Ranges are half-open: 2–16 Oct and 16–20 Oct do NOT overlap, because the
+ * 16th is a checkout morning in the first and a first night in the second.
+ */
+export function findOverlaps(
+  overrides: Array<{ id: string; startDate: string; endDate: string; label: string | null }>,
+): Map<string, string[]> {
+  const clashes = new Map<string, string[]>();
+
+  for (let i = 0; i < overrides.length; i += 1) {
+    for (let j = i + 1; j < overrides.length; j += 1) {
+      const a = overrides[i]!;
+      const b = overrides[j]!;
+
+      if (a.startDate < b.endDate && b.startDate < a.endDate) {
+        clashes.set(a.id, [...(clashes.get(a.id) ?? []), b.label || 'another period']);
+        clashes.set(b.id, [...(clashes.get(b.id) ?? []), a.label || 'another period']);
+      }
+    }
+  }
+
+  return clashes;
+}
+
+function nightsBetween(start: string, end: string): number {
+  const from = Date.parse(`${start}T00:00:00Z`);
+  const to = Date.parse(`${end}T00:00:00Z`);
+  if (!Number.isFinite(from) || !Number.isFinite(to) || to <= from) return 0;
+  return Math.round((to - from) / 86_400_000);
+}
+
+function PeakTable({
+  overrides,
+  isLoading,
+  onRemove,
+  removing,
+}: {
+  overrides: RateOverride[];
+  isLoading: boolean;
+  onRemove: (id: string) => void;
+  removing: boolean;
+}) {
+  const clashes = findOverlaps(overrides);
+  const today = new Date().toISOString().slice(0, 10);
+
+  if (isLoading) {
+    return (
+      <p className="mt-4 text-sm text-muted-foreground">Loading…</p>
+    );
+  }
+
+  if (overrides.length === 0) {
+    return (
+      <div className="mt-4 rounded-2xl border border-border bg-card p-5">
+        <p className="text-sm text-muted-foreground">
+          No peak periods yet. Standard rates apply on every date.
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <>
+      {clashes.size > 0 && (
+        <div
+          className="mt-4 flex items-start gap-3 rounded-xl border border-[#d8a24a]/40 bg-[#d8a24a]/10 p-4"
+          role="status"
+        >
+          <TriangleAlert size={16} className="mt-0.5 shrink-0 text-[#8a6320]" />
+          <p className="text-sm leading-6 text-[#6b4d18]">
+            {clashes.size} period{clashes.size === 1 ? '' : 's'} overlap. On a
+            shared night the <strong>lower row wins</strong> — it was added
+            later. Remove one if that isn't what you intended.
+          </p>
+        </div>
+      )}
+
+      <div className="mt-4 overflow-x-auto rounded-2xl border border-border bg-card">
+        <table className="w-full min-w-[820px] border-collapse text-sm">
+          <thead>
+            <tr className="border-b border-border text-left text-[10px] uppercase tracking-[.08em] text-muted-foreground">
+              <th className="px-5 py-3 font-bold">Period</th>
+              <th className="px-5 py-3 font-bold">Dates</th>
+              <th className="px-5 py-3 text-right font-bold">Nights</th>
+              <th className="px-5 py-3 font-bold">Pricing</th>
+              <th className="px-5 py-3 text-right font-bold">1 guest</th>
+              <th className="px-5 py-3 text-right font-bold">2 guests</th>
+              <th className="px-5 py-3 text-right font-bold">4 guests</th>
+              <th className="px-5 py-3" />
+            </tr>
+          </thead>
+          <tbody>
+            {overrides.map((override) => {
+              const overlapping = clashes.get(override.id);
+              const past = override.endDate <= today;
+
+              return (
+                <tr
+                  key={override.id}
+                  className={`border-b border-border last:border-0 ${overlapping ? 'bg-[#d8a24a]/5' : ''} ${past ? 'opacity-55' : ''}`}
+                  data-testid={`row-peak-${override.id}`}
+                >
+                  <td className="px-5 py-3">
+                    <span className="font-semibold text-primary">
+                      {override.label || 'Peak period'}
+                    </span>
+                    {past && (
+                      <span className="ml-2 text-[10px] uppercase tracking-wide text-muted-foreground">
+                        past
+                      </span>
+                    )}
+                    {overlapping && (
+                      <span
+                        className="mt-1 block text-[11px] leading-4 text-[#8a6320]"
+                        data-testid={`overlap-${override.id}`}
+                      >
+                        Overlaps {overlapping.join(', ')}
+                      </span>
+                    )}
+                  </td>
+
+                  <td className="px-5 py-3 whitespace-nowrap text-muted-foreground">
+                    {format(parseISO(override.startDate), 'd MMM')} →{' '}
+                    {format(parseISO(override.endDate), 'd MMM yyyy')}
+                  </td>
+
+                  <td className="px-5 py-3 text-right tabular-nums text-muted-foreground">
+                    {nightsBetween(override.startDate, override.endDate)}
+                  </td>
+
+                  <td className="px-5 py-3">
+                    {override.mode === 'percent' && (
+                      <span className="text-foreground">
+                        +{override.percent}% over standard
+                      </span>
+                    )}
+                    {override.mode === 'fixed' && (
+                      <span className="text-foreground">Exact prices</span>
+                    )}
+                    {override.mode === 'demand' && (
+                      <span className="text-foreground">
+                        {override.minPercent}–{override.maxPercent}% by demand
+                        <span className="mt-0.5 block text-[11px] text-muted-foreground">
+                          {override.enquiryCount ?? 0} of{' '}
+                          {override.demandThreshold} enquiries · now +
+                          {override.effectivePercent ?? override.minPercent}%
+                        </span>
+                      </span>
+                    )}
+                  </td>
+
+                  {[1, 2, 4].map((guests) => {
+                    const amount = override.amounts[String(guests)];
+                    return (
+                      <td
+                        key={guests}
+                        className="px-5 py-3 text-right tabular-nums"
+                      >
+                        {typeof amount === 'number' ? (
+                          <span className="font-semibold text-primary">
+                            {formatRupees(amount)}
+                          </span>
+                        ) : (
+                          <span className="text-muted-foreground/60">
+                            standard
+                          </span>
+                        )}
+                      </td>
+                    );
+                  })}
+
+                  <td className="px-5 py-3 text-right">
+                    <button
+                      type="button"
+                      onClick={() => onRemove(override.id)}
+                      disabled={removing}
+                      className="rounded-full border border-border p-1.5 text-muted-foreground transition-colors hover:border-[#A65E45] hover:text-[#A65E45] disabled:opacity-50"
+                      aria-label={`Remove ${override.label || 'peak period'}`}
+                      data-testid={`button-delete-peak-${override.id}`}
+                    >
+                      <Trash2 size={13} />
+                    </button>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </>
   );
 }
