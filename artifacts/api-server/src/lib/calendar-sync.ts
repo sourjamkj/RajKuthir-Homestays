@@ -34,6 +34,22 @@ export type CalendarSyncResult = {
 
 let activeSync: Promise<CalendarSyncResult> | null = null;
 
+/**
+ * Last completed sync, kept in memory so the admin dashboard can show
+ * per-source status on load without forcing a fresh round-trip to every OTA.
+ * Resets on restart, which is fine — the cron runs 10s after boot.
+ */
+let lastSyncResult: CalendarSyncResult | null = null;
+
+export function getLastSyncResult(): CalendarSyncResult | null {
+  return lastSyncResult;
+}
+
+/** True while a sync is in flight, so the UI can show it as running. */
+export function isSyncInFlight(): boolean {
+  return activeSync !== null;
+}
+
 async function runSync(
   overrides: Partial<Record<ImportSource, string | null | undefined>>,
 ): Promise<CalendarSyncResult> {
@@ -92,7 +108,9 @@ async function runSync(
     }
   }
 
-  return { syncedAt, totalEvents, sources };
+  const result = { syncedAt, totalEvents, sources };
+  lastSyncResult = result;
+  return result;
 }
 
 export function syncCalendarSources(

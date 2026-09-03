@@ -1,14 +1,18 @@
 import express, { type Express } from "express";
 import cors from "cors";
+import cookieParser from "cookie-parser";
 import pinoHttp from "pino-http";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { existsSync } from "node:fs";
-import { clerkMiddleware } from "@clerk/express";
 import router from "./routes";
 import { logger } from "./lib/logger";
 
 const app: Express = express();
+
+// Railway (and most PaaS hosts) terminate TLS at a proxy. Without this,
+// req.ip is the proxy's address and req.secure is always false.
+app.set("trust proxy", 1);
 
 app.use(
   pinoHttp({
@@ -32,10 +36,7 @@ app.use(
 
 app.use(cors({ credentials: true, origin: true }));
 
-// Standard Clerk middleware. Reads CLERK_SECRET_KEY and CLERK_PUBLISHABLE_KEY
-// from the environment automatically. No proxy needed on a same-origin domain.
-app.use(clerkMiddleware());
-
+app.use(cookieParser());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 

@@ -1,19 +1,9 @@
 import { useMemo, useState, type FormEvent, type ReactNode } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import {
-  getGetCalendarFeedInfoQueryKey,
   getGetPublicCalendarQueryKey,
-  getListCalendarEventsQueryKey,
-  type CalendarEvent,
-  type CalendarSourceStatus,
-  useGetCalendarFeedInfo,
   useGetPublicCalendar,
-  useListCalendarEvents,
-  useSyncCalendars,
 } from '@workspace/api-client-react';
-import { ClerkProvider, Show, SignIn, useAuth, useClerk } from '@clerk/react';
-import { publishableKeyFromHost } from '@clerk/react/internal';
-import { shadcn } from '@clerk/themes';
 import {
   ArrowRight,
   ArrowUpRight,
@@ -56,63 +46,16 @@ import {
   X,
 } from 'lucide-react';
 import { ErrorBoundary } from '@/components/error-boundary';
-import { AdminCalendar } from '@/components/AdminCalendar';
 import { Toaster } from '@/components/ui/toaster';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import NotFound from '@/pages/not-found';
+import AdminDashboard from '@/pages/AdminDashboard';
+import AdminLogin from '@/pages/AdminLogin';
 import { Route, Switch, useLocation, Router as WouterRouter } from 'wouter';
 
 const queryClient = new QueryClient();
 
-const clerkPubKey = publishableKeyFromHost(
-  window.location.hostname,
-  import.meta.env.VITE_CLERK_PUBLISHABLE_KEY,
-);
-const clerkProxyUrl = import.meta.env.VITE_CLERK_PROXY_URL;
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, '');
-
-if (!clerkPubKey) {
-  throw new Error('Missing VITE_CLERK_PUBLISHABLE_KEY in environment.');
-}
-
-const clerkAppearance = {
-  theme: shadcn,
-  cssLayerName: 'clerk',
-  options: {
-    logoPlacement: 'inside' as const,
-    logoLinkUrl: basePath || '/',
-    logoImageUrl: `${window.location.origin}${basePath}/favicon.svg`,
-  },
-  variables: {
-    colorPrimary: '#2d6658',
-    colorForeground: '#23493f',
-    colorMutedForeground: '#65766f',
-    colorDanger: '#a4513c',
-    colorBackground: '#f6f0e7',
-    colorInput: '#fffdf8',
-    colorInputForeground: '#23493f',
-    colorNeutral: '#d9cfc1',
-    fontFamily: 'Manrope, sans-serif',
-    borderRadius: '0.75rem',
-  },
-  elements: {
-    rootBox: 'w-full flex justify-center',
-    cardBox: 'bg-[#f6f0e7] rounded-2xl w-[440px] max-w-full overflow-hidden',
-    card: '!shadow-none !border-0 !bg-transparent !rounded-none',
-    footer: '!shadow-none !border-0 !bg-transparent !rounded-none',
-    headerTitle: 'text-[#23493f] font-serif',
-    headerSubtitle: 'text-[#65766f]',
-    socialButtonsBlockButtonText: 'text-[#23493f]',
-    formFieldLabel: 'text-[#23493f]',
-    footerActionLink: 'text-[#2d6658]',
-    footerActionText: 'text-[#65766f]',
-    dividerText: 'text-[#65766f]',
-    formButtonPrimary: 'bg-[#2d6658] hover:bg-[#23493f]',
-    formFieldInput: 'bg-[#fffdf8] border-[#d9cfc1] text-[#23493f]',
-    footerAction: 'hidden',
-    dividerLine: 'bg-[#d9cfc1]',
-  },
-};
 
 // EDITABLE OWNER CONFIG: update rate, contact details and planning notes here.
 const CONFIG = {
@@ -161,7 +104,6 @@ const NAV_ITEMS = [
   { label: 'Reviews', href: '#reviews' },
 ];
 
-type FeedKey = 'bookingCom' | 'airbnb' | 'makeMyTrip';
 type BusyPeriod = {
   id: string;
   source: string;
@@ -169,12 +111,6 @@ type BusyPeriod = {
   start: string;
   end: string;
 };
-
-const CALENDAR_FEEDS: Array<{ key: FeedKey; label: string; hint: string }> = [
-  { key: 'bookingCom', label: 'Booking.com', hint: 'Paste the property iCal export URL' },
-  { key: 'airbnb', label: 'Airbnb', hint: 'Paste the listing calendar export URL' },
-  { key: 'makeMyTrip', label: 'MakeMyTrip', hint: 'Paste an iCal link if your partner account provides one' },
-];
 
 const galleryItems = [
   { title: 'External villa', category: 'Home', img: IMG.villaExterior, tone: 'sage' },
@@ -213,13 +149,6 @@ const currency = (amount: number) =>
 
 const phoneHref = (phone: string) => `tel:${phone.replace(/\s/g, '')}`;
 
-const sourceLabel = (source: string) =>
-  source === 'manual'
-    ? 'Host block'
-    : source === 'direct'
-      ? 'Direct booking'
-      : CALENDAR_FEEDS.find((feed) => feed.key === source)?.label ?? source;
-
 const dateKey = (date: Date) => {
   const year = date.getFullYear();
   const month = String(date.getMonth() + 1).padStart(2, '0');
@@ -247,28 +176,12 @@ const calendarDays = (month: Date) => {
 const eventTouchesDay = (event: BusyPeriod, day: string) =>
   day >= event.start && day < event.end;
 
-const toBusyPeriod = (event: CalendarEvent): BusyPeriod => ({
-  id: event.id,
-  source: sourceLabel(event.source),
-  label: event.title || 'OTA booking',
-  start: eventDateKey(event.startDate),
-  end: eventDateKey(event.endDate),
-});
-
 function Home() {
-  const { isSignedIn } = useAuth();
   const [menuOpen, setMenuOpen] = useState(false);
   const [galleryFilter, setGalleryFilter] = useState('All');
   const [openFaq, setOpenFaq] = useState<number | null>(0);
   const [submitted, setSubmitted] = useState(false);
   const [calendarMonth, setCalendarMonth] = useState(() => new Date(new Date().getFullYear(), new Date().getMonth(), 1));
-  const [feeds, setFeeds] = useState<Record<FeedKey, string>>(() => {
-    return { bookingCom: '', airbnb: '', makeMyTrip: '' };
-  });
-  const [syncedEvents, setSyncedEvents] = useState<BusyPeriod[]>([]);
-  const [sourceStatuses, setSourceStatuses] = useState<CalendarSourceStatus[]>([]);
-  const [lastSyncedAt, setLastSyncedAt] = useState<string | null>(null);
-  const calendarSync = useSyncCalendars();
   const publicCalendar = useGetPublicCalendar({
     query: {
       queryKey: getGetPublicCalendarQueryKey(),
@@ -277,15 +190,6 @@ function Home() {
       refetchOnMount: 'always',
     },
   });
-  const adminCalendar = useListCalendarEvents({
-    query: {
-      queryKey: getListCalendarEventsQueryKey(),
-      enabled: Boolean(isSignedIn),
-      retry: false,
-      staleTime: 30_000,
-    },
-  });
-  const isCalendarAdmin = adminCalendar.isSuccess;
 
   const [form, setForm] = useState({
     name: '',
@@ -316,7 +220,7 @@ function Home() {
   const advance = Math.round(total * CONFIG.advanceShare);
   const balance = total - advance;
   const filteredGallery = galleryFilter === 'All' ? galleryItems : galleryItems.filter((item) => item.category === galleryFilter);
-  const persistedBusyPeriods = useMemo(
+  const busyPeriods = useMemo(
     () =>
       (publicCalendar.data?.blocks ?? []).map((block, index) => ({
         id: `public-block-${index}-${block.startDate}`,
@@ -326,19 +230,6 @@ function Home() {
         end: eventDateKey(block.endDate),
       })),
     [publicCalendar.data?.blocks],
-  );
-  const adminBusyPeriods = useMemo(
-    () => (adminCalendar.data?.events ?? []).map(toBusyPeriod),
-    [adminCalendar.data?.events],
-  );
-  const busyPeriods = useMemo(
-    () =>
-      isCalendarAdmin
-        ? adminBusyPeriods
-        : persistedBusyPeriods.length > 0
-          ? persistedBusyPeriods
-          : syncedEvents,
-    [adminBusyPeriods, isCalendarAdmin, persistedBusyPeriods, syncedEvents],
   );
   const daysInView = useMemo(() => calendarDays(calendarMonth), [calendarMonth]);
   const calendarMonthLabel = new Intl.DateTimeFormat('en-IN', { month: 'long', year: 'numeric' }).format(calendarMonth);
@@ -355,19 +246,6 @@ function Home() {
   const submitEnquiry = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setSubmitted(true);
-  };
-
-  const syncCalendarFeeds = () => {
-    calendarSync.mutate(
-      { data: feeds },
-      {
-        onSuccess: (response) => {
-          setSyncedEvents(response.events.map(toBusyPeriod));
-          setSourceStatuses(response.sources);
-          setLastSyncedAt(new Date(response.syncedAt).toISOString());
-        },
-      },
-    );
   };
 
   const shiftCalendarMonth = (amount: number) => {
@@ -427,7 +305,7 @@ function Home() {
                 Check availability
               </button>
               <div className="mt-3 border-t border-border pt-4">
-                <a href={`${basePath}/sign-in`} onClick={() => setMenuOpen(false)} className="flex items-center gap-2 text-xs font-bold uppercase tracking-[.1em] text-primary" data-testid="link-mobile-admin-login">
+                <a href={`${basePath}/admin`} onClick={() => setMenuOpen(false)} className="flex items-center gap-2 text-xs font-bold uppercase tracking-[.1em] text-primary" data-testid="link-mobile-admin-login">
                   <LockKeyhole size={15} /> Admin login
                 </a>
                 <p className="mt-2 pl-6 text-[10px] leading-4 text-muted-foreground">Private owner access to calendar controls</p>
@@ -628,72 +506,17 @@ function Home() {
           </div>
 
           <div className="mt-14 grid gap-5 lg:grid-cols-[.78fr_1.22fr]">
-            <Show when="signed-in">
-              {isCalendarAdmin && <div className="rounded-[1.5rem] bg-primary p-6 text-primary-foreground md:p-8">
-              <div className="flex items-start justify-between gap-4 border-b border-primary-foreground/15 pb-6">
-                <div>
-                  <p className="eyebrow text-secondary">Calendar sources</p>
-                  <p className="mt-3 font-journal text-3xl">Sync your OTAs.</p>
-                </div>
-                <Settings2 size={22} className="text-secondary" strokeWidth={1.4} />
+            <div className="flex min-h-[420px] flex-col justify-between rounded-[1.5rem] border border-border bg-card p-6 md:p-8">
+              <div>
+                <p className="eyebrow text-accent">Live availability</p>
+                <p className="mt-4 max-w-[300px] font-journal text-4xl leading-tight text-primary">Every channel, one calendar.</p>
+                <p className="mt-5 max-w-[320px] text-sm leading-6 text-muted-foreground">Sobuj Potro is listed on Booking.com, Airbnb and MakeMyTrip. This calendar combines all of them, so what you see here is what is actually free.</p>
               </div>
-              <div className="mt-4 flex items-center justify-between gap-4 text-[10px] uppercase tracking-[.08em] text-primary-foreground/55">
-                <span>Admin controls</span>
-                <AdminSignOutButton />
+              <div className="mt-8">
+                <p className="text-xs leading-6 text-muted-foreground">Found your dates? Send an enquiry and skip the platform fees.</p>
+                <button type="button" onClick={scrollToBooking} className="mt-4 inline-flex w-fit items-center gap-2 rounded-full bg-primary px-5 py-3 text-xs font-bold uppercase tracking-[.1em] text-primary-foreground transition-transform hover:-translate-y-0.5" data-testid="button-availability-enquire">Enquire directly <ArrowUpRight size={15} /></button>
               </div>
-              <div className="mt-6 space-y-5">
-                {CALENDAR_FEEDS.map((feed) => {
-                  const status = sourceStatuses.find((item) => item.source === feed.key);
-                  return (
-                    <label key={feed.key} className="block">
-                      <span className="flex items-center justify-between gap-3 text-xs font-bold text-primary-foreground">
-                        <span>{feed.label}</span>
-                        {status && (
-                          <span className={`flex items-center gap-1.5 text-[10px] font-medium uppercase tracking-[.08em] ${status.status === 'connected' ? 'text-secondary' : status.status === 'error' ? 'text-[#f0a184]' : 'text-primary-foreground/50'}`}>
-                            {status.status === 'connected' ? <Check size={12} /> : status.status === 'error' ? <AlertCircle size={12} /> : null}
-                            {status.status}
-                          </span>
-                        )}
-                      </span>
-                      <input
-                        type="url"
-                        value={feeds[feed.key]}
-                        onChange={(event) => setFeeds((current) => ({ ...current, [feed.key]: event.target.value }))}
-                        placeholder={feed.hint}
-                        className="mt-2 w-full rounded-lg border border-primary-foreground/20 bg-primary-foreground/10 px-3 py-3 text-xs text-primary-foreground outline-none placeholder:text-primary-foreground/40 focus:border-secondary"
-                        aria-label={`${feed.label} iCal feed URL`}
-                        data-testid={`input-calendar-${feed.key}`}
-                      />
-                      {status?.message && <span className={`mt-2 block text-[10px] leading-4 ${status.status === 'error' ? 'text-[#f0a184]' : 'text-primary-foreground/55'}`}>{status.message}</span>}
-                    </label>
-                  );
-                })}
-              </div>
-              <button
-                type="button"
-                onClick={syncCalendarFeeds}
-                disabled={calendarSync.isPending}
-                className="mt-7 flex w-full items-center justify-center gap-2 rounded-full bg-secondary px-5 py-4 text-xs font-bold uppercase tracking-[.11em] text-primary transition-transform hover:-translate-y-0.5 disabled:cursor-wait disabled:opacity-70"
-                data-testid="button-sync-calendars"
-              >
-                <RefreshCw size={15} className={calendarSync.isPending ? 'animate-spin' : ''} />
-                {calendarSync.isPending ? 'Syncing feeds' : 'Sync calendars'}
-              </button>
-              {calendarSync.isError && <p className="mt-3 text-center text-[10px] leading-4 text-[#f0a184]">The calendar service could not be reached. Please try again.</p>}
-              <AdminFeedLink />
-                <p className="mt-5 text-[10px] leading-4 text-primary-foreground/50">Leave a field blank to use the securely stored owner feed. Any URL entered here is sent only when you press Sync calendars and is not shown to guests.</p>
-              </div>}
-            </Show>
-            <Show when="signed-out">
-              <div className="flex min-h-[420px] flex-col justify-between rounded-[1.5rem] border border-border bg-card p-6 md:p-8">
-                <div>
-                  <p className="eyebrow text-accent">Guest view</p>
-                  <p className="mt-4 max-w-[300px] font-journal text-4xl leading-tight text-primary">Availability is managed privately by the host.</p>
-                  <p className="mt-5 max-w-[320px] text-sm leading-6 text-muted-foreground">Browse the calendar here. Dates are updated by the host as reservations change.</p>
-                </div>
-                <a href={`${basePath}/sign-in`} className="mt-8 inline-flex w-fit items-center gap-2 rounded-full bg-primary px-5 py-3 text-xs font-bold uppercase tracking-[.1em] text-primary-foreground transition-transform hover:-translate-y-0.5" data-testid="link-admin-sign-in">Admin sign in <ArrowUpRight size={15} /></a>
-              </div>
-            </Show>
+            </div>
 
             <div className="rounded-[1.5rem] border border-border bg-card p-5 md:p-8">
               <div className="flex flex-col justify-between gap-4 border-b border-border pb-5 sm:flex-row sm:items-center">
@@ -719,7 +542,7 @@ function Home() {
                     <div key={key} className={`min-h-[76px] rounded-lg border p-2 text-left transition-colors ${isOutsideMonth ? 'border-transparent bg-background/40 opacity-35' : dayEvents.length ? 'border-accent/35 bg-secondary/40' : 'border-border bg-background'} ${isToday ? 'ring-2 ring-accent/60 ring-offset-1 ring-offset-card' : ''}`} data-testid={`calendar-day-${key}`}>
                       <p className={`text-xs font-bold ${isToday ? 'text-accent' : 'text-primary'}`}>{day.getDate()}</p>
                       <div className="mt-2 space-y-1">
-                        {dayEvents.slice(0, 2).map((event) => <div key={`${event.id}-${key}`} className={`truncate rounded px-1.5 py-1 text-[9px] font-bold leading-none text-primary ${event.source === 'Airbnb' ? 'bg-[#e7aa84]' : event.source === 'Booking.com' ? 'bg-[#9eb5a7]' : event.source === 'MakeMyTrip' ? 'bg-[#e4c9a4]' : 'bg-[#c8a89a]'}`} title={`${event.source}: ${event.label}`}><Show when="signed-in">{isCalendarAdmin ? event.source : 'Booked'}</Show><Show when="signed-out">Booked</Show></div>)}
+                        {dayEvents.slice(0, 2).map((event) => <div key={`${event.id}-${key}`} className="truncate rounded bg-[#c8a89a] px-1.5 py-1 text-[9px] font-bold leading-none text-primary" title="Booked">Booked</div>)}
                         {dayEvents.length > 2 && <p className="text-[9px] font-bold text-muted-foreground">+{dayEvents.length - 2} more</p>}
                       </div>
                     </div>
@@ -727,27 +550,8 @@ function Home() {
                 })}
               </div>
 
-              <Show when="signed-in">
-                {isCalendarAdmin && <>
-                <div className="mt-6 flex flex-wrap gap-x-5 gap-y-2 border-t border-border pt-5 text-[10px] font-bold uppercase tracking-[.08em] text-muted-foreground">
-                  <span className="flex items-center gap-2"><i className="h-2 w-2 rounded-full bg-[#c8a89a]" />Existing booking</span>
-                  <span className="flex items-center gap-2"><i className="h-2 w-2 rounded-full bg-[#9eb5a7]" />Booking.com</span>
-                  <span className="flex items-center gap-2"><i className="h-2 w-2 rounded-full bg-[#e7aa84]" />Airbnb</span>
-                  <span className="flex items-center gap-2"><i className="h-2 w-2 rounded-full bg-[#e4c9a4]" />MakeMyTrip</span>
-                </div>
-                <p className="mt-4 text-[10px] leading-4 text-muted-foreground">All blocks shown here are persisted on the server. Synced OTA events are read-only; checkout dates remain available.</p>
-                {lastSyncedAt && <p className="mt-2 text-[10px] text-accent">Last synced {new Intl.DateTimeFormat('en-IN', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(lastSyncedAt))}</p>}
-                </>}
-              </Show>
-              <Show when="signed-out">
-                <p className="mt-6 border-t border-border pt-5 text-[10px] leading-4 text-muted-foreground">Dates marked as booked are currently unavailable. Checkout dates remain available.</p>
-              </Show>
+              <p className="mt-6 border-t border-border pt-5 text-[10px] leading-4 text-muted-foreground">Dates marked as booked are currently unavailable. Checkout days remain available for a new arrival.</p>
            </div>
-            <Show when="signed-in">
-              {isCalendarAdmin && <div className="lg:col-span-2">
-                <AdminCalendar />
-              </div>}
-            </Show>
           </div>
         </section>
 
@@ -786,105 +590,32 @@ function RoutedErrorBoundary({ children }: { children: ReactNode }) {
   return <ErrorBoundary resetKey={location}>{children}</ErrorBoundary>;
 }
 
-function AdminSignOutButton() {
-  const { signOut } = useClerk();
-  return (
-    <button type="button" onClick={() => signOut({ redirectUrl: basePath || "/" })} className="text-secondary underline underline-offset-4 transition-colors hover:text-primary-foreground" data-testid="button-admin-sign-out">
-      Sign out
-    </button>
-  );
-}
-
-function AdminFeedLink() {
-  const { isSignedIn } = useAuth();
-  const [copied, setCopied] = useState<string | null>(null);
-  const { data, error, isLoading } = useGetCalendarFeedInfo({
-    query: {
-      enabled: isSignedIn,
-      queryKey: getGetCalendarFeedInfoQueryKey(),
-    },
-  });
-  const errorMessage = error instanceof Error ? error.message : 'Outbound feed is not configured.';
-
-  if (!isSignedIn) return null;
-
-  const feedLinks = data
-    ? [
-        { key: 'bookingCom', label: 'Booking.com', url: data.bookingCom },
-        { key: 'airbnb', label: 'Airbnb', url: data.airbnb },
-        { key: 'makeMyTrip', label: 'MakeMyTrip', url: data.makeMyTrip },
-        { key: 'all', label: 'All sources', url: data.feedUrl },
-      ]
-    : [];
-
-  const copyFeedUrl = async (key: string, url: string) => {
-    await navigator.clipboard.writeText(url);
-    setCopied(key);
-    window.setTimeout(() => setCopied(null), 1800);
-  };
-
-  return (
-    <div className="mt-6 border-t border-primary-foreground/15 pt-5">
-      <p className="text-xs font-bold text-primary-foreground">Outbound calendar feed</p>
-      <p className="mt-2 text-[10px] leading-4 text-primary-foreground/55">Use the matching URL for each aggregator. Each one excludes that aggregator’s own imported bookings to prevent feedback loops.</p>
-      {feedLinks.length > 0 ? (
-        <div className="mt-4 space-y-3">
-          {feedLinks.map((feed) => (
-            <div key={feed.key}>
-              <p className="mb-1 text-[10px] font-bold uppercase tracking-[.08em] text-primary-foreground/70">{feed.label}</p>
-              <div className="flex gap-2">
-                <input
-                  readOnly
-                  value={feed.url}
-                  className="min-w-0 flex-1 rounded-lg border border-primary-foreground/20 bg-primary-foreground/10 px-3 py-2 text-[10px] text-primary-foreground outline-none"
-                  aria-label={`${feed.label} outbound calendar feed URL`}
-                  data-testid={`input-outbound-calendar-feed-${feed.key}`}
-                />
-                <button
-                  type="button"
-                  onClick={() => copyFeedUrl(feed.key, feed.url)}
-                  className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-secondary text-primary"
-                  aria-label={`Copy ${feed.label} outbound calendar feed URL`}
-                  data-testid={`button-copy-calendar-feed-${feed.key}`}
-                >
-                  {copied === feed.key ? <Check size={14} /> : <Copy size={14} />}
-                </button>
-              </div>
-            </div>
-          ))}
-        </div>
-      ) : (
-        <p className="mt-3 text-[10px] leading-4 text-[#f0a184]">{isLoading ? 'Loading private feed link...' : errorMessage}</p>
-      )}
-      <p className="mt-3 text-[10px] leading-4 text-primary-foreground/45">Keep these URLs private. Anyone with a link can read blocked dates.</p>
-    </div>
-  );
-}
-
-function SignInPage() {
-  return (
-    <div className="flex min-h-[100dvh] flex-col items-center justify-center bg-background px-4 py-10">
-      <div className="mb-5 flex w-full max-w-[440px] items-center justify-between">
-        <a href={`${basePath}/`} className="flex items-center gap-2 text-xs font-bold uppercase tracking-[.1em] text-primary" data-testid="link-sign-in-back">
-          <ArrowRight size={14} className="rotate-180" /> Back to site
-        </a>
-        <span className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-[.12em] text-accent"><LockKeyhole size={13} /> Owner access</span>
-      </div>
-      <div className="mb-5 w-full max-w-[440px] rounded-2xl border border-border bg-card px-5 py-4 text-center">
-        <p className="font-journal text-2xl text-primary">Raj Kuthir admin login</p>
-        <p className="mt-1 text-xs leading-5 text-muted-foreground">Sign in to manage private calendar feeds and copy the outbound iCal link.</p>
-      </div>
-      <SignIn routing="path" path={`${basePath}/sign-in`} />
-    </div>
-  );
-}
-
 function Router() {
-  return <RoutedErrorBoundary><Switch><Route path="/" component={Home} /><Route path="/sign-in/*?" component={SignInPage} /><Route component={NotFound} /></Switch></RoutedErrorBoundary>;
+  return (
+    <RoutedErrorBoundary>
+      <Switch>
+        <Route path="/" component={Home} />
+        <Route path="/admin" component={AdminDashboard} />
+        <Route path="/admin/login" component={AdminLogin} />
+        {/* Legacy sign-in path, kept so existing bookmarks still land somewhere useful. */}
+        <Route path="/sign-in/*?" component={AdminLogin} />
+        <Route component={NotFound} />
+      </Switch>
+    </RoutedErrorBoundary>
+  );
 }
 
 function App() {
-  return <ClerkProvider publishableKey={clerkPubKey} proxyUrl={clerkProxyUrl} appearance={clerkAppearance} signInUrl={`${basePath}/sign-in`}><QueryClientProvider client={queryClient}><TooltipProvider><WouterRouter base={basePath}><Router /></WouterRouter><Toaster /></TooltipProvider></QueryClientProvider></ClerkProvider>;
+  return (
+    <QueryClientProvider client={queryClient}>
+      <TooltipProvider>
+        <WouterRouter base={basePath}>
+          <Router />
+        </WouterRouter>
+        <Toaster />
+      </TooltipProvider>
+    </QueryClientProvider>
+  );
 }
 
 export default App;

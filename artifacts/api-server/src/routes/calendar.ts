@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
-import { getAuth } from "@clerk/express";
 import crypto from "node:crypto";
+import { requireAdmin } from "../lib/admin-auth";
 import {
   BlockDatesBody,
   CalendarEventDto,
@@ -17,16 +17,13 @@ import {
 } from "../lib/calendar-repo";
 import {
   SOURCE_DEFINITIONS,
+  getLastSyncResult,
   syncCalendarSources,
 } from "../lib/calendar-sync";
 import type { ImportSource } from "../lib/ics-utils";
 
 const router: IRouter = Router();
 const CALENDAR_FEED_TOKEN = process.env.RAJ_KUTHIR_CALENDAR_FEED_TOKEN;
-const ADMIN_USER_IDS = (process.env.RAJ_KUTHIR_ADMIN_USER_IDS ?? "")
-  .split(",")
-  .map((value) => value.trim())
-  .filter(Boolean);
 
 const CALENDAR_SOURCES = [
   "manual",
@@ -41,27 +38,6 @@ function isCalendarSource(value: unknown): value is CalendarEventDtoType["source
     typeof value === "string" &&
     (CALENDAR_SOURCES as readonly string[]).includes(value)
   );
-}
-
-function requireAdmin(req: any, res: any, next: any): void {
-  const { userId } = getAuth(req);
-
-  if (!userId) {
-    res.status(401).json({ error: "Admin sign-in required." });
-    return;
-  }
-
-  if (ADMIN_USER_IDS.length === 0) {
-    res.status(503).json({ error: "Admin access is not configured." });
-    return;
-  }
-
-  if (!ADMIN_USER_IDS.includes(userId)) {
-    res.status(403).json({ error: "This account is not an authorised admin." });
-    return;
-  }
-
-  next();
 }
 
 function toEventDto(event: Awaited<ReturnType<typeof listAllEvents>>[number]) {
@@ -165,12 +141,15 @@ router.post("/calendar/block", requireAdmin, async (req, res) => {
 });
 
 router.delete("/calendar/block/:id", requireAdmin, async (req, res) => {
-  if (!isUuid(req.params.id)) {
+  // Express 5 types a route param as `string | string[]`; `:id` is always a
+  // single path segment at runtime, so narrow it before validating.
+  const id = Array.isArray(req.params.id) ? "" : req.params.id;
+  if (!isUuid(id)) {
     res.status(400).json({ error: "Invalid calendar event id." });
     return;
   }
 
-  const deleted = await deleteOwnedEvent(req.params.id);
+  const deleted = await deleteOwnedEvent(id);
   if (!deleted) {
     res.status(404).json({
       error: "Not found, or it is an OTA booking that cannot be removed here.",
@@ -194,6 +173,36 @@ router.post("/calendar/sync", requireAdmin, async (req, res) => {
     ...result,
     totalEvents: events.length,
     events: events.map(toEventDto),
+  });
+});
+
+/**
+ * Per-source sync status for the admin dashboard, served from the last
+ * completed sync so opening the page is cheap. Sources that have never been
+ * reached are reported as "missing" rather than omitted, so the dashboard can
+ * always render one row per OTA.
+ */
+router.get("/calendar/sync-status", requireAdmin, (_req, res) => {
+  const last = getLastSyncResult();
+  const bySource = new Map(
+    (last?.sources ?? []).map((status) => [status.source, status]),
+  );
+
+  res.setHeader("Cache-Control", "no-store");
+  res.json({
+    syncedAt: last?.syncedAt ?? null,
+    totalEvents: last?.totalEvents ?? 0,
+    sources: SOURCE_DEFINITIONS.map(
+      (definition) =>
+        bySource.get(definition.key) ?? {
+          source: definition.key,
+          label: definition.label,
+          status: "missing" as const,
+          eventCount: 0,
+          message: "Not synced yet.",
+          lastSyncedAt: null,
+        },
+    ),
   });
 });
 

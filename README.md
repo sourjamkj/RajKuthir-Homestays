@@ -7,7 +7,7 @@ calendar, and DB-backed OTA (Airbnb / Booking.com / MakeMyTrip) calendar sync.
 ## Stack
 
 - pnpm workspaces (monorepo), Node.js 24, TypeScript 5.9
-- API: Express 5, auth via Clerk
+- API: Express 5, self-hosted password auth for the owner console (see Admin access)
 - DB: PostgreSQL + Drizzle ORM
 - Frontend: React + Vite + Tailwind
 - Validation: Zod, API contract in `lib/api-spec/openapi.yaml` (client hooks
@@ -39,9 +39,9 @@ scripts/        misc workspace scripts (e.g. post-merge hook)
 |---|---|---|
 | `DATABASE_URL` | yes | Postgres connection string |
 | `PORT` | yes | Port the API server listens on |
-| `NODE_ENV` | recommended | `production` in prod — gates the Clerk same-origin proxy |
-| `CLERK_SECRET_KEY` / `CLERK_PUBLISHABLE_KEY` | yes | Clerk auth (admin sign-in) |
-| `RAJ_KUTHIR_ADMIN_USER_IDS` | yes | Comma-separated Clerk user IDs allowed to use the admin calendar |
+| `NODE_ENV` | recommended | `production` in prod — makes the session cookie `Secure` |
+| `RAJ_KUTHIR_ADMIN_PASSWORD_HASH` | yes | scrypt hash of the owner password — see below |
+| `RAJ_KUTHIR_SESSION_SECRET` | yes | Signs the admin session cookie. Changing it signs everyone out |
 | `RAJ_KUTHIR_CALENDAR_FEED_TOKEN` | yes | Secret token guarding the outbound `/api/calendar/feed` export |
 | `RAJ_KUTHIR_BOOKING_ICAL_URL` | for that OTA | Booking.com's export iCal URL to import from |
 | `RAJ_KUTHIR_AIRBNB_ICAL_URL` | for that OTA | Airbnb's export iCal URL to import from |
@@ -52,7 +52,30 @@ The three OTAs each get their **own** export URL, generated at
 `GET /api/calendar/feed-info` while signed in as admin — each has a different
 `?exclude=` so an OTA never receives its own bookings back. Paste each OTA's
 own URL into that OTA's "import calendar" field, not the same URL into all
-three.
+three. The owner console at `/admin` shows all three with copy buttons.
+
+## Admin access
+
+There is one admin (the owner), so the app does not use an external identity
+provider. A password is checked against a scrypt hash held in an environment
+variable, and a successful sign-in issues an HMAC-signed HttpOnly cookie
+(30-day expiry). No session table, so restarts and multiple instances are fine.
+
+Generate both required values:
+
+```bash
+node scripts/hash-admin-password.mjs "your chosen password"
+```
+
+Paste the two lines it prints into your host's variables panel and redeploy.
+The plain password is never stored — if it is lost, generate a new pair.
+Rotating `RAJ_KUTHIR_SESSION_SECRET` immediately signs out every session,
+which is the fastest way to revoke access.
+
+Routes: `/admin` (dashboard, redirects to login when signed out) and
+`/admin/login`. The admin endpoints (`/api/admin/*`, `/api/calendar/sync-status`)
+are deliberately not in `openapi.yaml` — they are called with plain `fetch`
+from `artifacts/raj-kuthir/src/lib/admin-api.ts` rather than generated hooks.
 
 ## Local development
 
