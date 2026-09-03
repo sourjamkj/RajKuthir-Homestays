@@ -21,7 +21,12 @@ import {
   syncCalendarSources,
 } from "../lib/calendar-sync";
 import { getFeedUrls, setFeedUrl } from "../lib/settings-repo";
-import { isSafeFeedUrl, type ImportSource } from "../lib/ics-utils";
+import {
+  fetchFeed,
+  isSafeFeedUrl,
+  parseIcs,
+  type ImportSource,
+} from "../lib/ics-utils";
 
 const router: IRouter = Router();
 const CALENDAR_FEED_TOKEN = process.env.RAJ_KUTHIR_CALENDAR_FEED_TOKEN;
@@ -30,10 +35,16 @@ const CALENDAR_FEED_TOKEN = process.env.RAJ_KUTHIR_CALENDAR_FEED_TOKEN;
  * Whether each source has an environment-variable fallback configured. Only
  * presence is exposed to the client, never the URL itself.
  */
+const ENV_VAR_NAMES: Record<ImportSource, string> = {
+  bookingCom: "RAJ_KUTHIR_BOOKING_ICAL_URL",
+  airbnb: "RAJ_KUTHIR_AIRBNB_ICAL_URL",
+  makeMyTrip: "RAJ_KUTHIR_MAKEMYTRIP_ICAL_URL",
+};
+
 const ENV_FEED_URL_PRESENT: Record<ImportSource, boolean> = {
-  bookingCom: Boolean(process.env.RAJ_KUTHIR_BOOKING_ICAL_URL),
-  airbnb: Boolean(process.env.RAJ_KUTHIR_AIRBNB_ICAL_URL),
-  makeMyTrip: Boolean(process.env.RAJ_KUTHIR_MAKEMYTRIP_ICAL_URL),
+  bookingCom: Boolean(process.env[ENV_VAR_NAMES.bookingCom]),
+  airbnb: Boolean(process.env[ENV_VAR_NAMES.airbnb]),
+  makeMyTrip: Boolean(process.env[ENV_VAR_NAMES.makeMyTrip]),
 };
 
 const IMPORT_SOURCES: readonly ImportSource[] = [
@@ -253,6 +264,71 @@ router.put("/calendar/feed-sources/:source", requireAdmin, async (req, res) => {
 
   await setFeedUrl(source, value || null);
   res.json({ source, url: value, saved: true });
+});
+
+/**
+ * Live look at exactly what one OTA is currently exporting, without writing
+ * anything to the database.
+ *
+ * This exists to settle the recurring "I unblocked it there but it is still
+ * blocked here" question: if a date still appears here, the OTA is still
+ * publishing it and the sync is behaving correctly. Titles are included
+ * because they reveal echoes — a block that originated from our own outbound
+ * feed usually comes back with a tell-tale summary.
+ *
+ * The feed URL is a secret, so only its host is returned.
+ */
+router.get("/calendar/inspect/:source", requireAdmin, async (req, res) => {
+  const source = Array.isArray(req.params.source) ? "" : req.params.source;
+
+  if (!isImportSource(source)) {
+    res.status(400).json({ error: "Unknown calendar source." });
+    return;
+  }
+
+  const stored = await getFeedUrls();
+  const url = stored[source] || process.env[ENV_VAR_NAMES[source]];
+
+  if (!url) {
+    res.status(400).json({
+      error: "No feed URL is configured for this channel yet.",
+    });
+    return;
+  }
+
+  res.setHeader("Cache-Control", "no-store");
+
+  try {
+    const raw = await fetchFeed(url);
+    const events = parseIcs(raw, source);
+    const today = new Date().toISOString().slice(0, 10);
+
+    res.json({
+      source,
+      feedHost: new URL(url).host,
+      fetchedAt: new Date().toISOString(),
+      rawBytes: raw.length,
+      // Every VEVENT block in the file, including ones the parser discards.
+      rawEventBlocks: (raw.match(/BEGIN:VEVENT/g) ?? []).length,
+      eventCount: events.length,
+      events: events
+        .slice()
+        .sort((left, right) => left.startDate.localeCompare(right.startDate))
+        .map((event) => ({
+          startDate: event.startDate,
+          endDate: event.endDate,
+          title: event.title,
+          past: event.endDate <= today,
+        })),
+    });
+  } catch (error) {
+    res.status(502).json({
+      error:
+        error instanceof Error
+          ? error.message
+          : "Could not read this calendar feed.",
+    });
+  }
 });
 
 /**

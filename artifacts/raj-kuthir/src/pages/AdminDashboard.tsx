@@ -120,6 +120,20 @@ export default function AdminDashboard() {
 
           <div className="flex items-center gap-3">
             <a
+              href="/admin/earnings"
+              className="rounded-full border border-border px-4 py-2 text-[11px] font-bold uppercase tracking-[.09em] text-primary transition-colors hover:border-primary"
+              data-testid="link-admin-earnings"
+            >
+              Earnings
+            </a>
+            <a
+              href="/admin/rates"
+              className="rounded-full border border-border px-4 py-2 text-[11px] font-bold uppercase tracking-[.09em] text-primary transition-colors hover:border-primary"
+              data-testid="link-admin-rates"
+            >
+              Rates
+            </a>
+            <a
               href="/"
               className="flex items-center gap-1.5 rounded-full border border-border px-4 py-2 text-[11px] font-bold uppercase tracking-[.09em] text-primary transition-colors hover:border-primary"
               data-testid="link-view-site"

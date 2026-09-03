@@ -19,3 +19,5 @@
 
 export * from "./calendar";
 export * from "./settings";
+export * from "./rates";
+export * from "./bookings";
