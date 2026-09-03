@@ -1,28 +1,47 @@
 ---
 name: raj-kuthir-deploy-railway
-description: The site is hosted on Railway (not Replit); the Express API server serves the built frontend.
+description: The site is hosted on Railway (not Replit); Express API server serves the built frontend. Deploy setup is currently broken.
 ---
 
-Raj Kuthir Homestays is deployed on **Railway**, not Replit. Confirmed from
-response headers on https://rajkuthirhomestays.casa (`server: railway-hikari`,
-`x-railway-edge`, `x-powered-by: Express`). The `.replit` / `.replit-artifact/`
-files in the repo are dead config from the original Replit scaffold.
+Raj Kuthir Homestays is deployed on **Railway**, not Replit (`server: railway-hikari`
+headers on https://rajkuthirhomestays.casa). The `.replit` / `.replit-artifact/`
+files were deleted from the repo on 2026-09-03 — Railway uses the Railpack builder
+plus per-service dashboard settings, not those files.
 
-The API server (`artifacts/api-server`) serves the built frontend static files
-from `artifacts/raj-kuthir/dist/public` — the frontend must build before the
-server starts.
+**Railway project "RajKuthir Homestays"** (workspace `sourjamkj's Projects`,
+`mkj.sourja@gmail.com`) has 3 services:
+- `@workspace/raj-kuthir` — the exposed one. Domain `workspaceraj-kuthir-production.up.railway.app`
+  plus the custom domain (`rajkuthirhomestays.casa` apex CNAMEs to `8mqphttu.up.railway.app`).
+  Builder Railpack; build `pnpm --filter @workspace/raj-kuthir build`;
+  watch paths `/artifacts/raj-kuthir/**`.
+- `@workspace/api-server` — **unexposed, no active deployment.** Has env vars set
+  (DATABASE_URL, RAJ_KUTHIR_*). Effectively dead.
+- Postgres — online, with `postgres-volume`.
 
-**Build (per README):**
-`pnpm install && pnpm --filter @workspace/raj-kuthir run build && pnpm --filter @workspace/api-server run build`
-then `node artifacts/api-server/dist/index.mjs`.
+**Known problems (as of 2026-09-03):**
+- The Railway account is on a **Limited Trial** ("Upgrade to keep your services
+  online"). GitHub **auto-deploy is disabled** — the frontend service shows
+  "Auto deploy unavailable" and every push since commit `fbb3a3c` is SKIPPED.
+  Fixing this needs a plan upgrade (Hobby $5/mo) or a migration.
+- The frontend service's **start command is `pnpm --filter @workspace/raj-kuthir dev`**
+  — the Vite dev server, not a production static serve. Wrong for prod.
+- The intended architecture (per README) is ONE service: the API server builds +
+  serves `artifacts/raj-kuthir/dist/public`. The 2-service split is half-finished.
 
-Railway runs `pnpm install --frozen-lockfile` — it hard-fails (exit 1) on any
-mismatch between the manifests and `pnpm-lock.yaml`. Always regenerate and
-commit the lockfile after any dependency/catalog change.
+**Correct single-service setup:**
+build `pnpm install && pnpm --filter @workspace/raj-kuthir run build && pnpm --filter @workspace/api-server run build`;
+start `node artifacts/api-server/dist/index.mjs`; healthcheck `/api/healthz`.
 
-**Custom domains:** apex `rajkuthirhomestays.casa` works. `www` subdomain must be
-added as its own custom-domain entry on the Railway service to get a DNS target,
-then that record added at Namecheap. DNS is managed via Namecheap.
+Railway runs `pnpm install --frozen-lockfile` — hard-fails on any mismatch between
+manifests and `pnpm-lock.yaml`. Always regenerate + commit the lockfile after a
+dependency change. See [[raj-kuthir-public-image-refs]].
 
-Auto-deploys on push to `main` (the user sees Railway build logs / failure
-notifications), so a bad push to main can break the deploy.
+**Auth:** Clerk was removed 2026-09-03 (see [[raj-kuthir-admin-auth]]). No more
+`CLERK_*` / `VITE_CLERK_*` / `RAJ_KUTHIR_ADMIN_USER_IDS` env vars. New required
+vars: `RAJ_KUTHIR_ADMIN_PASSWORD_HASH`, `RAJ_KUTHIR_SESSION_SECRET`
+(generate with `node scripts/hash-admin-password.mjs "..."`).
+
+**Custom domains:** apex works; `www` has no DNS record and no Railway custom-domain
+entry — both need adding. DNS is Namecheap BasicDNS (`dns1/dns2.registrar-servers.com`),
+Clerk CNAMEs (`accounts`, `clerk`, `clk._domainkey`, `clk2._domainkey`) are now
+also dead and can be removed.
