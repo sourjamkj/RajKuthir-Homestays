@@ -11,6 +11,7 @@ export const CALENDAR_EVENTS_KEY = ['/api/calendar/events'];
 export const CALENDAR_PUBLIC_KEY = ['/api/calendar/public'];
 export const SYNC_STATUS_KEY = ['/api/calendar/sync-status'];
 export const FEED_INFO_KEY = ['/api/calendar/feed-info'];
+export const FEED_SOURCES_KEY = ['/api/calendar/feed-sources'];
 
 export type AdminSession = {
   signedIn: boolean;
@@ -141,6 +142,40 @@ export function useRunSync() {
       });
       queryClient.invalidateQueries({ queryKey: CALENDAR_EVENTS_KEY });
       queryClient.invalidateQueries({ queryKey: CALENDAR_PUBLIC_KEY });
+    },
+  });
+}
+
+export type FeedSource = {
+  source: 'bookingCom' | 'airbnb' | 'makeMyTrip';
+  label: string;
+  url: string;
+  /** True when nothing is saved but an environment variable is still supplying a URL. */
+  usingEnvFallback: boolean;
+};
+
+export function useFeedSources(enabled: boolean) {
+  return useQuery({
+    queryKey: FEED_SOURCES_KEY,
+    queryFn: () =>
+      adminFetch<{ sources: FeedSource[] }>('/api/calendar/feed-sources'),
+    enabled,
+    retry: false,
+    staleTime: 60_000,
+  });
+}
+
+export function useSaveFeedSource() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ source, url }: { source: string; url: string }) =>
+      adminFetch<{ saved: boolean }>(`/api/calendar/feed-sources/${source}`, {
+        method: 'PUT',
+        body: JSON.stringify({ url }),
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: FEED_SOURCES_KEY });
     },
   });
 }

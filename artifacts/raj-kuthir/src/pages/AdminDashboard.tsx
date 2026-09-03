@@ -9,6 +9,7 @@ import {
   CircleAlert,
   Copy,
   ExternalLink,
+  Link as LinkIcon,
   Loader2,
   LogOut,
   RefreshCw,
@@ -20,10 +21,13 @@ import {
   formatDateTime,
   useAdminSession,
   useFeedInfo,
+  useFeedSources,
   useLogout,
   useRunSync,
+  useSaveFeedSource,
   useSyncStatus,
   CALENDAR_EVENTS_KEY,
+  type FeedSource,
   type SyncSourceStatus,
 } from '@/lib/admin-api';
 
@@ -69,6 +73,7 @@ export default function AdminDashboard() {
   const syncStatus = useSyncStatus(signedIn);
   const runSync = useRunSync();
   const feedInfo = useFeedInfo(signedIn);
+  const feedSources = useFeedSources(signedIn);
 
   const events = useQuery({
     queryKey: CALENDAR_EVENTS_KEY,
@@ -163,6 +168,11 @@ export default function AdminDashboard() {
           />
         </section>
 
+        <FeedSourcesPanel
+          sources={feedSources.data?.sources}
+          isLoading={feedSources.isLoading}
+        />
+
         <SyncPanel
           data={syncStatus.data}
           isLoading={syncStatus.isLoading}
@@ -226,6 +236,137 @@ function SectionHeading({
         </p>
       </div>
       {action}
+    </div>
+  );
+}
+
+function FeedSourcesPanel({
+  sources,
+  isLoading,
+}: {
+  sources: FeedSource[] | undefined;
+  isLoading: boolean;
+}) {
+  return (
+    <section className="mt-6" aria-label="Channel connections">
+      <SectionHeading
+        icon={<LinkIcon size={15} />}
+        title="Channel connections"
+        description="Paste each channel's calendar export (iCal) link here so their bookings flow into your calendar. Find it in that channel's own dashboard under calendar sync or export. Saved here — no redeploy needed."
+      />
+
+      <div className="mt-4 space-y-3">
+        {isLoading
+          ? [0, 1, 2].map((key) => (
+              <div
+                key={key}
+                className="h-[86px] animate-pulse rounded-2xl border border-border bg-card"
+              />
+            ))
+          : (sources ?? []).map((source) => (
+              <FeedSourceRow key={source.source} source={source} />
+            ))}
+      </div>
+    </section>
+  );
+}
+
+function FeedSourceRow({ source }: { source: FeedSource }) {
+  const [value, setValue] = useState(source.url);
+  const [touched, setTouched] = useState(false);
+  const save = useSaveFeedSource();
+
+  // Re-seed from the server when this row is not being edited, so a refetch
+  // does not clobber what the owner is typing.
+  useEffect(() => {
+    if (!touched) setValue(source.url);
+  }, [source.url, touched]);
+
+  const dirty = value.trim() !== source.url.trim();
+
+  const submit = () => {
+    if (!dirty || save.isPending) return;
+    save.mutate(
+      { source: source.source, url: value.trim() },
+      { onSuccess: () => setTouched(false) },
+    );
+  };
+
+  const errorMessage =
+    save.error instanceof Error ? save.error.message : null;
+
+  return (
+    <div
+      className="rounded-2xl border border-border bg-card p-5"
+      data-testid={`row-feed-source-${source.source}`}
+    >
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <label
+          htmlFor={`feed-url-${source.source}`}
+          className="text-sm font-bold text-primary"
+        >
+          {source.label}
+        </label>
+
+        {source.url ? (
+          <span className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-[.07em] text-[#4b5340]">
+            <Check size={11} /> Saved
+          </span>
+        ) : source.usingEnvFallback ? (
+          <span className="text-[10px] font-bold uppercase tracking-[.07em] text-muted-foreground">
+            Using server variable
+          </span>
+        ) : (
+          <span className="text-[10px] font-bold uppercase tracking-[.07em] text-muted-foreground">
+            Not set
+          </span>
+        )}
+      </div>
+
+      <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+        <input
+          id={`feed-url-${source.source}`}
+          type="url"
+          inputMode="url"
+          value={value}
+          placeholder="https://…  paste the iCal export link"
+          onChange={(event) => {
+            setTouched(true);
+            setValue(event.target.value);
+          }}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter') submit();
+          }}
+          className="min-w-0 flex-1 rounded-lg border border-border bg-background px-3 py-2.5 font-mono-ui text-[11px] text-foreground outline-none transition-colors focus:border-primary"
+          data-testid={`input-feed-url-${source.source}`}
+        />
+        <button
+          type="button"
+          onClick={submit}
+          disabled={!dirty || save.isPending}
+          className="flex shrink-0 items-center justify-center gap-1.5 rounded-lg bg-primary px-4 py-2.5 text-[11px] font-bold uppercase tracking-[.07em] text-primary-foreground transition-transform hover:-translate-y-0.5 disabled:translate-y-0 disabled:cursor-not-allowed disabled:opacity-40"
+          data-testid={`button-save-feed-${source.source}`}
+        >
+          {save.isPending ? (
+            <Loader2 size={13} className="animate-spin" />
+          ) : save.isSuccess && !dirty ? (
+            <Check size={13} />
+          ) : null}
+          {save.isPending ? 'Saving' : save.isSuccess && !dirty ? 'Saved' : 'Save'}
+        </button>
+      </div>
+
+      {errorMessage && (
+        <p className="mt-2 text-xs text-[#A65E45]" role="alert">
+          {errorMessage}
+        </p>
+      )}
+
+      {!value && source.usingEnvFallback && (
+        <p className="mt-2 text-[11px] leading-5 text-muted-foreground">
+          A URL is currently set on the server. Paste one here to override it.
+        </p>
+      )}
     </div>
   );
 }

@@ -20,10 +20,34 @@ import {
   getLastSyncResult,
   syncCalendarSources,
 } from "../lib/calendar-sync";
-import type { ImportSource } from "../lib/ics-utils";
+import { getFeedUrls, setFeedUrl } from "../lib/settings-repo";
+import { isSafeFeedUrl, type ImportSource } from "../lib/ics-utils";
 
 const router: IRouter = Router();
 const CALENDAR_FEED_TOKEN = process.env.RAJ_KUTHIR_CALENDAR_FEED_TOKEN;
+
+/**
+ * Whether each source has an environment-variable fallback configured. Only
+ * presence is exposed to the client, never the URL itself.
+ */
+const ENV_FEED_URL_PRESENT: Record<ImportSource, boolean> = {
+  bookingCom: Boolean(process.env.RAJ_KUTHIR_BOOKING_ICAL_URL),
+  airbnb: Boolean(process.env.RAJ_KUTHIR_AIRBNB_ICAL_URL),
+  makeMyTrip: Boolean(process.env.RAJ_KUTHIR_MAKEMYTRIP_ICAL_URL),
+};
+
+const IMPORT_SOURCES: readonly ImportSource[] = [
+  "bookingCom",
+  "airbnb",
+  "makeMyTrip",
+];
+
+function isImportSource(value: unknown): value is ImportSource {
+  return (
+    typeof value === "string" &&
+    (IMPORT_SOURCES as readonly string[]).includes(value)
+  );
+}
 
 const CALENDAR_SOURCES = [
   "manual",
@@ -174,6 +198,61 @@ router.post("/calendar/sync", requireAdmin, async (req, res) => {
     totalEvents: events.length,
     events: events.map(toEventDto),
   });
+});
+
+/**
+ * The owner-editable OTA import URLs, shown in the dashboard so a feed can be
+ * repointed without a redeploy. Admin-only: these URLs are secrets, since
+ * anyone holding one can read booking dates. `source` tells the UI whether a
+ * value came from the database or is still falling back to an env var.
+ */
+router.get("/calendar/feed-sources", requireAdmin, async (_req, res) => {
+  const stored = await getFeedUrls();
+
+  res.setHeader("Cache-Control", "no-store");
+  res.json({
+    sources: SOURCE_DEFINITIONS.map((definition) => {
+      const saved = stored[definition.key];
+      const fromEnv = ENV_FEED_URL_PRESENT[definition.key];
+
+      return {
+        source: definition.key,
+        label: definition.label,
+        url: saved ?? "",
+        // The env value is deliberately not sent — it is only reported as present.
+        usingEnvFallback: !saved && fromEnv,
+      };
+    }),
+  });
+});
+
+router.put("/calendar/feed-sources/:source", requireAdmin, async (req, res) => {
+  const source = req.params.source;
+
+  if (!isImportSource(source)) {
+    res.status(400).json({ error: "Unknown calendar source." });
+    return;
+  }
+
+  const raw: unknown = req.body?.url;
+  const value = typeof raw === "string" ? raw.trim() : "";
+
+  if (value.length > 2000) {
+    res.status(400).json({ error: "That URL is too long." });
+    return;
+  }
+
+  // An empty value clears the override and falls back to the env var.
+  if (value && !isSafeFeedUrl(value)) {
+    res.status(400).json({
+      error:
+        "Enter a public http(s) calendar feed URL. Private and local addresses are not allowed.",
+    });
+    return;
+  }
+
+  await setFeedUrl(source, value || null);
+  res.json({ source, url: value, saved: true });
 });
 
 /**

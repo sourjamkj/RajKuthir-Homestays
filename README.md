@@ -43,12 +43,18 @@ scripts/        misc workspace scripts (e.g. post-merge hook)
 | `RAJ_KUTHIR_ADMIN_PASSWORD_HASH` | yes | scrypt hash of the owner password — see below |
 | `RAJ_KUTHIR_SESSION_SECRET` | yes | Signs the admin session cookie. Changing it signs everyone out |
 | `RAJ_KUTHIR_CALENDAR_FEED_TOKEN` | yes | Secret token guarding the outbound `/api/calendar/feed` export |
-| `RAJ_KUTHIR_BOOKING_ICAL_URL` | for that OTA | Booking.com's export iCal URL to import from |
-| `RAJ_KUTHIR_AIRBNB_ICAL_URL` | for that OTA | Airbnb's export iCal URL to import from |
-| `RAJ_KUTHIR_MAKEMYTRIP_ICAL_URL` | for that OTA | MakeMyTrip's export iCal URL to import from |
+| `RAJ_KUTHIR_BOOKING_ICAL_URL` | optional | Fallback Booking.com import URL — normally set in the dashboard instead |
+| `RAJ_KUTHIR_AIRBNB_ICAL_URL` | optional | Fallback Airbnb import URL — normally set in the dashboard instead |
+| `RAJ_KUTHIR_MAKEMYTRIP_ICAL_URL` | optional | Fallback MakeMyTrip import URL — normally set in the dashboard instead |
 | `CLIENT_DIST` | no | Overrides where the API server looks for the built frontend (`artifacts/raj-kuthir/dist/public` by default) |
 
-The three OTAs each get their **own** export URL, generated at
+**Inbound** (OTA → this app): the three import URLs are edited from the admin
+dashboard and stored in the `app_settings` table, so a feed can be repointed
+without a redeploy. The `*_ICAL_URL` variables above are only a fallback for
+any source with nothing saved. Resolution order per source: an override passed
+to `POST /api/calendar/sync`, then the saved value, then the env var.
+
+**Outbound** (this app → OTA): the three OTAs each get their **own** export URL, generated at
 `GET /api/calendar/feed-info` while signed in as admin — each has a different
 `?exclude=` so an OTA never receives its own bookings back. Paste each OTA's
 own URL into that OTA's "import calendar" field, not the same URL into all

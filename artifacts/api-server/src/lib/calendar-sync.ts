@@ -1,6 +1,7 @@
 import { logger } from "./logger";
 import { fetchFeed, parseIcs, type ImportSource } from "./ics-utils";
 import { replaceSourceEvents } from "./calendar-repo";
+import { getFeedUrls } from "./settings-repo";
 
 export const SOURCE_DEFINITIONS: Array<{
   key: ImportSource;
@@ -11,7 +12,11 @@ export const SOURCE_DEFINITIONS: Array<{
   { key: "makeMyTrip", label: "MakeMyTrip" },
 ];
 
-const SECURE_FEED_URLS: Record<ImportSource, string | undefined> = {
+/**
+ * Fallback feed URLs from the environment. The owner-editable values saved
+ * from the admin dashboard take precedence over these — see runSync.
+ */
+const ENV_FEED_URLS: Record<ImportSource, string | undefined> = {
   bookingCom: process.env.RAJ_KUTHIR_BOOKING_ICAL_URL,
   airbnb: process.env.RAJ_KUTHIR_AIRBNB_ICAL_URL,
   makeMyTrip: process.env.RAJ_KUTHIR_MAKEMYTRIP_ICAL_URL,
@@ -57,8 +62,18 @@ async function runSync(
   const sources: SyncSourceStatus[] = [];
   let totalEvents = 0;
 
+  // Owner-saved URLs win over environment variables. A DB failure here must
+  // not take the whole sync down — fall back to the environment.
+  const stored = await getFeedUrls().catch((error) => {
+    logger.warn({ err: error }, "Could not read saved feed URLs");
+    return null;
+  });
+
   for (const definition of SOURCE_DEFINITIONS) {
-    const url = overrides[definition.key] || SECURE_FEED_URLS[definition.key];
+    const url =
+      overrides[definition.key] ||
+      stored?.[definition.key] ||
+      ENV_FEED_URLS[definition.key];
 
     if (!url) {
       sources.push({
