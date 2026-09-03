@@ -252,6 +252,45 @@ export async function createOverride(input: {
   return created!;
 }
 
+/**
+ * Replaces a peak period's settings wholesale. Mode-specific fields for the
+ * modes not in use are cleared, so a period switched from demand to percent
+ * cannot leave stale min/max values behind to confuse a later reader.
+ */
+export async function updateOverride(
+  id: string,
+  input: {
+    startDate: string;
+    endDate: string;
+    label?: string | null;
+    mode: RateMode;
+    amounts?: Record<string, number>;
+    percent?: number | null;
+    minPercent?: number | null;
+    maxPercent?: number | null;
+    demandThreshold?: number | null;
+  },
+): Promise<RateOverride | null> {
+  const [updated] = await db
+    .update(rateOverrides)
+    .set({
+      startDate: input.startDate,
+      endDate: input.endDate,
+      label: input.label?.trim() || null,
+      mode: input.mode,
+      amounts: input.mode === "fixed" ? (input.amounts ?? {}) : {},
+      percent: input.mode === "percent" ? (input.percent ?? null) : null,
+      minPercent: input.mode === "demand" ? (input.minPercent ?? null) : null,
+      maxPercent: input.mode === "demand" ? (input.maxPercent ?? null) : null,
+      demandThreshold:
+        input.mode === "demand" ? (input.demandThreshold ?? null) : null,
+    })
+    .where(eq(rateOverrides.id, id))
+    .returning();
+
+  return updated ?? null;
+}
+
 export async function deleteOverride(id: string): Promise<boolean> {
   const deleted = await db
     .delete(rateOverrides)

@@ -8,9 +8,11 @@ import {
   IndianRupee,
   Loader2,
   LogOut,
+  Pencil,
   Plus,
   Trash2,
   TriangleAlert,
+  X,
 } from 'lucide-react';
 import { adminFetch, useAdminSession, useLogout } from '@/lib/admin-api';
 import {
@@ -79,6 +81,8 @@ export default function AdminRates() {
   const [touched, setTouched] = useState(false);
   const [peak, setPeak] = useState(emptyPeak);
   const [peakOpen, setPeakOpen] = useState(false);
+  /** Set when the form is editing an existing period rather than creating one. */
+  const [editingId, setEditingId] = useState<string | null>(null);
 
   // Seed the form from the server, but never overwrite what is being typed.
   useEffect(() => {
@@ -119,8 +123,12 @@ export default function AdminRates() {
 
   const addPeak = useMutation({
     mutationFn: () =>
-      adminFetch('/api/rates/overrides', {
-        method: 'POST',
+      adminFetch(
+        editingId
+          ? `/api/rates/overrides/${editingId}`
+          : '/api/rates/overrides',
+        {
+        method: editingId ? 'PATCH' : 'POST',
         body: JSON.stringify({
           startDate: peak.startDate,
           endDate: peak.endDate,
@@ -144,13 +152,50 @@ export default function AdminRates() {
               }
             : {}),
         }),
-      }),
+        },
+      ),
     onSuccess: () => {
       setPeak(emptyPeak());
       setPeakOpen(false);
+      setEditingId(null);
       invalidate();
     },
   });
+
+  const startEdit = (override: RateOverride) => {
+    setEditingId(override.id);
+    setPeakOpen(true);
+    setPeak({
+      startDate: override.startDate,
+      endDate: override.endDate,
+      label: override.label ?? '',
+      mode: override.mode,
+      percent: override.percent !== null ? String(override.percent) : '',
+      minPercent:
+        override.minPercent !== null ? String(override.minPercent) : '',
+      maxPercent:
+        override.maxPercent !== null ? String(override.maxPercent) : '',
+      demandThreshold:
+        override.demandThreshold !== null
+          ? String(override.demandThreshold)
+          : '',
+      amounts: Object.fromEntries(
+        GUEST_COUNTS.map((n) => [
+          String(n),
+          override.mode === 'fixed' && override.amounts[String(n)]
+            ? String(override.amounts[String(n)]! / 100)
+            : '',
+        ]),
+      ),
+    });
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const cancelEdit = () => {
+    setEditingId(null);
+    setPeak(emptyPeak());
+    setPeakOpen(false);
+  };
 
   const removePeak = useMutation({
     mutationFn: (id: string) =>
@@ -171,6 +216,8 @@ export default function AdminRates() {
     peak.startDate && peak.endDate && peak.endDate > peak.startDate
       ? (plan.data?.overrides ?? []).filter(
           (existing) =>
+            // A period being edited is not in conflict with itself.
+            existing.id !== editingId &&
             peak.startDate < existing.endDate &&
             existing.startDate < peak.endDate,
         )
@@ -278,19 +325,39 @@ export default function AdminRates() {
             title="Peak periods"
             description="Festival weeks, New Year, Poush Mela — a date range with its own prices. Leave an occupancy blank to keep the standard rate for it."
             action={
-              <button
-                type="button"
-                onClick={() => setPeakOpen((value) => !value)}
-                className="flex items-center gap-2 rounded-full bg-primary px-5 py-2.5 text-[11px] font-bold uppercase tracking-[.09em] text-primary-foreground transition-transform hover:-translate-y-0.5"
-                data-testid="button-add-peak"
-              >
-                <Plus size={14} /> {peakOpen ? 'Close' : 'Add peak period'}
-              </button>
+              editingId ? (
+                <button
+                  type="button"
+                  onClick={cancelEdit}
+                  className="flex items-center gap-2 rounded-full border border-border px-5 py-2.5 text-[11px] font-bold uppercase tracking-[.09em] text-primary transition-colors hover:border-primary"
+                  data-testid="button-cancel-edit"
+                >
+                  <X size={14} /> Cancel edit
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setPeakOpen((value) => !value)}
+                  className="flex items-center gap-2 rounded-full bg-primary px-5 py-2.5 text-[11px] font-bold uppercase tracking-[.09em] text-primary-foreground transition-transform hover:-translate-y-0.5"
+                  data-testid="button-add-peak"
+                >
+                  <Plus size={14} /> {peakOpen ? 'Close' : 'Add peak period'}
+                </button>
+              )
             }
           />
 
           {peakOpen && (
-            <div className="mt-4 rounded-2xl border border-border bg-card p-5 md:p-6">
+            <div className={`mt-4 rounded-2xl border bg-card p-5 md:p-6 ${editingId ? 'border-primary' : 'border-border'}`}>
+              {editingId && (
+                <p
+                  className="mb-5 flex items-center gap-2 text-xs font-bold uppercase tracking-[.08em] text-primary"
+                  data-testid="text-editing-peak"
+                >
+                  <Pencil size={13} /> Editing “{peak.label || 'peak period'}”
+                </p>
+              )}
+
               <div className="grid gap-4 sm:grid-cols-3">
                 <Field label="From (first night)">
                   <input
@@ -512,7 +579,7 @@ export default function AdminRates() {
                 {addPeak.isPending && (
                   <Loader2 size={14} className="animate-spin" />
                 )}
-                Save peak period
+                {editingId ? 'Save changes' : 'Save peak period'}
               </button>
             </div>
           )}
@@ -520,8 +587,10 @@ export default function AdminRates() {
           <PeakTable
             overrides={plan.data?.overrides ?? []}
             isLoading={plan.isLoading}
+            onEdit={startEdit}
             onRemove={(id) => removePeak.mutate(id)}
             removing={removePeak.isPending}
+            editingId={editingId}
           />
         </section>
       </main>
@@ -606,13 +675,17 @@ function nightsBetween(start: string, end: string): number {
 function PeakTable({
   overrides,
   isLoading,
+  onEdit,
   onRemove,
   removing,
+  editingId,
 }: {
   overrides: RateOverride[];
   isLoading: boolean;
+  onEdit: (override: RateOverride) => void;
   onRemove: (id: string) => void;
   removing: boolean;
+  editingId: string | null;
 }) {
   const clashes = findOverlaps(overrides);
   const today = new Date().toISOString().slice(0, 10);
@@ -671,7 +744,7 @@ function PeakTable({
               return (
                 <tr
                   key={override.id}
-                  className={`border-b border-border last:border-0 ${overlapping ? 'bg-[#d8a24a]/5' : ''} ${past ? 'opacity-55' : ''}`}
+                  className={`border-b border-border last:border-0 ${editingId === override.id ? 'bg-primary/5 ring-1 ring-inset ring-primary/30' : overlapping ? 'bg-[#d8a24a]/5' : ''} ${past ? 'opacity-55' : ''}`}
                   data-testid={`row-peak-${override.id}`}
                 >
                   <td className="px-5 py-3">
@@ -743,17 +816,28 @@ function PeakTable({
                     );
                   })}
 
-                  <td className="px-5 py-3 text-right">
-                    <button
-                      type="button"
-                      onClick={() => onRemove(override.id)}
-                      disabled={removing}
-                      className="rounded-full border border-border p-1.5 text-muted-foreground transition-colors hover:border-[#A65E45] hover:text-[#A65E45] disabled:opacity-50"
-                      aria-label={`Remove ${override.label || 'peak period'}`}
-                      data-testid={`button-delete-peak-${override.id}`}
-                    >
-                      <Trash2 size={13} />
-                    </button>
+                  <td className="px-5 py-3">
+                    <div className="flex justify-end gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => onEdit(override)}
+                        className="rounded-full border border-border p-1.5 text-muted-foreground transition-colors hover:border-primary hover:text-primary"
+                        aria-label={`Edit ${override.label || 'peak period'}`}
+                        data-testid={`button-edit-peak-${override.id}`}
+                      >
+                        <Pencil size={13} />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => onRemove(override.id)}
+                        disabled={removing}
+                        className="rounded-full border border-border p-1.5 text-muted-foreground transition-colors hover:border-[#A65E45] hover:text-[#A65E45] disabled:opacity-50"
+                        aria-label={`Remove ${override.label || 'peak period'}`}
+                        data-testid={`button-delete-peak-${override.id}`}
+                      >
+                        <Trash2 size={13} />
+                      </button>
+                    </div>
                   </td>
                 </tr>
               );

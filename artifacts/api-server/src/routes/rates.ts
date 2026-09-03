@@ -6,6 +6,7 @@ import {
   deleteOverride,
   getRatePlan,
   setNightlyRates,
+  updateOverride,
   type RateMode,
 } from "../lib/rates-repo";
 
@@ -91,106 +92,118 @@ router.put("/rates", requireAdmin, async (req, res) => {
   res.json(await getRatePlan());
 });
 
-router.post("/rates/overrides", requireAdmin, async (req, res) => {
-  const startDate = String(req.body?.startDate ?? "");
-  const endDate = String(req.body?.endDate ?? "");
-  const rawLabel = req.body?.label;
+type OverrideInput = {
+  startDate: string;
+  endDate: string;
+  label: string | null;
+  mode: RateMode;
+  amounts?: Record<string, number>;
+  percent?: number;
+  minPercent?: number;
+  maxPercent?: number;
+  demandThreshold?: number;
+};
+
+/**
+ * One validator for both create and edit. Splitting them is how the two
+ * quietly diverge — an edit that accepts something a create would reject.
+ */
+function parseOverrideBody(
+  body: Record<string, unknown> | undefined,
+): { error: string } | { value: OverrideInput } {
+  const startDate = String(body?.startDate ?? "");
+  const endDate = String(body?.endDate ?? "");
+  const rawLabel = body?.label;
   const label = typeof rawLabel === "string" ? rawLabel.slice(0, 120) : null;
-  const mode = String(req.body?.mode ?? "fixed") as RateMode;
+  const mode = String(body?.mode ?? "fixed") as RateMode;
 
   if (!ISO_DATE.test(startDate) || !ISO_DATE.test(endDate)) {
-    res.status(400).json({ error: "Choose a valid start and end date." });
-    return;
+    return { error: "Choose a valid start and end date." };
   }
 
   if (endDate <= startDate) {
-    res.status(400).json({ error: "The end date must be after the start date." });
-    return;
+    return { error: "The end date must be after the start date." };
   }
 
   if (!MODES.includes(mode)) {
-    res.status(400).json({ error: "Choose a valid pricing mode." });
-    return;
+    return { error: "Choose a valid pricing mode." };
   }
 
+  const base = { startDate, endDate, label, mode };
+
   if (mode === "fixed") {
-    const amounts = parseAmounts(req.body?.amounts);
-
+    const amounts = parseAmounts(body?.amounts);
     if (Object.keys(amounts).length === 0) {
-      res.status(400).json({
-        error: "Enter at least one peak price for this period.",
-      });
-      return;
+      return { error: "Enter at least one peak price for this period." };
     }
-
-    const created = await createOverride({
-      startDate,
-      endDate,
-      label,
-      mode,
-      amounts,
-    });
-    res.status(201).json(created);
-    return;
+    return { value: { ...base, amounts } };
   }
 
   if (mode === "percent") {
-    const percent = parsePercent(req.body?.percent);
-
+    const percent = parsePercent(body?.percent);
     if (percent === null) {
-      res.status(400).json({
-        error: "Enter a percentage between -90 and 500.",
-      });
-      return;
+      return { error: "Enter a percentage between -90 and 500." };
     }
-
-    const created = await createOverride({
-      startDate,
-      endDate,
-      label,
-      mode,
-      percent,
-    });
-    res.status(201).json(created);
-    return;
+    return { value: { ...base, percent } };
   }
 
-  // demand
-  const minPercent = parsePercent(req.body?.minPercent);
-  const maxPercent = parsePercent(req.body?.maxPercent);
-  const threshold = Number(req.body?.demandThreshold);
+  const minPercent = parsePercent(body?.minPercent);
+  const maxPercent = parsePercent(body?.maxPercent);
+  const threshold = Number(body?.demandThreshold);
 
   if (minPercent === null || maxPercent === null) {
-    res.status(400).json({
-      error: "Enter both a minimum and maximum percentage.",
-    });
-    return;
+    return { error: "Enter both a minimum and maximum percentage." };
   }
 
   if (maxPercent < minPercent) {
-    res.status(400).json({
-      error: "The maximum percentage must be at least the minimum.",
-    });
-    return;
+    return { error: "The maximum percentage must be at least the minimum." };
   }
 
   if (!Number.isInteger(threshold) || threshold < 1 || threshold > 1000) {
-    res.status(400).json({
+    return {
       error: "Enter how many enquiries should reach the top price (1-1000).",
-    });
+    };
+  }
+
+  return {
+    value: { ...base, minPercent, maxPercent, demandThreshold: threshold },
+  };
+}
+
+router.post("/rates/overrides", requireAdmin, async (req, res) => {
+  const parsed = parseOverrideBody(req.body);
+
+  if ("error" in parsed) {
+    res.status(400).json({ error: parsed.error });
     return;
   }
 
-  const created = await createOverride({
-    startDate,
-    endDate,
-    label,
-    mode,
-    minPercent,
-    maxPercent,
-    demandThreshold: threshold,
-  });
-  res.status(201).json(created);
+  res.status(201).json(await createOverride(parsed.value));
+});
+
+router.patch("/rates/overrides/:id", requireAdmin, async (req, res) => {
+  const id = Array.isArray(req.params.id) ? "" : req.params.id;
+
+  if (!isUuid(id)) {
+    res.status(400).json({ error: "Invalid price rule id." });
+    return;
+  }
+
+  const parsed = parseOverrideBody(req.body);
+
+  if ("error" in parsed) {
+    res.status(400).json({ error: parsed.error });
+    return;
+  }
+
+  const updated = await updateOverride(id, parsed.value);
+
+  if (!updated) {
+    res.status(404).json({ error: "That price rule no longer exists." });
+    return;
+  }
+
+  res.json(updated);
 });
 
 router.delete("/rates/overrides/:id", requireAdmin, async (req, res) => {
