@@ -94,14 +94,46 @@ const asset = (file: string) => `${basePath}/${file}`;
 
 const IMG = {
   villaExterior: asset('External%20Villa%20Morning.jpg'),
+  villaDay: asset('villa-day.jpg'),
+  villaNight: asset('villa-night.jpg'),
   bedroom: asset('Bedroom.jpg'),
   dining: asset('Dining%20Space.jpg'),
   pet: asset('Pet%20View.jpg'),
   statue: asset('Rabiguru%20Statue.jpg'),
+  interiorBedroom: asset('interior-bedroom.jpg'),
+  interiorKitchen: asset('interior-kitchen.jpg'),
+  interiorLiving: asset('interior-living.jpg'),
+  interiorDining: asset('interior-dining.jpg'),
+  interiorEntrance: asset('interior-entrance.jpg'),
   review1: asset('Review%201.jpg'),
   review2: asset('Review%202.jpg'),
   review3: asset('Review%203.jpg'),
 };
+
+/**
+ * Finished marketing posters: the text, branding and contact details are baked
+ * into the artwork. They are shown whole (`object-contain`) rather than cropped
+ * to fill a tile — a cropped poster loses the words that are its point — and
+ * they stay out of the photo gallery because they are a different kind of thing
+ * from a photograph of a room.
+ */
+const posters = [
+  {
+    title: 'Stay. Relax. Belong.',
+    note: 'What the villa gives you, at a glance',
+    img: asset('poster-stay-relax-belong.jpg'),
+  },
+  {
+    title: 'Feels like home',
+    note: 'The whole house in one frame',
+    img: asset('poster-feels-like-home.jpg'),
+  },
+  {
+    title: 'Cook. Connect. Create memories.',
+    note: 'The kitchen, in its own words',
+    img: asset('poster-cook-connect.jpg'),
+  },
+];
 const NAV_ITEMS = [
   { label: 'Stay', href: '#stay' },
   { label: 'Experience', href: '#experience' },
@@ -123,11 +155,17 @@ type BusyPeriod = {
 
 const galleryItems = [
   { title: 'External villa', category: 'Home', img: IMG.villaExterior, tone: 'sage' },
+  { title: 'Evening lights', category: 'Home', img: IMG.villaNight, tone: 'ink' },
+  { title: 'Under open sky', category: 'Nature', img: IMG.villaDay, tone: 'sage' },
   { title: 'The bedroom', category: 'Home', img: IMG.bedroom, tone: 'clay' },
+  { title: 'Bedroom, evening', category: 'Home', img: IMG.interiorBedroom, tone: 'clay' },
+  { title: 'The living room', category: 'Home', img: IMG.interiorLiving, tone: 'clay' },
+  { title: 'The kitchen', category: 'Details', img: IMG.interiorKitchen, tone: 'ochre' },
   { title: 'Dining space', category: 'Details', img: IMG.dining, tone: 'ochre' },
+  { title: 'Set for dinner', category: 'Details', img: IMG.interiorDining, tone: 'ochre' },
+  { title: 'The entrance', category: 'Details', img: IMG.interiorEntrance, tone: 'clay' },
   { title: 'Rabindra statue', category: 'Nature', img: IMG.statue, tone: 'ink' },
   { title: 'Pet friendly', category: 'Details', img: IMG.pet, tone: 'clay' },
-  { title: 'Morning light', category: 'Nature', img: IMG.villaExterior, tone: 'sage' },
 ];
 
 const faqs = [
@@ -445,6 +483,22 @@ function Home() {
           </div>
         </section>
 
+        {/* Full-bleed night shot. Decorative, so the caption lives in the DOM
+            rather than in alt text, and the image is lazy — it is below the fold. */}
+        <section className="relative isolate" aria-label="Raj Kuthir after sundown">
+          <img
+            src={IMG.villaNight}
+            alt="Raj Kuthir Homestays lit up after sundown"
+            loading="lazy"
+            className="h-[320px] w-full object-cover md:h-[540px]"
+          />
+          <div className="absolute inset-0 bg-gradient-to-t from-black/65 via-black/20 to-transparent" />
+          <div className="section-shell absolute inset-x-0 bottom-0 pb-10 md:pb-16">
+            <p className="eyebrow text-secondary">After sundown</p>
+            <p className="mt-4 max-w-[540px] font-journal text-4xl leading-[.98] text-white md:text-6xl">The lights come on,<br /><em>and the day slows.</em></p>
+          </div>
+        </section>
+
         <section id="stay" className="scroll-mt-24 bg-primary py-24 text-primary-foreground md:py-32" aria-labelledby="stay-title">
           <div className="section-shell">
             <div className="flex flex-col justify-between gap-8 md:flex-row md:items-end">
@@ -643,6 +697,46 @@ function Home() {
 
         <section id="reviews" className="scroll-mt-24 section-shell py-24 md:py-32" aria-labelledby="reviews-title">
           <div className="grid gap-12 lg:grid-cols-[.7fr_1.3fr] lg:gap-24"><div><p className="eyebrow mb-5 text-accent">From our guests</p><h2 id="reviews-title" className="font-journal text-5xl leading-[.94] text-primary md:text-6xl">Kind<br /><em>words.</em></h2><a href={CONFIG.reviewUrl} target="_blank" rel="noreferrer" className="mt-8 inline-flex items-center gap-2 text-xs font-bold uppercase tracking-[.1em] text-primary underline decoration-accent decoration-2 underline-offset-4" data-testid="link-google-review">Leave a Google review <ExternalLink size={14} /></a></div><div className="grid gap-4 sm:grid-cols-3"><img src={IMG.review1} alt="Guest review for Raj Kuthir" className="w-full rounded-[1.4rem] object-cover shadow-sm" /><img src={IMG.review2} alt="Guest review for Raj Kuthir" className="w-full rounded-[1.4rem] object-cover shadow-sm" /><img src={IMG.review3} alt="Guest review for Raj Kuthir" className="w-full rounded-[1.4rem] object-cover shadow-sm" /></div></div>
+        </section>
+
+        <section id="posters" className="scroll-mt-24 bg-primary py-24 text-primary-foreground md:py-32" aria-labelledby="posters-title">
+          <div className="section-shell">
+            <div className="flex flex-col justify-between gap-8 md:flex-row md:items-end">
+              <div>
+                <p className="eyebrow mb-5 text-secondary">Take us with you</p>
+                <h2 id="posters-title" className="font-journal text-5xl leading-[.94] md:text-7xl">Little posters,<br /><em>the whole story.</em></h2>
+              </div>
+              <p className="max-w-[300px] text-sm leading-6 text-primary-foreground/70">Tap any one to open it full size — handy for sharing the stay with the people you are travelling with.</p>
+            </div>
+            <div className="mt-14 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+              {posters.map((poster) => (
+                <a
+                  key={poster.title}
+                  href={poster.img}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="lift group flex flex-col overflow-hidden rounded-[1.4rem] border border-primary-foreground/15 bg-primary-foreground/[.07] transition-colors hover:border-secondary"
+                  data-testid={`poster-${poster.title.toLowerCase().replace(/[^a-z]+/g, '-').replace(/^-|-$/g, '')}`}
+                >
+                  {/* object-contain, not cover: these are artwork with text in
+                      them, and a crop would cut the words off. */}
+                  <img
+                    src={poster.img}
+                    alt={`Raj Kuthir Homestays poster — ${poster.title}`}
+                    loading="lazy"
+                    className="h-[340px] w-full bg-black/25 object-contain transition-transform duration-500 group-hover:scale-[1.03] md:h-[420px]"
+                  />
+                  <div className="flex items-center justify-between gap-4 px-6 py-5">
+                    <div>
+                      <p className="font-journal text-2xl leading-tight">{poster.title}</p>
+                      <p className="mt-1 text-xs leading-5 text-primary-foreground/60">{poster.note}</p>
+                    </div>
+                    <ArrowUpRight size={18} className="shrink-0 text-secondary transition-transform group-hover:-translate-y-1 group-hover:translate-x-1" />
+                  </div>
+                </a>
+              ))}
+            </div>
+          </div>
         </section>
 
         <section className="border-t border-border bg-card py-24 md:py-32" aria-labelledby="faq-title">
