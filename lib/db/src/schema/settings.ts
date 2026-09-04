@@ -25,3 +25,15 @@ export const FEED_URL_KEYS = {
   airbnb: "feed_url.airbnb",
   makeMyTrip: "feed_url.makeMyTrip",
 } as const;
+
+/**
+ * The arrival pack shown on /welcome once a guest has entered their booking
+ * reference: Wi-Fi credentials, directions and the on-call contact numbers.
+ *
+ * Stored as one JSON document under a single key rather than a column per
+ * field, because the contact list is variable-length and the shape will keep
+ * changing — and because this table is already the place the owner edits
+ * things without a redeploy. Rotating the Wi-Fi password has to be a text box,
+ * not a deployment, or it will never happen.
+ */
+export const GUEST_INFO_KEY = "guest_info" as const;

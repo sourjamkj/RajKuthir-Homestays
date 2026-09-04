@@ -23,3 +23,4 @@ export * from "./rates";
 export * from "./bookings";
 export * from "./enquiries";
 export * from "./contacts";
+export * from "./messages";

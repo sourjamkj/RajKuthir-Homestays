@@ -1,6 +1,7 @@
 import app from "./app";
 import { logger } from "./lib/logger";
 import { startCalendarCron } from "./lib/calendar-cron";
+import { startNotificationsCron } from "./lib/notifications-cron";
 
 const rawPort = process.env["PORT"];
 
@@ -31,4 +32,8 @@ app.listen(port, (err) => {
   // Started unconditionally (not gated on NODE_ENV) so it runs no matter
   // what env vars the hosting platform sets at runtime.
   startCalendarCron();
+
+  // Queues and sends guest WhatsApp messages. Idle unless WhatsApp is
+  // configured, and never sends unless WHATSAPP_ENABLED is explicitly true.
+  startNotificationsCron();
 });
