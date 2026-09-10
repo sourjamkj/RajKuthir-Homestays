@@ -523,6 +523,81 @@ test("faq · the landing page makes no claim we cannot stand behind", () => {
   );
 });
 
+// ====================================================== ANALYTICS
+// The tag is environment-gated: absent unless an ID is configured, and never
+// on a private page.
+
+const gaTags = (html: string) =>
+  (html.match(/googletagmanager\.com\/gtag\/js\?id=([A-Z0-9-]+)/g) ?? []);
+
+test("analytics · nothing is emitted when no measurement ID is configured", () => {
+  const previous = process.env.GA4_MEASUREMENT_ID;
+  delete process.env.GA4_MEASUREMENT_ID;
+  try {
+    for (const route of [...PUBLIC_ROUTES, ...PRIVATE_ROUTES]) {
+      const html = render(route);
+      assert.equal(gaTags(html).length, 0, `${route}: emitted a tag with no ID set`);
+      assert.ok(
+        !html.includes("googletagmanager"),
+        `${route}: contacts Google with analytics unconfigured`,
+      );
+    }
+  } finally {
+    if (previous === undefined) delete process.env.GA4_MEASUREMENT_ID;
+    else process.env.GA4_MEASUREMENT_ID = previous;
+  }
+});
+
+test("analytics · a configured ID is emitted on public pages only", () => {
+  const previous = process.env.GA4_MEASUREMENT_ID;
+  process.env.GA4_MEASUREMENT_ID = "G-TESTID12345";
+  try {
+    for (const route of PUBLIC_ROUTES) {
+      const html = render(route);
+      assert.equal(gaTags(html).length, 1, `${route}: expected exactly one tag`);
+      assert.ok(html.includes("gtag('config','G-TESTID12345')"));
+    }
+
+    // The owner console and the guest arrival pack are never tracked.
+    for (const route of PRIVATE_ROUTES) {
+      assert.equal(
+        gaTags(render(route)).length,
+        0,
+        `${route} is private but carries the analytics tag`,
+      );
+    }
+  } finally {
+    if (previous === undefined) delete process.env.GA4_MEASUREMENT_ID;
+    else process.env.GA4_MEASUREMENT_ID = previous;
+  }
+});
+
+test("analytics · a malformed ID is refused rather than echoed into a script", () => {
+  const previous = process.env.GA4_MEASUREMENT_ID;
+  try {
+    for (const bad of [
+      "",
+      "UA-12345-1",
+      "G-",
+      "not-an-id",
+      "G-ABC'); alert(1); //",
+      "<script>alert(1)</script>",
+    ]) {
+      process.env.GA4_MEASUREMENT_ID = bad;
+      const html = render("/");
+      assert.equal(
+        gaTags(html).length,
+        0,
+        `a malformed ID (${JSON.stringify(bad)}) was emitted`,
+      );
+      assert.ok(!html.includes("alert(1)"), "script injection reached the page");
+    }
+  } finally {
+    if (previous === undefined) delete process.env.GA4_MEASUREMENT_ID;
+    else process.env.GA4_MEASUREMENT_ID = previous;
+  }
+});
+
 // =========================================================== POINT 8
 // Private and unknown pages cannot become indexable.
 

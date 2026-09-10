@@ -30,6 +30,39 @@
 export const SITE_ORIGIN = "https://rajkuthirhomestays.casa";
 
 /**
+ * Google Analytics, read from the environment rather than hardcoded.
+ *
+ * A GA4 measurement ID is a public identifier, not a secret, so the reason to
+ * keep it out of the source is different: a hardcoded tag would also fire from
+ * local and preview builds, quietly polluting production data with your own
+ * traffic, and it would track the owner console alongside the guest site.
+ *
+ * Reading it here means analytics is off by default. With the variable unset
+ * the site emits no tag and makes no request to Google at all — which is what
+ * makes this safe to ship before the property exists.
+ */
+/** Measurement IDs look like G-XXXXXXXXXX. Validated because it goes into a
+ *  <script> tag: a malformed or injected value must never be echoed there. */
+const GA_ID_PATTERN = /^G-[A-Z0-9]{4,15}$/;
+
+function analyticsTag(noindex: boolean | undefined): string[] {
+  // Never track the owner console or the guest arrival pack.
+  if (noindex) return [];
+
+  // Read per call rather than at module load, so the behaviour is testable
+  // and a variable change takes effect on restart without a rebuild.
+  const id = process.env.GA4_MEASUREMENT_ID;
+  if (!id || !GA_ID_PATTERN.test(id)) return [];
+
+  return [
+    `<script async src="https://www.googletagmanager.com/gtag/js?id=${id}"></script>`,
+    `<script>window.dataLayer=window.dataLayer||[];` +
+      `function gtag(){dataLayer.push(arguments)}` +
+      `gtag('js',new Date());gtag('config','${id}');</script>`,
+  ];
+}
+
+/**
  * The share card image.
  *
  * Landscape 1600x900 — WhatsApp, Facebook and X all crop tall images badly.
@@ -382,6 +415,7 @@ export function injectMeta(html: string, pathname: string): string {
     meta.noindex
       ? ""
       : `<script type="application/ld+json">${jsonLd(path)}</script>`,
+    ...analyticsTag(meta.noindex),
   ]
     .filter(Boolean)
     .join("\n    ");

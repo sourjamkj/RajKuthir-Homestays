@@ -172,3 +172,24 @@ export const NEIGHBOURHOOD = [
 export const asset = (file: string) => `${basePath}/${file}`;
 
 export const phoneHref = (phone: string) => `tel:${phone.replace(/\s/g, '')}`;
+
+/**
+ * Fire a GA4 event, or do nothing at all.
+ *
+ * The analytics tag is injected by the server only when a measurement ID is
+ * configured (see api-server/src/lib/seo.ts), so `gtag` is frequently absent —
+ * in development, in preview builds, and on every admin page. The optional
+ * call means the site behaves identically either way and a missing tag can
+ * never throw in the middle of a booking enquiry.
+ *
+ * NEVER pass personal data. No name, phone, email or free-text request may be
+ * sent to GA4: it breaks Google's terms and it is a privacy problem. Counts,
+ * dates and placement labels only.
+ */
+export function track(name: string, params: Record<string, unknown> = {}): void {
+  (window as unknown as { gtag?: (...args: unknown[]) => void }).gtag?.(
+    'event',
+    name,
+    params,
+  );
+}
