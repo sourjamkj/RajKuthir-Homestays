@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useRef, useState, type ReactNode } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   CircleAlert,
@@ -25,6 +25,28 @@ import {
  * "Import" is pressed.
  */
 
+/**
+ * A booking already in the ledger that these dates run into.
+ *
+ * "duplicate" means same dates AND same guest — the same reservation entered
+ * twice, safe to merge. "overlap" means the nights collide but it is not
+ * obviously the same stay, which on a single-villa let is a real double
+ * booking and wants a human decision.
+ */
+type Clash = {
+  kind: 'duplicate' | 'overlap';
+  id: string;
+  reference: string | null;
+  checkIn: string;
+  checkOut: string;
+  guestName: string | null;
+  source: keyof typeof SOURCE_LABELS;
+  grossPaise: number | null;
+};
+
+/** What to do with a row that clashes. Absent means skip — silence is never a write. */
+type Decision = 'merge' | 'import' | 'skip';
+
 type ParsedRow = {
   rowNumber: number;
   nights: number;
@@ -38,6 +60,7 @@ type ParsedRow = {
     guests: number | null;
     grossPaise: number | null;
   } | null;
+  clashes?: Clash[];
 };
 
 type Preview = {
@@ -47,6 +70,8 @@ type Preview = {
   errorCount: number;
   committed: boolean;
   created?: number;
+  merged?: number;
+  skipped?: number;
 };
 
 const TEMPLATE_HEADERS = [
@@ -127,8 +152,14 @@ export function BookingImport() {
   const [fileName, setFileName] = useState('');
   const [readError, setReadError] = useState<string | null>(null);
 
+  const [decisions, setDecisions] = useState<Record<number, Decision>>({});
+
   const preview = useMutation({
-    mutationFn: (payload: { rows: unknown[][]; commit: boolean }) =>
+    mutationFn: (payload: {
+      rows: unknown[][];
+      commit: boolean;
+      decisions?: Record<number, Decision>;
+    }) =>
       adminFetch<Preview>('/api/bookings/import', {
         method: 'POST',
         body: JSON.stringify(payload),
@@ -147,6 +178,7 @@ export function BookingImport() {
 
     setReadError(null);
     preview.reset();
+    setDecisions({});
     setFileName(file.name);
 
     try {
@@ -184,6 +216,24 @@ export function BookingImport() {
   };
 
   const result = preview.data;
+
+  /**
+   * Rows split by what the server found. A clashing row only counts towards
+   * the import total once the owner has explicitly said so — the default is
+   * to leave it out.
+   */
+  const clashingRows =
+    result?.rows.filter((row) => row.booking && (row.clashes?.length ?? 0) > 0) ?? [];
+  const cleanCount =
+    result?.rows.filter((row) => row.booking && !(row.clashes?.length ?? 0)).length ?? 0;
+  const decidedMerge = clashingRows.filter((row) => decisions[row.rowNumber] === 'merge').length;
+  const decidedImport = clashingRows.filter((row) => decisions[row.rowNumber] === 'import').length;
+  const willSkip = clashingRows.length - decidedMerge - decidedImport;
+  const willCreate = cleanCount + decidedImport;
+
+  const setDecision = (rowNumber: number, decision: Decision) =>
+    setDecisions((current) => ({ ...current, [rowNumber]: decision }));
+
   const errorMessage =
     preview.error instanceof Error ? preview.error.message : null;
 
@@ -192,6 +242,7 @@ export function BookingImport() {
     setFileName('');
     setReadError(null);
     preview.reset();
+    setDecisions({});
     if (inputRef.current) inputRef.current.value = '';
   };
 
@@ -271,7 +322,9 @@ export function BookingImport() {
         <div className="mt-5 rounded-xl border border-[#7A8065]/40 bg-[#7A8065]/10 p-4">
           <p className="text-sm font-semibold text-[#4b5340]">
             Imported {result.created}{' '}
-            {result.created === 1 ? 'booking' : 'bookings'}.
+            {result.created === 1 ? 'booking' : 'bookings'}
+            {result.merged ? `, merged ${result.merged}` : ''}
+            {result.skipped ? `, skipped ${result.skipped}` : ''}.
           </p>
           {result.errorCount > 0 && (
             <p className="mt-1 text-xs text-[#4b5340]/80">
@@ -286,8 +339,14 @@ export function BookingImport() {
         <div className="mt-5">
           <div className="flex flex-wrap items-center gap-4 rounded-xl border border-border bg-background p-4">
             <p className="text-sm text-foreground">
-              <strong className="text-primary">{result.validCount}</strong> ready
-              to import
+              <strong className="text-primary">{cleanCount}</strong> ready to import
+              {clashingRows.length > 0 && (
+                <>
+                  {' · '}
+                  <strong className="text-[#8a6320]">{clashingRows.length}</strong>{' '}
+                  clash{clashingRows.length === 1 ? 'es' : ''} with existing bookings
+                </>
+              )}
               {result.errorCount > 0 && (
                 <>
                   {' · '}
@@ -302,16 +361,38 @@ export function BookingImport() {
             <button
               type="button"
               onClick={() =>
-                rows && preview.mutate({ rows, commit: true })
+                rows && preview.mutate({ rows, commit: true, decisions })
               }
-              disabled={result.validCount === 0 || preview.isPending}
+              disabled={
+                (willCreate === 0 && decidedMerge === 0) || preview.isPending
+              }
               className="ml-auto flex items-center gap-2 rounded-full bg-primary px-5 py-2.5 text-[11px] font-bold uppercase tracking-[.09em] text-primary-foreground transition-transform hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-40"
               data-testid="button-commit-import"
             >
-              Import {result.validCount}{' '}
-              {result.validCount === 1 ? 'booking' : 'bookings'}
+              Import {willCreate}
+              {decidedMerge > 0 ? ` · merge ${decidedMerge}` : ''}
+              {willSkip > 0 ? ` · skip ${willSkip}` : ''}
             </button>
           </div>
+
+          {clashingRows.length > 0 && (
+            <div
+              className="mt-4 rounded-xl border border-[#d8a24a]/50 bg-[#d8a24a]/10 p-4"
+              role="alert"
+              data-testid="banner-import-clashes"
+            >
+              <p className="flex items-start gap-2 text-sm font-semibold text-[#8a6320]">
+                <CircleAlert size={15} className="mt-0.5 shrink-0" />
+                {clashingRows.length} row{clashingRows.length === 1 ? '' : 's'} run into
+                bookings you already have.
+              </p>
+              <p className="mt-2 text-xs leading-5 text-[#8a6320]/90">
+                Sobuj Potro is let as one whole villa, so overlapping nights mean a real
+                double booking — not just untidy data. Decide on each below. Anything you
+                leave undecided is skipped, so nothing gets created by accident.
+              </p>
+            </div>
+          )}
 
           {result.unknownColumns.length > 0 && (
             <p className="mt-3 flex items-start gap-2 text-xs leading-5 text-muted-foreground">
@@ -330,6 +411,7 @@ export function BookingImport() {
                   <th className="px-4 py-2.5 font-bold">Guest</th>
                   <th className="px-4 py-2.5 font-bold">Channel</th>
                   <th className="px-4 py-2.5 text-right font-bold">Amount</th>
+                  <th className="px-4 py-2.5 font-bold">Review</th>
                 </tr>
               </thead>
               <tbody>
@@ -364,14 +446,79 @@ export function BookingImport() {
                             ? '—'
                             : formatRupees(row.booking.grossPaise)}
                         </td>
+                        <td className="px-4 py-2.5">
+                          {(row.clashes?.length ?? 0) === 0 ? (
+                            <span className="text-[11px] text-muted-foreground">—</span>
+                          ) : (
+                            <div className="flex flex-wrap gap-1.5">
+                              {row.clashes?.some((clash) => clash.kind === 'duplicate') && (
+                                <DecisionButton
+                                  active={decisions[row.rowNumber] === 'merge'}
+                                  onClick={() => setDecision(row.rowNumber, 'merge')}
+                                  testId={`decision-merge-${row.rowNumber}`}
+                                >
+                                  Merge
+                                </DecisionButton>
+                              )}
+                              <DecisionButton
+                                active={decisions[row.rowNumber] === 'import'}
+                                onClick={() => setDecision(row.rowNumber, 'import')}
+                                testId={`decision-import-${row.rowNumber}`}
+                              >
+                                Import anyway
+                              </DecisionButton>
+                              <DecisionButton
+                                active={(decisions[row.rowNumber] ?? 'skip') === 'skip'}
+                                onClick={() => setDecision(row.rowNumber, 'skip')}
+                                testId={`decision-skip-${row.rowNumber}`}
+                              >
+                                Discard
+                              </DecisionButton>
+                            </div>
+                          )}
+                        </td>
                       </>
                     ) : (
-                      <td colSpan={4} className="px-4 py-2.5 text-[#A65E45]">
+                      <td colSpan={5} className="px-4 py-2.5 text-[#A65E45]">
                         {row.errors.join('; ')}
                       </td>
                     )}
                   </tr>
                 ))}
+
+                {result.rows
+                  .filter((row) => (row.clashes?.length ?? 0) > 0)
+                  .map((row) => (
+                    <tr key={`clash-${row.rowNumber}`} className="bg-[#d8a24a]/5">
+                      <td className="px-4 py-2 align-top text-xs text-[#8a6320]">
+                        {row.rowNumber}
+                      </td>
+                      <td colSpan={4} className="px-4 py-2 text-xs leading-5 text-[#8a6320]">
+                        {row.clashes?.map((clash) => (
+                          <div key={clash.id}>
+                            {clash.kind === 'duplicate'
+                              ? 'Same dates and guest as'
+                              : 'Overlaps'}{' '}
+                            <strong>{clash.guestName ?? 'an existing booking'}</strong>{' '}
+                            {clash.checkIn} → {clash.checkOut}
+                            {clash.reference ? ` · ${clash.reference}` : ''}
+                            {' · '}
+                            {SOURCE_LABELS[clash.source]}
+                            {clash.grossPaise === null
+                              ? ''
+                              : ` · ${formatRupees(clash.grossPaise)}`}
+                          </div>
+                        ))}
+                        {row.clashes?.every((clash) => clash.kind === 'overlap') && (
+                          <div className="mt-1 italic">
+                            Not an exact duplicate, so there is nothing safe to merge
+                            into — import it as a second booking only if both stays are
+                            real.
+                          </div>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
 
                 {result.rows
                   .filter((row) => row.booking && row.errors.length > 0)
@@ -383,6 +530,7 @@ export function BookingImport() {
                       <td colSpan={4} className="px-4 py-2 text-xs text-[#8a6320]">
                         {row.errors.join('; ')}
                       </td>
+                      <td />
                     </tr>
                   ))}
               </tbody>
@@ -391,5 +539,34 @@ export function BookingImport() {
         </div>
       )}
     </div>
+  );
+}
+
+/** One choice in the review column. Reads as a segmented control, not three buttons. */
+function DecisionButton({
+  active,
+  onClick,
+  testId,
+  children,
+}: {
+  active: boolean;
+  onClick: () => void;
+  testId: string;
+  children: ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={active}
+      className={`rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-[.06em] transition-colors ${
+        active
+          ? 'bg-primary text-primary-foreground'
+          : 'border border-border text-muted-foreground hover:border-primary hover:text-primary'
+      }`}
+      data-testid={testId}
+    >
+      {children}
+    </button>
   );
 }

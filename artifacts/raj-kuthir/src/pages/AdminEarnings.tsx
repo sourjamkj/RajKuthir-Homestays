@@ -26,6 +26,7 @@ import {
   useLedgerSummary,
   CATEGORY_LABELS,
   SOURCE_LABELS,
+  type Booking,
   type BookingDraft,
   type BookingSource,
   type ExpenseCategory,
@@ -411,16 +412,9 @@ function BookingsSection({
   bookings,
   loading,
 }: {
-  bookings: Array<{
-    id: string;
-    source: BookingSource;
-    guestName: string | null;
-    checkIn: string;
-    checkOut: string;
-    status: string;
-    grossPaise: number | null;
-    externalRef: string | null;
-  }>;
+  // Use the shared Booking type rather than restating its shape here: the
+  // local copy silently went stale when reference and guestPhone were added.
+  bookings: Booking[];
   loading: boolean;
 }) {
   const [open, setOpen] = useState(false);
@@ -584,6 +578,7 @@ function BookingsSection({
         <table className="w-full min-w-[640px] border-collapse text-sm">
           <thead>
             <tr className="border-b border-border text-left text-[10px] uppercase tracking-[.08em] text-muted-foreground">
+              <th className="px-5 py-3 font-bold">Reference</th>
               <th className="px-5 py-3 font-bold">Dates</th>
               <th className="px-5 py-3 font-bold">Guest</th>
               <th className="px-5 py-3 font-bold">Channel</th>
@@ -594,7 +589,7 @@ function BookingsSection({
           <tbody>
             {loading && (
               <tr>
-                <td colSpan={5} className="px-5 py-6 text-muted-foreground">
+                <td colSpan={6} className="px-5 py-6 text-muted-foreground">
                   Loading…
                 </td>
               </tr>
@@ -602,7 +597,7 @@ function BookingsSection({
 
             {!loading && bookings.length === 0 && (
               <tr>
-                <td colSpan={5} className="px-5 py-6 text-muted-foreground">
+                <td colSpan={6} className="px-5 py-6 text-muted-foreground">
                   No bookings recorded yet.
                 </td>
               </tr>
@@ -614,6 +609,18 @@ function BookingsSection({
                 className="border-b border-border last:border-0"
                 data-testid={`row-booking-${booking.id}`}
               >
+                <td className="px-5 py-3">
+                  {booking.reference ? (
+                    <BookingReference
+                      reference={booking.reference}
+                      phone={booking.guestPhone}
+                      guestName={booking.guestName}
+                      checkIn={booking.checkIn}
+                    />
+                  ) : (
+                    <span className="text-[11px] text-muted-foreground">—</span>
+                  )}
+                </td>
                 <td className="px-5 py-3">
                   <span className="text-foreground">
                     {format(parseISO(booking.checkIn), 'd MMM')} →{' '}
@@ -895,5 +902,73 @@ function TextInput({
       className="w-full rounded-lg border border-border bg-background px-3 py-2.5 text-sm text-foreground outline-none transition-colors focus:border-primary"
       data-testid={testId}
     />
+  );
+}
+
+/**
+ * The guest's key to /welcome, with the two things you actually do with it:
+ * copy it, or send it to the guest on WhatsApp.
+ *
+ * The WhatsApp link only appears when a phone number is on file, and it opens
+ * a pre-filled draft rather than sending anything — you still press send.
+ */
+function BookingReference({
+  reference,
+  phone,
+  guestName,
+  checkIn,
+}: {
+  reference: string;
+  phone: string | null;
+  guestName: string | null;
+  checkIn: string;
+}) {
+  const [copied, setCopied] = useState(false);
+
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(reference);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 2000);
+    } catch {
+      // Clipboard is blocked in some browsers; the reference is on screen anyway.
+    }
+  };
+
+  const digits = (phone ?? '').replace(/\D/g, '');
+  const waNumber = digits.length === 10 ? `91${digits}` : digits;
+
+  const message = encodeURIComponent(
+    `Hello${guestName ? ` ${guestName}` : ''}, your stay at Raj Kuthir Homestays is confirmed for ` +
+      `${format(parseISO(checkIn), 'd MMM yyyy')}.\n\n` +
+      `Your booking reference is ${reference}\n\n` +
+      `Enter it at https://rajkuthirhomestays.casa/welcome for directions, Wi-Fi and our contact numbers.`,
+  );
+
+  return (
+    <div className="flex items-center gap-2">
+      <button
+        type="button"
+        onClick={copy}
+        title="Copy reference"
+        className="font-mono-ui text-[11px] tracking-[.04em] text-primary underline decoration-dotted underline-offset-2 hover:decoration-solid"
+        data-testid={`button-copy-reference-${reference}`}
+      >
+        {copied ? 'Copied' : reference}
+      </button>
+
+      {waNumber.length >= 10 && (
+        <a
+          href={`https://wa.me/${waNumber}?text=${message}`}
+          target="_blank"
+          rel="noreferrer"
+          title="Send the reference on WhatsApp"
+          className="text-[10px] font-bold uppercase tracking-[.06em] text-muted-foreground transition-colors hover:text-primary"
+          data-testid={`link-whatsapp-reference-${reference}`}
+        >
+          Send
+        </a>
+      )}
+    </div>
   );
 }

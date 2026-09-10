@@ -83,7 +83,12 @@ function toEventDto(event: Awaited<ReturnType<typeof listAllEvents>>[number]) {
     endDate: event.endDate,
     title: event.title,
     note: event.note,
-    editable: (OWNED_SOURCES as readonly string[]).includes(event.source),
+    // Only real calendar rows can be edited. A booking-derived entry has no
+    // calendar_events id behind it, so offering a delete button would just
+    // produce a 404 — change the booking in the ledger instead.
+    editable:
+      event.origin === "event" &&
+      (OWNED_SOURCES as readonly string[]).includes(event.source),
   });
 }
 
@@ -172,7 +177,8 @@ router.post("/calendar/block", requireAdmin, async (req, res) => {
   }
 
   const created = await createManualBlock(parsed.data);
-  res.status(201).json(toEventDto(created));
+  // A manual block is always a real calendar_events row, never booking-derived.
+  res.status(201).json(toEventDto({ ...created, origin: "event" }));
 });
 
 router.delete("/calendar/block/:id", requireAdmin, async (req, res) => {

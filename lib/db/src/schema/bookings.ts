@@ -42,6 +42,18 @@ export const bookings = pgTable(
      */
     externalRef: text("external_ref"),
 
+    /**
+     * Raj Kuthir's own reference — RK-17SEP-7K4MQ — issued for every booking
+     * however it arrived. This is what the guest types into /welcome, so it is
+     * a credential: random, never reused, and never changed once it has been
+     * sent to someone. Distinct from `externalRef`, which is the CHANNEL's
+     * number and is not secret.
+     *
+     * Nullable only so existing rows could be backfilled; every write path
+     * sets one. See backfillMissingReferences() in ledger-repo.
+     */
+    reference: text("reference"),
+
     guestName: text("guest_name"),
     guestPhone: text("guest_phone"),
 
@@ -80,6 +92,7 @@ export const bookings = pgTable(
   },
   (table) => [
     uniqueIndex("booking_source_ref_uniq").on(table.source, table.externalRef),
+    uniqueIndex("booking_reference_uniq").on(table.reference),
     index("booking_checkin_idx").on(table.checkIn),
     index("booking_status_idx").on(table.status),
   ],

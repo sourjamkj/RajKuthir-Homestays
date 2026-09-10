@@ -5,35 +5,62 @@ import {
   type CalendarEvent,
   type NewCalendarEvent,
 } from "@workspace/db";
+import {
+  bookingsAsEvents,
+  mergeByDate,
+  type MergedEvent,
+} from "./calendar-bookings";
 
 export type CalendarSource = CalendarEvent["source"];
 
 export const OWNED_SOURCES: CalendarSource[] = ["manual", "direct"];
 
-export async function listAllEvents(): Promise<CalendarEvent[]> {
-  return db
+/**
+ * Everything occupying a night, from either table. Confirmed ledger bookings
+ * are folded in here rather than stored as calendar rows — see calendar-bookings.
+ */
+export async function listAllEvents(): Promise<MergedEvent[]> {
+  const events = await db
     .select()
     .from(calendarEvents)
     .where(eq(calendarEvents.status, "confirmed"))
     .orderBy(asc(calendarEvents.startDate));
+
+  return mergeByDate(events, await bookingsAsEvents(events));
 }
 
+/**
+ * What a guest sees as unavailable. Includes ledger bookings: a night you have
+ * already sold must never show as free, whichever table it was recorded in.
+ * Dates only — no guest names or sources reach the public endpoint.
+ */
 export async function listPublicBlocks(): Promise<
   Array<{ startDate: string; endDate: string }>
 > {
-  return db
-    .select({
-      startDate: calendarEvents.startDate,
-      endDate: calendarEvents.endDate,
-    })
+  const events = await db
+    .select()
     .from(calendarEvents)
     .where(eq(calendarEvents.status, "confirmed"))
     .orderBy(asc(calendarEvents.startDate));
+
+  return mergeByDate(events, await bookingsAsEvents(events)).map((entry) => ({
+    startDate: entry.startDate,
+    endDate: entry.endDate,
+  }));
 }
 
+/**
+ * The .ics we publish to the OTAs. This is the one that actually prevents
+ * double bookings, so ledger bookings belong in it above all: a stay taken
+ * over WhatsApp has to reach Booking.com and Airbnb somehow, and this feed is
+ * the only channel that does it.
+ *
+ * `excludeSource` keeps us from echoing a channel's own reservations back at
+ * it, and applies to bookings as well as calendar rows.
+ */
 export async function listFeedEvents(
   excludeSource?: CalendarSource,
-): Promise<CalendarEvent[]> {
+): Promise<MergedEvent[]> {
   const where = excludeSource
     ? and(
         eq(calendarEvents.status, "confirmed"),
@@ -41,11 +68,13 @@ export async function listFeedEvents(
       )
     : eq(calendarEvents.status, "confirmed");
 
-  return db
+  const events = await db
     .select()
     .from(calendarEvents)
     .where(where)
     .orderBy(asc(calendarEvents.startDate));
+
+  return mergeByDate(events, await bookingsAsEvents(events, excludeSource));
 }
 
 export async function createManualBlock(input: {

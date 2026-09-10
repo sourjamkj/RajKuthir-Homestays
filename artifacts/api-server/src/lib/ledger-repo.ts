@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, gte, lte, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gt, gte, isNull, lt, lte, sql } from "drizzle-orm";
 import {
   db,
   bookings,
@@ -8,6 +8,7 @@ import {
   type Expense,
   type Payout,
 } from "@workspace/db";
+import { buildReference } from "./booking-reference";
 
 /**
  * Money crosses this boundary in rupees (what the owner types and reads) and
@@ -36,6 +37,8 @@ export type BookingInput = {
   receivedPaise?: number | null;
   note?: string | null;
   importedFromEmail?: string | null;
+  /** Normally omitted — createBooking issues one. Set only when re-homing a row. */
+  reference?: string | null;
 };
 
 export async function listBookings(range?: {
@@ -53,13 +56,165 @@ export async function listBookings(range?: {
     .orderBy(desc(bookings.checkIn));
 }
 
+/** Postgres unique-violation. A fresh reference is generated and retried. */
+function isUniqueViolation(error: unknown): boolean {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    (error as { code?: string }).code === "23505"
+  );
+}
+
+const REFERENCE_ATTEMPTS = 5;
+
+/**
+ * Every booking gets a Raj Kuthir reference, whichever way it arrived — typed
+ * in, imported, or synced from a channel. It is the guest's key to /welcome and
+ * the id an online payment would later be raised against, so there is no such
+ * thing here as a booking without one.
+ *
+ * Collisions are astronomically unlikely but not impossible, and the unique
+ * index is what decides. Retrying on 23505 is cheaper and more honest than
+ * pre-checking with a SELECT, which races.
+ */
 export async function createBooking(input: BookingInput): Promise<Booking> {
-  const [created] = await db
-    .insert(bookings)
-    .values({ ...input, updatedAt: new Date() })
+  let lastError: unknown;
+
+  for (let attempt = 0; attempt < REFERENCE_ATTEMPTS; attempt += 1) {
+    try {
+      const [created] = await db
+        .insert(bookings)
+        .values({
+          ...input,
+          reference: input.reference ?? buildReference(input.checkIn),
+          updatedAt: new Date(),
+        })
+        .returning();
+
+      return created!;
+    } catch (error) {
+      lastError = error;
+      if (!isUniqueViolation(error)) throw error;
+    }
+  }
+
+  throw lastError ?? new Error("Could not allocate a booking reference.");
+}
+
+/**
+ * Gives a reference to any booking saved before references existed. Idempotent
+ * and safe to call repeatedly; does nothing once every row has one.
+ */
+export async function backfillMissingReferences(): Promise<number> {
+  const rows = await db
+    .select({ id: bookings.id, checkIn: bookings.checkIn })
+    .from(bookings)
+    .where(isNull(bookings.reference));
+
+  let filled = 0;
+
+  for (const row of rows) {
+    for (let attempt = 0; attempt < REFERENCE_ATTEMPTS; attempt += 1) {
+      try {
+        await db
+          .update(bookings)
+          .set({ reference: buildReference(row.checkIn) })
+          .where(eq(bookings.id, row.id));
+        filled += 1;
+        break;
+      } catch (error) {
+        if (!isUniqueViolation(error)) throw error;
+      }
+    }
+  }
+
+  return filled;
+}
+
+/** Punctuation, case and spacing are not part of a guest's identity. */
+function normaliseName(name: string | null | undefined): string {
+  return (name ?? "").toLowerCase().replace(/[^a-z0-9]+/g, "");
+}
+
+export type ClashKind = "duplicate" | "overlap";
+
+export type Clash = { kind: ClashKind; booking: Booking };
+
+/**
+ * Anything already occupying these nights.
+ *
+ * Sobuj Potro is let as one whole villa, so two confirmed stays sharing even a
+ * single night is a real double booking, not merely untidy data — which is why
+ * this looks for overlap rather than for identical dates.
+ *
+ * A clash counts as a "duplicate" only when the dates match exactly AND the
+ * guest name matches: that is the same reservation entered twice, and it is
+ * safe to merge. Anything else is an "overlap" and wants a human to look at it.
+ */
+export async function findClashes(input: {
+  checkIn: string;
+  checkOut: string;
+  guestName?: string | null;
+  excludeId?: string;
+}): Promise<Clash[]> {
+  const rows = await db
+    .select()
+    .from(bookings)
+    .where(
+      and(
+        eq(bookings.status, "confirmed"),
+        // Half-open: a stay ending on the 5th does not clash with one starting then.
+        lt(bookings.checkIn, input.checkOut),
+        gt(bookings.checkOut, input.checkIn),
+      ),
+    )
+    .orderBy(asc(bookings.checkIn));
+
+  const incomingName = normaliseName(input.guestName);
+
+  return rows
+    .filter((booking) => booking.id !== input.excludeId)
+    .map((booking) => ({
+      kind:
+        booking.checkIn === input.checkIn &&
+        booking.checkOut === input.checkOut &&
+        incomingName !== "" &&
+        normaliseName(booking.guestName) === incomingName
+          ? ("duplicate" as ClashKind)
+          : ("overlap" as ClashKind),
+      booking,
+    }));
+}
+
+/**
+ * Folds an incoming row into a booking that already exists — "merge complete".
+ *
+ * Only fills gaps: COALESCE means anything already recorded wins, so a figure
+ * typed in by hand is never overwritten by a spreadsheet. Dates are left alone
+ * (they matched, or this would not be a duplicate) and so is the reference,
+ * which may already have been sent to the guest.
+ */
+export async function mergeIntoBooking(
+  id: string,
+  input: BookingInput,
+): Promise<Booking | null> {
+  const [updated] = await db
+    .update(bookings)
+    .set({
+      guestName: sql`coalesce(${bookings.guestName}, ${input.guestName ?? null})`,
+      guestPhone: sql`coalesce(${bookings.guestPhone}, ${input.guestPhone ?? null})`,
+      guests: sql`coalesce(${bookings.guests}, ${input.guests ?? null})`,
+      externalRef: sql`coalesce(${bookings.externalRef}, ${input.externalRef ?? null})`,
+      grossPaise: sql`coalesce(${bookings.grossPaise}, ${input.grossPaise ?? null})`,
+      commissionPaise: sql`coalesce(${bookings.commissionPaise}, ${input.commissionPaise ?? null})`,
+      receivedPaise: sql`coalesce(${bookings.receivedPaise}, ${input.receivedPaise ?? null})`,
+      note: sql`coalesce(${bookings.note}, ${input.note ?? null})`,
+      updatedAt: new Date(),
+    })
+    .where(eq(bookings.id, id))
     .returning();
 
-  return created!;
+  return updated ?? null;
 }
 
 /**
@@ -72,7 +227,11 @@ export async function upsertImportedBooking(
 ): Promise<Booking> {
   const [saved] = await db
     .insert(bookings)
-    .values({ ...input, updatedAt: new Date() })
+    .values({
+      ...input,
+      reference: input.reference ?? buildReference(input.checkIn),
+      updatedAt: new Date(),
+    })
     .onConflictDoUpdate({
       target: [bookings.source, bookings.externalRef],
       set: {

@@ -24,6 +24,7 @@ import {
   GalleryHorizontalEnd,
   HeartHandshake,
   Instagram,
+  KeyRound,
   Landmark,
   Leaf,
   LockKeyhole,
@@ -440,6 +441,36 @@ function Home() {
                 <div><p className="text-sm font-bold text-primary">{title}</p><p className="mt-1 text-[11px] text-muted-foreground">{detail}</p></div>
               </div>
             ))}
+          </div>
+        </section>
+
+        {/* Arriving guests. Sits high on the page rather than in the footer,
+            because the person who needs it is usually standing at the gate on a
+            phone, not browsing. Distinct colour so it reads as a different kind
+            of thing from the marketing sections around it. */}
+        <section className="bg-secondary py-12 md:py-14" aria-labelledby="arriving-title">
+          <div className="section-shell flex flex-col items-start justify-between gap-7 md:flex-row md:items-center">
+            <div className="flex items-start gap-5">
+              <span className="grid h-12 w-12 shrink-0 place-items-center rounded-full bg-primary text-secondary">
+                <KeyRound size={21} strokeWidth={1.5} />
+              </span>
+              <div>
+                <p className="eyebrow text-primary/70">Already booked with us?</p>
+                <h2 id="arriving-title" className="mt-2 font-journal text-3xl leading-tight text-primary md:text-4xl">
+                  Your arrival details, ready when you are.
+                </h2>
+                <p className="mt-2 max-w-[520px] text-sm leading-6 text-primary/75">
+                  Directions, Wi-Fi, and who to call for what. Enter your booking reference to open it.
+                </p>
+              </div>
+            </div>
+            <a
+              href={`${basePath}/welcome`}
+              className="group flex shrink-0 items-center gap-3 rounded-full bg-primary px-7 py-4 text-xs font-bold uppercase tracking-[.12em] text-primary-foreground transition-all hover:-translate-y-1 hover:shadow-lg active:scale-95"
+              data-testid="link-guest-welcome"
+            >
+              Open my arrival pack <ArrowRight size={16} className="transition-transform group-hover:translate-x-1" />
+            </a>
           </div>
         </section>
 

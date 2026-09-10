@@ -1,10 +1,14 @@
 import { Router, type IRouter } from "express";
 import { requireAdmin } from "../lib/admin-auth";
+import { logger } from "../lib/logger";
 import { parseBookingSheet } from "../lib/booking-import";
 import {
+  backfillMissingReferences,
   createBooking,
   createExpense,
   deleteBooking,
+  findClashes,
+  mergeIntoBooking,
   deleteExpense,
   getLedgerSummary,
   listBookings,
@@ -12,11 +16,47 @@ import {
   listPayouts,
   toPaise,
   updateBooking,
+  type Clash,
   type BookingSource,
   type BookingStatus,
 } from "../lib/ledger-repo";
 
 const router: IRouter = Router();
+
+/**
+ * Bookings created before references existed need one, and there is no
+ * migration step in this project to hang that on. Doing it once per process,
+ * the first time the owner opens the ledger, keeps it self-healing without a
+ * manual command — and costs one indexed query per boot thereafter.
+ */
+let referencesBackfilled = false;
+
+async function ensureReferencesBackfilled(): Promise<void> {
+  if (referencesBackfilled) return;
+  referencesBackfilled = true;
+
+  try {
+    await backfillMissingReferences();
+  } catch (error) {
+    // Never take the ledger down over a backfill; it retries next boot.
+    referencesBackfilled = false;
+    logger.warn({ error }, "Could not backfill booking references");
+  }
+}
+
+/** What the browser is told about a clash — enough to decide, no more. */
+function toClashDto(clashes: Clash[]) {
+  return clashes.map(({ kind, booking }) => ({
+    kind,
+    id: booking.id,
+    reference: booking.reference,
+    checkIn: booking.checkIn,
+    checkOut: booking.checkOut,
+    guestName: booking.guestName,
+    source: booking.source,
+    grossPaise: booking.grossPaise,
+  }));
+}
 
 // Every route here is owner-only: this is the business's financial record.
 router.use("/ledger", requireAdmin);
@@ -102,6 +142,7 @@ router.get("/bookings", async (req, res) => {
   const to = typeof req.query.to === "string" ? req.query.to : undefined;
 
   res.setHeader("Cache-Control", "no-store");
+  await ensureReferencesBackfilled();
   res.json({ bookings: await listBookings({ from, to }) });
 });
 
@@ -194,24 +235,96 @@ router.post("/bookings/import", async (req, res) => {
   const commit = req.body?.commit === true;
 
   if (!commit) {
-    res.json({ ...parsed, committed: false });
+    // Dry run: tell the owner which rows would land on top of something.
+    const rowsWithClashes = await Promise.all(
+      parsed.rows.map(async (row) => {
+        if (!row.booking) return { ...row, clashes: [] };
+
+        const clashes = await findClashes({
+          checkIn: row.booking.checkIn,
+          checkOut: row.booking.checkOut,
+          guestName: row.booking.guestName,
+        });
+
+        return { ...row, clashes: toClashDto(clashes) };
+      }),
+    );
+
+    res.json({ ...parsed, rows: rowsWithClashes, committed: false });
     return;
   }
 
+  /**
+   * Per-row instructions from the review screen, keyed by row number:
+   *
+   *   import — create it anyway, clash and all (two genuine stays, one villa;
+   *            the owner has seen the conflict and wants both on record)
+   *   merge  — fold it into the booking it duplicates, filling only blanks
+   *   skip   — discard the row
+   *
+   * A clashing row with NO instruction is skipped. Silence must never create a
+   * double booking; that is the whole point of the review step.
+   */
+  const decisions: Record<string, string> =
+    req.body?.decisions && typeof req.body.decisions === "object"
+      ? (req.body.decisions as Record<string, string>)
+      : {};
+
   let created = 0;
+  let merged = 0;
+  let skipped = 0;
   const failures: Array<{ rowNumber: number; error: string }> = [];
 
   for (const row of parsed.rows) {
     if (!row.booking) continue;
 
+    const payload = {
+      ...row.booking,
+      externalRef: null,
+      taxPaise: null,
+      pets: null,
+    };
+
     try {
-      await createBooking({
-        ...row.booking,
-        externalRef: null,
-        taxPaise: null,
-        pets: null,
+      const clashes = await findClashes({
+        checkIn: payload.checkIn,
+        checkOut: payload.checkOut,
+        guestName: payload.guestName,
       });
-      created += 1;
+
+      const decision = decisions[String(row.rowNumber)];
+
+      if (clashes.length === 0) {
+        await createBooking(payload);
+        created += 1;
+        continue;
+      }
+
+      if (decision === "merge") {
+        // Merge only into an exact duplicate. Folding a row into a stay that
+        // merely overlaps would silently destroy a real second booking.
+        const duplicate = clashes.find((clash) => clash.kind === "duplicate");
+
+        if (!duplicate) {
+          failures.push({
+            rowNumber: row.rowNumber,
+            error: "Nothing here to merge into — the dates overlap but do not match.",
+          });
+          continue;
+        }
+
+        await mergeIntoBooking(duplicate.booking.id, payload);
+        merged += 1;
+        continue;
+      }
+
+      if (decision === "import") {
+        await createBooking(payload);
+        created += 1;
+        continue;
+      }
+
+      skipped += 1;
     } catch (error) {
       failures.push({
         rowNumber: row.rowNumber,
@@ -225,6 +338,8 @@ router.post("/bookings/import", async (req, res) => {
     ...parsed,
     committed: true,
     created,
+    merged,
+    skipped,
     failures,
   });
 });

@@ -53,6 +53,9 @@ export const CATEGORY_LABELS: Record<ExpenseCategory, string> = {
 export type Booking = {
   id: string;
   source: BookingSource;
+  /** Raj Kuthir's own reference — RK-17SEP-7K4MQ. What the guest logs in with. */
+  reference: string | null;
+  /** The channel's reservation number. Not secret, not a login.  */
   externalRef: string | null;
   guestName: string | null;
   guestPhone: string | null;

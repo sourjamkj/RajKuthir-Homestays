@@ -1,20 +1,20 @@
 import { desc, sql } from "drizzle-orm";
+import { normaliseReference } from "./booking-reference";
 import { db, bookings } from "@workspace/db";
 
 /**
- * Looking a guest up by the reservation number on their confirmation.
+ * Looking a guest up by the Raj Kuthir reference on their confirmation message.
  *
- * The reference is unique, but it is NOT a secret — it travels in confirmation
- * emails, OTA dashboards and forwarded screenshots. Two things keep that from
- * mattering:
+ * This used to match the CHANNEL's booking number, which is not a secret — it
+ * travels in confirmation emails and forwarded screenshots. It now matches the
+ * reference we issue ourselves: five random characters from a 30-character
+ * alphabet behind a date prefix, so 24 million possibilities per check-in date.
+ *
+ * Two things still back that up, because a credential should never rest on one:
  *
  *  1. The pack stops resolving after check-out (see `todayInIndia` below), so a
  *     reference from an old stay opens nothing.
- *  2. The route rate-limits attempts per IP, so the reference space cannot be
- *     walked.
- *
- * The people who typically see a booking confirmation are the guest's own
- * travelling party — which is exactly who the arrival pack is for.
+ *  2. The route rate-limits attempts per IP, so the space cannot be walked.
  */
 
 export type GuestBooking = {
@@ -29,15 +29,6 @@ export type GuestBooking = {
 export type LookupResult =
   | { ok: true; booking: GuestBooking }
   | { ok: false; reason: "not_found" | "ended" | "cancelled" };
-
-/**
- * Strips everything that is not a letter or digit and upper-cases the rest, so
- * "hm abc-1234", "HMABC1234" and "HM-ABC 1234" are the same reference. Applied
- * identically to the stored value in SQL below.
- */
-export function normaliseReference(raw: string): string {
-  return raw.replace(/[^a-z0-9]/gi, "").toUpperCase();
-}
 
 /**
  * Today's date in the house's own timezone. The server runs in UTC, and
@@ -66,13 +57,14 @@ export async function lookupBooking(
     return { ok: false, reason: "not_found" };
   }
 
-  // Same normalisation on the stored column: the owner may have typed the
-  // reference with spaces or dashes when entering an offline booking.
-  const normalisedColumn = sql`upper(regexp_replace(${bookings.externalRef}, '[^A-Za-z0-9]', '', 'g'))`;
+  // Matched against Raj Kuthir's OWN reference, not the channel's number. The
+  // channel number travels in confirmation emails and is not secret; the Raj
+  // Kuthir reference is random and is issued precisely to be the guest's key.
+  const normalisedColumn = sql`upper(regexp_replace(${bookings.reference}, '[^A-Za-z0-9]', '', 'g'))`;
 
   const rows = await db
     .select({
-      externalRef: bookings.externalRef,
+      reference: bookings.reference,
       guestName: bookings.guestName,
       checkIn: bookings.checkIn,
       checkOut: bookings.checkOut,
