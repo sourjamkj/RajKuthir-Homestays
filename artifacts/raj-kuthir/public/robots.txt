@@ -1,2 +1,18 @@
+# Raj Kuthir Homestays
+# The guest-facing site is open to crawlers; owner and guest-private areas are not.
+
 User-agent: *
 Allow: /
+
+# Owner console — nothing here belongs in a search result.
+Disallow: /admin
+Disallow: /sign-in
+
+# Guest arrival pack. Reachable only with a booking reference, but there is no
+# reason for it to be crawled or indexed either.
+Disallow: /welcome
+
+# The API serves data, not pages.
+Disallow: /api/
+
+Sitemap: https://rajkuthirhomestays.casa/sitemap.xml

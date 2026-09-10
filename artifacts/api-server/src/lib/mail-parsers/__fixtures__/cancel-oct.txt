@@ -1,0 +1,53 @@
+ Hotelier Voucher
+
+| |
+| Host Voucher |
+
+| |
+| Raj Kuthir Homestays - Sobuj Potro, Shantiniketan |
+
+| |
+| PRIMARY GUEST DETAILS |
+
+| |
+| | Sudipta Saha |
+
+| |
+| CHECK-IN | CHECK-OUT |
+| 02 Oct '26 12:00 PM | 04 Oct '26 (2 Nights) 11:00 AM |
+
+| |
+| TOTAL NO. OF GUEST(S) |
+| 3 Adults |
+
+| |
+| Booking ID |
+| GH75081277131254 |
+
+| |
+| Cancelled on |
+
+| |
+| 10 Sep '26 12:17 PM |
+
+| |
+| Booking Status |
+| CANCELLED |
+
+| |
+| Payment Status |
+| Paid Online |
+
+| |
+| Booked Via |
+| GoIbibo |
+
+| |
+| PNR |
+| 0186870710 |
+
+| Payment |
+
+| |
+| Cancellation Charges (Payable to Property) |
+| ₹ 0.0 |

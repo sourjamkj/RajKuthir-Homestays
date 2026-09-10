@@ -1,0 +1,76 @@
+ Hotelier Voucher
+
+| |
+
+| |
+| |
+| Host Voucher |
+
+| |
+| Raj Kuthir Homestays - Sobuj Potro, Shantiniketan |
+| Sobuj, Potro Bunglow, Dopati 148, Bolpur, Bandh Nabagram, West Bengal 731235, Shantiniketan, IN |
+
+| |
+| PRIMARY GUEST DETAILS |
+
+| |
+| | Sudipta Saha |
+
+| |
+| |
+
+| |
+| CHECK-IN | CHECK-OUT |
+| 02 Oct '26 12:00 PM | 04 Oct '26 (2 Nights) 11:00 AM |
+
+| |
+| TOTAL NO. OF GUEST(S) |
+| 3 Adults |
+
+| |
+| Booking ID |
+| GH75081277131254 |
+
+| |
+| Booked on |
+| | 09 Sep '26 11:42 AM |
+
+| |
+| Booking Status |
+| Confirmed |
+
+| |
+| Payment Status |
+| Paid Online |
+
+| |
+| Booked Via |
+| GoIbibo |
+
+| |
+| PNR |
+| 0186870710 |
+
+| Payment |
+
+| |
+| Property Gross Charges |
+| ₹ 4,266.0 |
+
+| |
+| Payable to Property |
+| ₹ 3,355.63 |
+
+| Final Calculation |
+
+| (A) | Property Gross Charges (1+2+3+4) | ₹ 4,266.0 |
+
+| 5. | Go-MMT Commission | ₹ 767.88 |
+| 6. | GST on Commission @ 18.0% | ₹ 138.22 |
+| (B) | Go-MMT Commission (including GST) (5+6) | ₹ 906.1 |
+
+| 7. | TCS @ 0.0% | ₹ 0.0 |
+| 8. | TDS @ 0.1% | ₹ 4.27 |
+| (C) | Tax Deduction (7+8) | ₹ 4.27 |
+
+| | Payable to Property (A-B-C) | ₹ 3,355.63 |

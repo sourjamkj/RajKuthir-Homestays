@@ -37,6 +37,20 @@ yarn-error.log
 testem.log
 /typings
 
+# Secrets — never commit. The repo is public.
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Internal working notes. Useful to whoever is editing the repo, but this
+# repository is public and none of it is needed to build or run the site.
+# Already-tracked copies must be removed with:
+#   git rm -r --cached .agents attached_assets
+.agents/
+attached_assets/
+
 # System Files
 .DS_Store
 Thumbs.db
