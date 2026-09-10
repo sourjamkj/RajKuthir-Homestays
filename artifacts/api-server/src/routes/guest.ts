@@ -1,5 +1,9 @@
+import { createReadStream, existsSync, statSync } from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { Router, type IRouter } from "express";
 import { requireAdmin } from "../lib/admin-auth";
+import { logger } from "../lib/logger";
 import {
   getGuestInfo,
   hasGuestInfo,
@@ -8,6 +12,34 @@ import {
 import { lookupBooking } from "../lib/guest-lookup";
 
 const router: IRouter = Router();
+
+/**
+ * The printed arrival poster, served to guests who have proved a live booking.
+ *
+ * It lives OUTSIDE artifacts/raj-kuthir/public deliberately. Anything in that
+ * folder is copied to the site root and served at a plain URL to anyone who
+ * asks — and this PDF carries the Wi-Fi QR code (which encodes the network
+ * credentials) plus the personal mobile numbers of the caretaker, electrician,
+ * plumber, cafe and toto driver. It has to come through the same gate as the
+ * rest of the pack, so it is streamed from here after a reference check.
+ *
+ * Resolved against several candidate paths for the same reason app.ts does:
+ * the process may be started from the repo root or from the service directory,
+ * and from src or from dist.
+ */
+const here = path.dirname(fileURLToPath(import.meta.url));
+
+const PACK_CANDIDATES = [
+  process.env.ARRIVAL_PACK_PDF,
+  path.resolve(process.cwd(), "assets/arrival-pack.pdf"),
+  path.resolve(process.cwd(), "artifacts/api-server/assets/arrival-pack.pdf"),
+  path.resolve(here, "../../assets/arrival-pack.pdf"),
+  path.resolve(here, "../../../assets/arrival-pack.pdf"),
+].filter(Boolean) as string[];
+
+function findPackPdf(): string | null {
+  return PACK_CANDIDATES.find((candidate) => existsSync(candidate)) ?? null;
+}
 
 /**
  * Rate limiting for the public lookup.
@@ -50,6 +82,8 @@ const MESSAGES = {
     "That stay has already ended, so the arrival details are no longer available. Do come back.",
   cancelled:
     "That booking shows as cancelled. If that is wrong, please message the host.",
+  phone_mismatch:
+    "That mobile number does not match the one on this booking. Use the number you booked with, or message the host.",
 } as const;
 
 /**
@@ -72,13 +106,15 @@ router.post("/guest/lookup", async (req, res) => {
 
   const raw = req.body?.reference;
   const reference = typeof raw === "string" ? raw : "";
+  const rawPhone = req.body?.phone;
+  const phone = typeof rawPhone === "string" ? rawPhone : "";
 
   if (!reference.trim()) {
     res.status(400).json({ error: "Enter your booking reference." });
     return;
   }
 
-  const result = await lookupBooking(reference);
+  const result = await lookupBooking(reference, phone);
 
   if (!result.ok) {
     recordMiss(key);
@@ -98,6 +134,60 @@ router.post("/guest/lookup", async (req, res) => {
   }
 
   res.json({ booking: result.booking, info });
+});
+
+/**
+ * The same reference check as /guest/lookup, then the PDF itself.
+ *
+ * A POST rather than a GET with a token in the query string: a URL carrying a
+ * booking reference would end up in browser history, in any link a guest
+ * forwards, and in our own access logs. The body keeps it out of all three.
+ */
+router.post("/guest/pack.pdf", async (req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+
+  const key = req.ip ?? "unknown";
+
+  if (tooMany(key)) {
+    res.status(429).json({ error: "Too many attempts. Please wait a few minutes." });
+    return;
+  }
+
+  const raw = req.body?.reference;
+  const reference = typeof raw === "string" ? raw : "";
+  const rawPhone = req.body?.phone;
+  const phone = typeof rawPhone === "string" ? rawPhone : "";
+
+  if (!reference.trim()) {
+    res.status(400).json({ error: "Enter your booking reference." });
+    return;
+  }
+
+  const result = await lookupBooking(reference, phone);
+
+  if (!result.ok) {
+    recordMiss(key);
+    res.status(404).json({ error: MESSAGES[result.reason], reason: result.reason });
+    return;
+  }
+
+  const file = findPackPdf();
+
+  if (!file) {
+    logger.warn({ tried: PACK_CANDIDATES }, "Arrival pack PDF not found on disk");
+    res.status(503).json({
+      error: "The arrival pack is not available right now. Please message the host.",
+    });
+    return;
+  }
+
+  res.type("application/pdf");
+  res.setHeader(
+    "Content-Disposition",
+    'inline; filename="raj-kuthir-arrival-pack.pdf"',
+  );
+  res.setHeader("Content-Length", String(statSync(file).size));
+  createReadStream(file).pipe(res);
 });
 
 router.get("/admin/guest-info", requireAdmin, async (_req, res) => {

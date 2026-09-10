@@ -1,11 +1,13 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { useLocation } from 'wouter';
 import { ArrowLeft, Eye, EyeOff, Loader2, LockKeyhole } from 'lucide-react';
-import { AdminApiError, useAdminSession, useLogin } from '@/lib/admin-api';
+import { consumeSessionExpired, AdminApiError, useAdminSession, useLogin } from '@/lib/admin-api';
 
 export default function AdminLogin() {
   const [, navigate] = useLocation();
   const [password, setPassword] = useState('');
+  // Read once on mount: did we land here because a session lapsed, or normally?
+  const [expired] = useState(() => consumeSessionExpired());
   const [revealed, setRevealed] = useState(false);
   const session = useAdminSession();
   const login = useLogin();
@@ -76,6 +78,17 @@ export default function AdminLogin() {
             </div>
           ) : (
             <form onSubmit={submit} className="mt-7">
+              {expired && (
+                <p
+                  className="mb-6 rounded-xl border border-[#d8a24a]/50 bg-[#d8a24a]/10 px-4 py-3 text-sm leading-6 text-[#8a6320]"
+                  role="status"
+                  data-testid="notice-session-expired"
+                >
+                  Your session expired, so you were signed out. Nothing has changed —
+                  sign in again and everything will be exactly where you left it.
+                </p>
+              )}
+
               <label
                 htmlFor="admin-password"
                 className="text-xs font-bold uppercase tracking-[.08em] text-primary"

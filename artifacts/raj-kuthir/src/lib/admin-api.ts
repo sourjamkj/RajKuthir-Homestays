@@ -51,6 +51,27 @@ export class AdminApiError extends Error {
   }
 }
 
+/**
+ * Whether the last failure was an expired session.
+ *
+ * A module-level flag rather than router state or a query parameter: the
+ * redirect is triggered deep inside a data query, far from any component that
+ * could pass a message along, and a ?expired=1 in the URL would survive
+ * bookmarking and reappear at confusing moments. Read once, then cleared.
+ */
+let sessionExpired = false;
+
+export function markSessionExpired(): void {
+  sessionExpired = true;
+}
+
+/** Reads the flag and clears it, so the notice shows exactly once. */
+export function consumeSessionExpired(): boolean {
+  const was = sessionExpired;
+  sessionExpired = false;
+  return was;
+}
+
 export async function adminFetch<T>(
   path: string,
   init?: RequestInit,

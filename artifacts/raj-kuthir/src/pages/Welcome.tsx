@@ -5,6 +5,7 @@ import {
   ArrowRight,
   Check,
   Copy,
+  Download,
   Leaf,
   MapPin,
   MessageCircle,
@@ -97,9 +98,12 @@ function CopyButton({ value, label }: { value: string; label: string }) {
 
 export default function Welcome() {
   const [reference, setReference] = useState('');
+  const [phone, setPhone] = useState('');
   const [data, setData] = useState<LookupResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [packLoading, setPackLoading] = useState(false);
+  const [packError, setPackError] = useState<string | null>(null);
 
   useEffect(() => {
     const previous = document.title;
@@ -129,7 +133,7 @@ export default function Welcome() {
       const response = await fetch('/api/guest/lookup', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ reference }),
+        body: JSON.stringify({ reference, phone }),
       });
 
       const body = await response.json().catch(() => ({}));
@@ -144,6 +148,48 @@ export default function Welcome() {
       setError('Could not reach the server. Check your connection and try again.');
     } finally {
       setLoading(false);
+    }
+  };
+
+  /**
+   * Fetches the poster and hands it to the browser as a file.
+   *
+   * Posted rather than linked, because the reference is the credential: a URL
+   * carrying it would live on in history and in anything the guest forwards.
+   * The blob is revoked straight after, so it does not linger in memory.
+   */
+  const downloadPack = async () => {
+    if (packLoading) return;
+
+    setPackLoading(true);
+    setPackError(null);
+
+    try {
+      const response = await fetch('/api/guest/pack.pdf', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reference, phone }),
+      });
+
+      if (!response.ok) {
+        const body = await response.json().catch(() => ({}));
+        setPackError(body?.error ?? 'Could not open the arrival pack.');
+        return;
+      }
+
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = 'raj-kuthir-arrival-pack.pdf';
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.setTimeout(() => URL.revokeObjectURL(url), 10_000);
+    } catch {
+      setPackError('Could not reach the server. Check your connection and try again.');
+    } finally {
+      setPackLoading(false);
     }
   };
 
@@ -201,8 +247,22 @@ export default function Welcome() {
               </label>
 
               <p className="mt-3 text-xs leading-5 text-muted-foreground">
-                It is on your Booking.com, Airbnb or MakeMyTrip confirmation. Spaces and dashes do not matter.
+                We sent this to you on WhatsApp when your stay was confirmed — it looks like
+                RK-17SEP-7K4MQ. Spaces, dashes and capitals do not matter.
               </p>
+
+              <label className="mt-7 block">
+                <span className="eyebrow text-muted-foreground">Mobile number</span>
+                <input
+                  value={phone}
+                  onChange={(event) => setPhone(event.target.value)}
+                  type="tel"
+                  autoComplete="tel"
+                  placeholder="The number you booked with"
+                  className="mt-2 w-full border-b border-border bg-transparent px-0 py-3 font-mono-ui text-lg tracking-[.06em] text-primary outline-none placeholder:text-muted-foreground/50 focus:border-primary"
+                  data-testid="input-guest-phone"
+                />
+              </label>
 
               {error && (
                 <div className="mt-6 flex items-start gap-3 rounded-[1.1rem] border border-accent/40 bg-accent/10 px-5 py-4" role="alert" data-testid="status-lookup-error">
@@ -337,6 +397,28 @@ export default function Welcome() {
                 </div>
 
                 <div className="rounded-[1.4rem] border border-border bg-background p-7 md:p-8">
+                  <p className="font-journal text-2xl text-primary">The printed sheet</p>
+                  <p className="mt-3 text-sm leading-6 text-muted-foreground">
+                    The same poster that hangs in the house — Wi-Fi, contacts and emergency
+                    numbers on one page. Handy offline.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={downloadPack}
+                    disabled={packLoading}
+                    className="mt-5 inline-flex items-center gap-2 rounded-full bg-secondary px-5 py-3 text-xs font-bold uppercase tracking-[.1em] text-primary transition-transform hover:-translate-y-0.5 disabled:opacity-60"
+                    data-testid="button-download-pack"
+                  >
+                    <Download size={14} /> {packLoading ? 'Preparing…' : 'Download the pack'}
+                  </button>
+                  {packError && (
+                    <p className="mt-3 text-xs leading-5 text-accent" role="alert">
+                      {packError}
+                    </p>
+                  )}
+                </div>
+
+                <div className="rounded-[1.4rem] border border-border bg-background p-7 md:p-8">
                   <p className="font-journal text-2xl text-primary">House rules</p>
                   <p className="mt-3 text-sm leading-6 text-muted-foreground">
                     Worth a two-minute read before you settle in.
@@ -367,6 +449,7 @@ export default function Welcome() {
                 onClick={() => {
                   setData(null);
                   setReference('');
+                  setPhone('');
                 }}
                 className="px-2 py-3 text-xs font-bold uppercase tracking-[.12em] text-muted-foreground transition-colors hover:text-primary"
                 data-testid="button-guest-reset"

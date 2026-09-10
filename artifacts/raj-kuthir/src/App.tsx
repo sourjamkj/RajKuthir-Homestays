@@ -1,5 +1,10 @@
 import { useMemo, useState, type FormEvent, type ReactNode } from 'react';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import {
+  MutationCache,
+  QueryCache,
+  QueryClient,
+  QueryClientProvider,
+} from '@tanstack/react-query';
 import {
   getGetPublicCalendarQueryKey,
   useGetPublicCalendar,
@@ -66,8 +71,37 @@ import {
 } from '@/lib/rates';
 import { Route, Switch, useLocation, Router as WouterRouter } from 'wouter';
 import { CONFIG, asset, basePath, phoneHref } from '@/lib/site';
+import {
+  ADMIN_SESSION_KEY,
+  AdminApiError,
+  markSessionExpired,
+} from '@/lib/admin-api';
 
-const queryClient = new QueryClient();
+/**
+ * A signed-out session used to look exactly like an empty business.
+ *
+ * Each admin page checks /api/admin/me once on mount. When the cookie expired
+ * later that check stayed cached as "signed in", while every data query came
+ * back 401 — and a 401 rendered as an empty table. The ledger looked wiped,
+ * which is precisely how it felt.
+ *
+ * Catching 401 in one place fixes every screen at once: mark the session
+ * signed out, and the guard each admin page already has does the rest.
+ */
+function onAdminUnauthorised(error: unknown): void {
+  if (!(error instanceof AdminApiError) || error.status !== 401) return;
+
+  markSessionExpired();
+  queryClient.setQueryData(ADMIN_SESSION_KEY, {
+    signedIn: false,
+    configured: true,
+  });
+}
+
+const queryClient: QueryClient = new QueryClient({
+  queryCache: new QueryCache({ onError: onAdminUnauthorised }),
+  mutationCache: new MutationCache({ onError: onAdminUnauthorised }),
+});
 
 // basePath, CONFIG and asset() now live in lib/site.ts — see the import above.
 
