@@ -215,7 +215,7 @@ test("point 1 · the share image is declared with real dimensions", () => {
 // The sitemap contains only intended, indexable URLs.
 
 test("point 2 · the sitemap lists exactly the public, indexable pages", () => {
-  const xml = sitemapXml("2026-09-10");
+  const xml = sitemapXml();
   const locs = all(xml, /<loc>([^<]*)<\/loc>/g);
 
   assert.deepEqual(locs.sort(), [
@@ -245,7 +245,7 @@ test("point 2 · nothing private or noindex can reach the sitemap", () => {
 });
 
 test("point 2 · the sitemap is well-formed and correctly namespaced", () => {
-  const xml = sitemapXml("2026-09-10");
+  const xml = sitemapXml();
 
   assert.ok(xml.startsWith('<?xml version="1.0" encoding="UTF-8"?>'));
   assert.ok(
@@ -262,6 +262,66 @@ test("point 2 · the sitemap is well-formed and correctly namespaced", () => {
   for (const priority of all(xml, /<priority>([^<]*)<\/priority>/g)) {
     const value = Number(priority);
     assert.ok(value >= 0 && value <= 1, `priority ${priority} out of range`);
+  }
+});
+
+test("point 2 · every listed page declares its own lastmod", () => {
+  const xml = sitemapXml();
+  const urls = xml.match(/<url>[\s\S]*?<\/url>/g) ?? [];
+
+  assert.ok(urls.length > 0, "sitemap has no <url> entries at all");
+  for (const url of urls) {
+    const loc = url.match(/<loc>([^<]*)<\/loc>/)?.[1];
+    assert.match(
+      url,
+      /<lastmod>\d{4}-\d{2}-\d{2}<\/lastmod>/,
+      `${loc} has no usable lastmod`,
+    );
+  }
+
+  // The value must come from the page, not from a clock. Two calls a day
+  // apart have to agree, or we are back to telling Google that everything
+  // changed today — which is the fastest way to have the field ignored.
+  for (const [route, meta] of Object.entries(PAGES)) {
+    if (meta.noindex || isPrivatePath(route)) continue;
+    assert.ok(meta.lastmod, `${route} is in the sitemap with no lastmod`);
+    assert.ok(
+      xml.includes(`<lastmod>${meta.lastmod}</lastmod>`),
+      `${route}'s lastmod ${meta.lastmod} is not what the sitemap emitted`,
+    );
+  }
+});
+
+test("point 2 · no page claims to have changed in the future", () => {
+  // A lastmod ahead of now is the other way to lose the signal: a crawler
+  // that reads a future date treats the whole file as untrustworthy.
+  const today = new Date().toISOString().slice(0, 10);
+
+  for (const [route, meta] of Object.entries(PAGES)) {
+    if (!meta.lastmod) continue;
+    assert.match(
+      meta.lastmod,
+      /^\d{4}-\d{2}-\d{2}$/,
+      `${route} lastmod "${meta.lastmod}" is not a W3C date`,
+    );
+    assert.ok(
+      !Number.isNaN(Date.parse(meta.lastmod)),
+      `${route} lastmod "${meta.lastmod}" is not a real date`,
+    );
+    assert.ok(
+      meta.lastmod <= today,
+      `${route} claims to have changed on ${meta.lastmod}, which is after ${today}`,
+    );
+  }
+});
+
+test("point 2 · a noindex page carries no lastmod to leak", () => {
+  for (const [route, meta] of Object.entries(PAGES)) {
+    if (!meta.noindex) continue;
+    assert.ok(
+      !meta.lastmod,
+      `${route} is noindex but carries a lastmod — it will never be emitted`,
+    );
   }
 });
 

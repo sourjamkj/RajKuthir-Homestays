@@ -91,6 +91,21 @@ export type PageMeta = {
   ogImage?: OgImage;
   /** Kept out of the sitemap and marked noindex. */
   noindex?: boolean;
+  /**
+   * The date this page's visible content last changed, as YYYY-MM-DD.
+   *
+   * Bump it by hand when you change the copy, and only then. This used to be
+   * generated as "today" on every request, which meant the sitemap claimed all
+   * three pages had changed every single day for as long as the site was up.
+   * Google's documented response to a lastmod it judges unreliable is to
+   * ignore the field for the whole site, so an always-fresh date is worse than
+   * no date at all. A slightly stale one costs nothing — it only means Google
+   * is in no hurry to come back.
+   *
+   * Every page in the sitemap must carry one; a test asserts that, that the
+   * form is right, and that nothing claims a date in the future.
+   */
+  lastmod?: string;
   /** Omitted from the sitemap when absent. */
   changefreq?: string;
   priority?: string;
@@ -147,6 +162,7 @@ export const PAGES: Record<string, PageMeta> = {
     title: "Private 2BHK Villa in Shantiniketan | Raj Kuthir Homestays",
     description:
       "An entire two-bedroom villa with a private garden in Bolpur, Shantiniketan. Pet-friendly, family-friendly, and bookable direct with the owner.",
+    lastmod: "2026-09-10",
     changefreq: "weekly",
     priority: "1.0",
   },
@@ -160,6 +176,7 @@ export const PAGES: Record<string, PageMeta> = {
       height: 1024,
       alt: "Raj Kuthir Homestays, Sobuj Potro, seen from the garden in daylight",
     },
+    lastmod: "2026-09-10",
     changefreq: "monthly",
     priority: "0.9",
     faq: PET_FRIENDLY_FAQ,
@@ -168,6 +185,7 @@ export const PAGES: Record<string, PageMeta> = {
     title: "House Rules | Raj Kuthir Homestays, Shantiniketan",
     description:
       "Check-in and check-out times, our pet and smoking policy, and what we ask of guests — published in full before you book, so nothing is a surprise.",
+    lastmod: "2026-09-04",
     changefreq: "yearly",
     priority: "0.4",
   },
@@ -435,15 +453,21 @@ export function injectMeta(html: string, pathname: string): string {
     .replace(/<\/head>/i, `  ${head}\n  </head>`);
 }
 
-/** Only pages we have deliberately described, and never a private one. */
-export function sitemapXml(lastmod = new Date().toISOString().slice(0, 10)): string {
+/**
+ * Only pages we have deliberately described, and never a private one.
+ *
+ * Takes no clock: every date in here comes from the page's own `lastmod`, so
+ * the same commit always produces the same sitemap and a page is only ever
+ * announced as changed when it actually has.
+ */
+export function sitemapXml(): string {
   const urls = Object.entries(PAGES)
     .filter(([path, meta]) => !meta.noindex && !isPrivatePath(path))
     .map(([path, meta]) =>
       [
         "  <url>",
         `    <loc>${SITE_ORIGIN}${path === "/" ? "/" : path}</loc>`,
-        `    <lastmod>${lastmod}</lastmod>`,
+        meta.lastmod ? `    <lastmod>${meta.lastmod}</lastmod>` : "",
         meta.changefreq ? `    <changefreq>${meta.changefreq}</changefreq>` : "",
         meta.priority ? `    <priority>${meta.priority}</priority>` : "",
         "  </url>",
