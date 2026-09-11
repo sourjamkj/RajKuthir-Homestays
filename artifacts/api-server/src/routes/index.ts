@@ -7,6 +7,7 @@ import ledgerRouter from "./ledger";
 import enquiriesRouter from "./enquiries";
 import notificationsRouter from "./notifications";
 import guestRouter from "./guest";
+import mailRouter from "./mail";
 
 const router: IRouter = Router();
 
@@ -18,5 +19,6 @@ router.use(ledgerRouter);
 router.use(enquiriesRouter);
 router.use(notificationsRouter);
 router.use(guestRouter);
+router.use(mailRouter);
 
 export default router;

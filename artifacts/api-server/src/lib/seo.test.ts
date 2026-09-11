@@ -4,6 +4,7 @@ import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 
+import { MOBILE_PATTERN } from "./phone.ts";
 import {
   PAGES,
   SITE_ORIGIN,
@@ -852,4 +853,45 @@ test("point 10 · the homepage links to the gallery rather than inlining it", ()
     !APP_TSX.includes("filteredGallery"),
     "the old filtered gallery is still on the homepage",
   );
+});
+
+// =========================================================== POINT 11
+// The enquiry form's phone rule is the same in the browser and on the server.
+
+test("point 11 · the browser and the server agree on what a phone number is", () => {
+  // Two copies of a validation rule always drift. When they do, the visible
+  // symptom is a guest being told their number is fine and the enquiry
+  // silently 400ing — or worse, the reverse. This is the guard.
+  const attribute = /pattern="((?:[^"\\]|\\.)*)"/.exec(APP_TSX)?.[1];
+  assert.ok(attribute, "the phone input no longer carries a pattern attribute");
+
+  const browser = new RegExp(`^(?:${attribute})$`);
+  const server = new RegExp(`^(?:${MOBILE_PATTERN})$`);
+
+  const cases = [
+    ["9876543210", true],
+    ["+919876543210", true],
+    ["91 9876543210", true],
+    ["09876543210", true],
+    ["6123456789", true],
+    ["5123456789", false],  // Indian mobiles do not start below 6
+    ["987654321", false],   // nine digits
+    ["98765432101", false], // eleven
+    ["1234567890", false],
+    ["not a number", false],
+    ["", false],
+  ] as const;
+
+  for (const [input, expected] of cases) {
+    assert.equal(
+      browser.test(input),
+      expected,
+      `the browser pattern disagrees on "${input}"`,
+    );
+    assert.equal(
+      server.test(input),
+      expected,
+      `the server pattern disagrees on "${input}"`,
+    );
+  }
 });

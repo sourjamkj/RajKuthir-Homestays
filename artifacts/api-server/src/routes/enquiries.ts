@@ -1,6 +1,7 @@
 import { Router, type IRouter } from "express";
 import { requireAdmin } from "../lib/admin-auth";
 import { logger } from "../lib/logger";
+import { normaliseMobile } from "../lib/phone";
 import {
   createEnquiry,
   deleteEnquiry,
@@ -14,6 +15,7 @@ import {
 const router: IRouter = Router();
 
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
+
 const STATUSES: readonly EnquiryStatus[] = [
   "new",
   "contacted",
@@ -84,13 +86,22 @@ router.post("/enquiries", async (req, res) => {
     return;
   }
 
+  const dialable = normaliseMobile(phone);
+
+  if (!dialable) {
+    res.status(400).json({
+      error: "That does not look like a mobile number we can call back.",
+    });
+    return;
+  }
+
   const checkIn = text(req.body?.checkIn, 10);
   const checkOut = text(req.body?.checkOut, 10);
 
   try {
     const created = await createEnquiry({
       name,
-      phone,
+      phone: dialable,
       email: text(req.body?.email, 200),
       checkIn: checkIn && ISO_DATE.test(checkIn) ? checkIn : null,
       checkOut: checkOut && ISO_DATE.test(checkOut) ? checkOut : null,

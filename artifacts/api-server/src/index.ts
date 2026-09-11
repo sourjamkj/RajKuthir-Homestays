@@ -2,6 +2,7 @@ import app from "./app";
 import { logger } from "./lib/logger";
 import { startCalendarCron } from "./lib/calendar-cron";
 import { startNotificationsCron } from "./lib/notifications-cron";
+import { startMailCron } from "./lib/mail-cron";
 
 const rawPort = process.env["PORT"];
 
@@ -36,4 +37,10 @@ app.listen(port, (err) => {
   // Queues and sends guest WhatsApp messages. Idle unless WhatsApp is
   // configured, and never sends unless WHATSAPP_ENABLED is explicitly true.
   startNotificationsCron();
+
+  // Reads OTA booking emails out of the configured mailboxes. Idle until a
+  // mailbox is added in the admin screen, and skipped entirely when
+  // MAIL_ENCRYPTION_KEY is unset, since the stored passwords cannot be
+  // opened without it.
+  startMailCron();
 });
