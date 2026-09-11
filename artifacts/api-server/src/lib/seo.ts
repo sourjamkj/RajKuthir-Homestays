@@ -153,6 +153,32 @@ const PET_FRIENDLY_FAQ = [
 ];
 
 /**
+ * The FAQ shown on /places-to-visit-in-shantiniketan, verbatim.
+ * Source of truth for the visible copy is
+ * artifacts/raj-kuthir/src/pages/PlacesToVisit.tsx — keep the two in step.
+ * Every answer restates something already published on the site: the two
+ * station distances, the Sonajhuri market times, the toto and the car.
+ */
+const PLACES_FAQ = [
+  {
+    q: 'Which station should we book to for Shantiniketan?',
+    a: 'Prantik is the closer of the two at about 5 km from the villa, and the quieter. Bolpur Shantiniketan is about 9 km away and is where the fast trains stop — the Vande Bharat, Darjeeling Mail and Kanchanjunga Express. Most people book to Bolpur out of habit, which is worth knowing if you would rather arrive somewhere calmer.',
+  },
+  {
+    q: 'When is the Sonajhuri forest market on?',
+    a: 'Saturdays, and often Sundays too, from about 2pm. It is roughly 4 km from the villa — close enough that a toto will take you and wait.',
+  },
+  {
+    q: 'How do people get around once they are here?',
+    a: 'A toto for anything close by; the caretaker can arrange a car for the full-day trips such as Tarapith, Bishnupur or Massanjore. There is parking on the premises if you have driven down.',
+  },
+  {
+    q: 'How far is the Tagore campus from the villa?',
+    a: 'About 6 km to Visva-Bharati and Rabindra Bhavan, and the same to Upasana Griha, Chhatimtala and Kala Bhavana — all of it within one short ride of the house.',
+  },
+];
+
+/**
  * Written for a person deciding where to stay, not for a keyword counter.
  * Titles stay under ~60 characters and descriptions under ~155 so neither is
  * truncated in results.
@@ -195,6 +221,29 @@ export const PAGES: Record<string, PageMeta> = {
     changefreq: "monthly",
     priority: "0.6",
   },
+  "/our-story": {
+    title: "Our Story | Raj Kuthir Homestays, Shantiniketan",
+    description:
+      "Why Sobuj Potro exists and what the house actually is \u2014 an entire two-bedroom villa with its own garden in Bolpur, let directly by the owner.",
+    lastmod: "2026-09-11",
+    changefreq: "yearly",
+    priority: "0.5",
+  },
+  "/places-to-visit-in-shantiniketan": {
+    title: "Places to Visit in Shantiniketan | Raj Kuthir Homestays",
+    description:
+      "Eighteen places around Shantiniketan with road distances from our doorstep in Bolpur \u2014 the Tagore campus, Sonajhuri haat, Kopai, Tarapith and Bishnupur.",
+    ogImage: {
+      url: `${SITE_ORIGIN}/Rabiguru%20Statue.jpg`,
+      width: 1254,
+      height: 1254,
+      alt: "A statue of Rabindranath Tagore near Raj Kuthir Homestays, Shantiniketan",
+    },
+    lastmod: "2026-09-11",
+    changefreq: "monthly",
+    priority: "0.8",
+    faq: PLACES_FAQ,
+  },
   "/house-rules": {
     title: "House Rules | Raj Kuthir Homestays, Shantiniketan",
     description:
@@ -225,6 +274,8 @@ const PRIVATE_PREFIXES = ["/admin", "/sign-in", "/welcome"];
 const CLIENT_ROUTES = new Set([
   "/",
   "/gallery",
+  "/our-story",
+  "/places-to-visit-in-shantiniketan",
   "/house-rules",
   "/pet-friendly-homestay-shantiniketan",
   "/welcome",

@@ -232,7 +232,9 @@ test("point 2 · the sitemap lists exactly the public, indexable pages", () => {
     `${SITE_ORIGIN}/`,
     `${SITE_ORIGIN}/gallery`,
     `${SITE_ORIGIN}/house-rules`,
+    `${SITE_ORIGIN}/our-story`,
     `${SITE_ORIGIN}/pet-friendly-homestay-shantiniketan`,
+    `${SITE_ORIGIN}/places-to-visit-in-shantiniketan`,
   ]);
   assert.equal(new Set(locs).size, locs.length, "duplicate <loc> in sitemap");
 });
@@ -520,19 +522,34 @@ test("point 5 · breadcrumbs appear on inner pages only", () => {
 // ====================================================== FAQ MARKUP
 // FAQPage is only legitimate when a visitor can read the same questions.
 
-test("faq · every marked-up question appears verbatim on the rendered page", () => {
-  const faq = PAGES["/pet-friendly-homestay-shantiniketan"]!.faq;
-  assert.ok(faq?.length, "the pet-friendly page declares no FAQ");
+/** Which component renders which route, for the parity checks below. */
+const PAGE_COMPONENTS: Record<string, string> = {
+  "/pet-friendly-homestay-shantiniketan": "src/pages/PetFriendly.tsx",
+  "/places-to-visit-in-shantiniketan": "src/pages/PlacesToVisit.tsx",
+};
 
-  for (const { q, a } of faq) {
+test("faq · every marked-up question appears verbatim on the rendered page", () => {
+  const withFaq = Object.entries(PAGES).filter(([, meta]) => meta.faq?.length);
+  assert.ok(withFaq.length >= 2, "expected at least two pages to carry an FAQ");
+
+  for (const [route, meta] of withFaq) {
+    const component = PAGE_COMPONENTS[route];
     assert.ok(
-      PET_PAGE_TSX.includes(q),
-      `FAQ markup asks "${q}" but PetFriendly.tsx does not render it`,
+      component,
+      `${route} declares an FAQ but PAGE_COMPONENTS does not say which file renders it`,
     );
-    assert.ok(
-      PET_PAGE_TSX.includes(a),
-      `the answer to "${q}" is marked up but not rendered — Google treats that as a violation`,
-    );
+    const source = readFileSync(path.join(clientRoot, component), "utf8");
+
+    for (const { q, a } of meta.faq!) {
+      assert.ok(
+        source.includes(q),
+        `FAQ markup for ${route} asks "${q}" but ${component} does not render it`,
+      );
+      assert.ok(
+        source.includes(a),
+        `the answer to "${q}" on ${route} is marked up but not rendered — Google treats that as a violation`,
+      );
+    }
   }
 });
 
