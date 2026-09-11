@@ -163,14 +163,15 @@ const GROUPS: Group[] = [
 export const GALLERY: Photo[] = GROUPS.flatMap((group) => group.photos);
 
 /**
- * The four the homepage shows.
+ * The two the homepage shows.
  *
- * Chosen to cover the whole stay in one row — outside, garden, a bedroom, the
- * table — rather than simply the first four, which would have been two
- * bedrooms side by side. Defined here so the homepage never drifts out of step
- * with the gallery it links to.
+ * Two rather than a row of four: the homepage is a path to an enquiry, not a
+ * contact sheet, and two large frames read better than four small ones. One
+ * outside, one in — enough to say what kind of house this is, and to make
+ * "view all" worth clicking. Defined here so the homepage can never drift out
+ * of step with the gallery it links to.
  */
-export const GALLERY_TEASER: Photo[] = ['The villa, morning', 'Under open sky', 'The bedroom', 'Dining space']
+export const GALLERY_TEASER: Photo[] = ['The villa, morning', 'The bedroom']
   .map((title) => GALLERY.find((photo) => photo.title === title))
   .filter((photo): photo is Photo => Boolean(photo));
 

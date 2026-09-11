@@ -115,7 +115,6 @@ const IMG = {
   villaNight: asset('villa-night.jpg'),
   bedroom: asset('Bedroom.jpg'),
   pet: asset('Pet%20View.jpg'),
-  statue: asset('Rabiguru%20Statue.jpg'),
   review1: asset('Review%201.jpg'),
   review2: asset('Review%202.jpg'),
   review3: asset('Review%203.jpg'),
@@ -159,14 +158,21 @@ const NEIGHBOURHOOD_TEASER = ['Prantik station', 'Visva-Bharati & Rabindra Bhava
   .map((title) => NEIGHBOURHOOD.flatMap((group) => group.places).find((place) => place.title === title))
   .filter((place): place is NonNullable<typeof place> => Boolean(place));
 
+/**
+ * The header menu, in the order a visitor meets these things.
+ *
+ * Anchors are listed in the order their sections appear down the homepage;
+ * "Our story" leads because the hero's own button points there. Reordering a
+ * section below means reordering its entry here — a menu whose order does not
+ * match the page makes people hunt.
+ */
 const NAV_ITEMS = [
   { label: 'Our story', href: `${basePath}/our-story` },
-  { label: 'Nearby', href: `${basePath}/places-to-visit-in-shantiniketan` },
   { label: 'Pet Friendly', href: '#pet-friendly' },
+  { label: 'Availability', href: '#availability' },
+  { label: 'Nearby', href: `${basePath}/places-to-visit-in-shantiniketan` },
   { label: 'Food', href: '#food' },
   { label: 'Gallery', href: `${basePath}/gallery` },
-  { label: 'Location', href: '#location' },
-  { label: 'Availability', href: '#booking' },
   { label: 'Reviews', href: '#reviews' },
 ];
 
@@ -473,9 +479,9 @@ function Home() {
                 Take your time.
               </p>
               <div className="mt-10 flex flex-wrap items-center gap-4">
-                <button onClick={scrollToBooking} className="group flex items-center gap-3 rounded-full bg-secondary px-6 py-4 text-xs font-bold uppercase tracking-[.12em] text-primary transition-all hover:-translate-y-1 hover:shadow-xl active:scale-95" data-testid="button-hero-book">
+                <a href="#availability" className="group flex items-center gap-3 rounded-full bg-secondary px-6 py-4 text-xs font-bold uppercase tracking-[.12em] text-primary transition-all hover:-translate-y-1 hover:shadow-xl active:scale-95" data-testid="button-hero-book">
                   Check availability <ArrowRight size={16} className="transition-transform group-hover:translate-x-1" />
-                </button>
+                </a>
                 <a href={`${basePath}/our-story`} className="flex items-center gap-2 rounded-full border border-white/30 px-6 py-4 text-xs font-bold uppercase tracking-[.12em] text-white transition-colors hover:bg-white/10" data-testid="link-hero-stay">
                   Read the story <ArrowUpRight size={15} />
                 </a>
@@ -529,117 +535,6 @@ function Home() {
           </div>
         </section>
 
-        {/* ------------------------------------------------- neighbourhood
-            A taste of it. All eighteen places, with their road distances from
-            the villa, live on /places-to-visit-in-shantiniketan — a page that
-            answers a question people ask Google before they have chosen
-            anywhere to stay. */}
-        <section id="experience" className="scroll-mt-24 section-shell py-24 md:py-32" aria-labelledby="experience-title">
-          <div className="flex flex-col justify-between gap-8 md:flex-row md:items-end">
-            <div>
-              <p className="eyebrow mb-5 text-accent">The neighbourhood</p>
-              <h2 id="experience-title" className="font-journal text-5xl leading-[.94] text-primary md:text-7xl">Make room<br /><em>for wandering.</em></h2>
-            </div>
-            <p className="max-w-[330px] text-sm leading-6 text-muted-foreground">
-              Shantiniketan is best met in fragments: a red-earth path, a market
-              pause, a late return home.
-            </p>
-          </div>
-
-          <div className="mt-12 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            {NEIGHBOURHOOD_TEASER.map((place) => (
-              <a
-                key={place.title}
-                href={`${basePath}/places-to-visit-in-shantiniketan`}
-                className="group flex items-start gap-4 rounded-[1.25rem] border border-border bg-card p-5 transition-colors hover:border-primary"
-                data-testid={`teaser-${place.title.toLowerCase().replace(/[^a-z]+/g, '-')}`}
-              >
-                <Landmark size={18} className="mt-1 shrink-0 text-primary/60" strokeWidth={1.4} />
-                <span className="min-w-0">
-                  <span className="block font-journal text-xl leading-tight text-primary">{place.title}</span>
-                  <span className="mt-1 block text-xs leading-5 text-muted-foreground">{place.note}</span>
-                  <span className="mt-2 block font-journal text-lg text-accent">{place.distance}</span>
-                </span>
-              </a>
-            ))}
-          </div>
-
-          <a
-            href={`${basePath}/places-to-visit-in-shantiniketan`}
-            className="mt-9 inline-flex items-center gap-2 text-xs font-bold uppercase tracking-[.1em] text-primary underline decoration-accent decoration-2 underline-offset-4"
-            data-testid="link-places-page"
-          >
-            Read more &mdash; all {NEIGHBOURHOOD_COUNT} places, with distances <ArrowUpRight size={14} />
-          </a>
-        </section>
-
-        <section id="food" className="scroll-mt-24 border-y border-border bg-card py-24 md:py-32" aria-labelledby="food-title">
-          <div className="section-shell"><div className="flex flex-col justify-between gap-8 md:flex-row md:items-end"><div><p className="eyebrow mb-5 text-accent">Eat at your pace</p><h2 id="food-title" className="font-journal text-5xl leading-[.94] text-primary md:text-7xl">A kitchen<br /><em>with options.</em></h2></div><p className="max-w-[290px] text-sm leading-6 text-muted-foreground">The best meal plan is the one that leaves room for another cup of tea.</p></div>
-            <div className="mt-14 grid gap-4 md:grid-cols-3">
-              {[
-                { icon: Sparkles, title: 'Cafe Soi', text: 'Cafe Soi is inside the premises when you want a meal without leaving your little orbit.' },
-                { icon: CookingPot, title: 'Make it yours', text: 'Basic cooking utensils, induction setup, microwave, refrigerator and a water filter are available.' },
-                { icon: HeartHandshake, title: 'Cooked with care', text: 'Ask the caretaker about the home-cooked meal option. Zomato is available too.' },
-              ].map(({ icon: Icon, title, text }, index) => <div key={title} className={`lift rounded-[1.4rem] p-7 ${index === 1 ? 'bg-primary text-primary-foreground' : 'border border-border bg-background'}`}><Icon size={24} className={index === 1 ? 'text-secondary' : 'text-accent'} strokeWidth={1.4} /><p className="mt-16 font-journal text-3xl">{title}</p><p className={`mt-4 text-sm leading-6 ${index === 1 ? 'text-primary-foreground/70' : 'text-muted-foreground'}`}>{text}</p></div>)}
-            </div>
-          </div>
-        </section>
-
-        {/* ------------------------------------------------------- gallery
-            A teaser, not the gallery. The twelve photographs live on /gallery
-            so the homepage does not make every visitor download a megabyte of
-            pictures to reach the enquiry form below them. */}
-        <section id="gallery" className="scroll-mt-24 section-shell py-24 md:py-36" aria-labelledby="gallery-title">
-          <div className="flex flex-col justify-between gap-8 md:flex-row md:items-end">
-            <div>
-              <p className="eyebrow mb-5 text-accent">A visual diary</p>
-              <h2 id="gallery-title" className="font-journal text-5xl leading-[.94] text-primary md:text-7xl">A look<br /><em>around home.</em></h2>
-            </div>
-            <a
-              href={`${basePath}/gallery`}
-              className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-[.1em] text-primary underline decoration-accent decoration-2 underline-offset-4"
-              data-testid="link-gallery-page"
-            >
-              See all photos <ArrowUpRight size={14} />
-            </a>
-          </div>
-          <div className="mt-12 grid grid-cols-2 gap-3 md:grid-cols-4 md:gap-5">
-            {GALLERY_TEASER.map((photo) => (
-              <a
-                key={photo.file}
-                href={`${basePath}/gallery`}
-                className="group relative block min-h-[200px] overflow-hidden rounded-[1.25rem] md:min-h-[260px]"
-                data-testid={`gallery-teaser-${photo.file.split('.')[0]!.toLowerCase().replace(/%20|\s/g, '-')}`}
-              >
-                <img
-                  src={asset(photo.file)}
-                  alt={photo.alt}
-                  width={photo.width}
-                  height={photo.height}
-                  loading="lazy"
-                  decoding="async"
-                  className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.05]"
-                />
-                <div className="absolute inset-0 bg-gradient-to-t from-black/55 via-black/10 to-transparent" />
-                <div className="absolute inset-x-0 bottom-0 p-4">
-                  <p className="font-journal text-xl leading-none text-white">{photo.title}</p>
-                </div>
-              </a>
-            ))}
-          </div>
-        </section>
-
-        <section id="location" className="scroll-mt-24 bg-primary py-24 text-primary-foreground md:py-32" aria-labelledby="location-title">
-          <div className="section-shell grid items-center gap-12 lg:grid-cols-[1fr_1fr] lg:gap-24">
-            <div><p className="eyebrow mb-5 text-secondary">Find your way here</p><h2 id="location-title" className="font-journal text-5xl leading-[.94] md:text-7xl">A softer<br /><em>kind of away.</em></h2><p className="mt-8 max-w-[425px] text-lg leading-8 text-primary-foreground/70">In Bolpur / Shantiniketan, West Bengal. Follow the map, then let the pace change.</p><div className="mt-9 flex flex-wrap gap-3"><a href={CONFIG.mapsUrl} target="_blank" rel="noreferrer" className="flex items-center gap-2 rounded-full bg-secondary px-5 py-3 text-xs font-bold uppercase tracking-[.1em] text-primary transition-transform hover:-translate-y-1" data-testid="link-directions"><Navigation size={15} /> Open directions</a><a href={phoneHref(CONFIG.caretakerPhone)} className="flex items-center gap-2 rounded-full border border-primary-foreground/25 px-5 py-3 text-xs font-bold uppercase tracking-[.1em] text-primary-foreground transition-colors hover:bg-primary-foreground/10" data-testid="link-caretaker-call"><Phone size={15} /> Call caretaker</a></div></div>
-            <img
-              src={IMG.statue}
-              alt="Rabindra statue near Raj Kuthir, Shantiniketan"
-              className="min-h-[380px] w-full rounded-[2rem] object-cover md:min-h-[460px]"
-            />
-          </div>
-        </section>
-
         {/* ------------------------------------------- dates and enquiry
             One banner, not two sections. The calendar and the enquiry form
             were the same job split across two stops on the page: people read
@@ -674,7 +569,7 @@ function Home() {
             </div>
 
             <div className="mt-12 space-y-5">
-          <div className="grid gap-5 lg:grid-cols-[.78fr_1.22fr]">
+          <div id="availability" className="scroll-mt-24 grid gap-5 lg:grid-cols-[.78fr_1.22fr]">
             <div className="flex min-h-[420px] flex-col justify-between rounded-[1.5rem] border border-border bg-card p-6 md:p-8">
               <div>
                 <p className="eyebrow text-accent">Live availability</p>
@@ -754,6 +649,106 @@ function Home() {
           </div>
         </section>
 
+        {/* ------------------------------------------------- neighbourhood
+            A taste of it. All eighteen places, with their road distances from
+            the villa, live on /places-to-visit-in-shantiniketan — a page that
+            answers a question people ask Google before they have chosen
+            anywhere to stay. */}
+        <section id="experience" className="scroll-mt-24 section-shell py-24 md:py-32" aria-labelledby="experience-title">
+          <div className="flex flex-col justify-between gap-8 md:flex-row md:items-end">
+            <div>
+              <p className="eyebrow mb-5 text-accent">The neighbourhood</p>
+              <h2 id="experience-title" className="font-journal text-5xl leading-[.94] text-primary md:text-7xl">Make room<br /><em>for wandering.</em></h2>
+            </div>
+            <p className="max-w-[330px] text-sm leading-6 text-muted-foreground">
+              Shantiniketan is best met in fragments: a red-earth path, a market
+              pause, a late return home.
+            </p>
+          </div>
+
+          <div className="mt-12 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            {NEIGHBOURHOOD_TEASER.map((place) => (
+              <a
+                key={place.title}
+                href={`${basePath}/places-to-visit-in-shantiniketan`}
+                className="group flex items-start gap-4 rounded-[1.25rem] border border-border bg-card p-5 transition-colors hover:border-primary"
+                data-testid={`teaser-${place.title.toLowerCase().replace(/[^a-z]+/g, '-')}`}
+              >
+                <Landmark size={18} className="mt-1 shrink-0 text-primary/60" strokeWidth={1.4} />
+                <span className="min-w-0">
+                  <span className="block font-journal text-xl leading-tight text-primary">{place.title}</span>
+                  <span className="mt-1 block text-xs leading-5 text-muted-foreground">{place.note}</span>
+                  <span className="mt-2 block font-journal text-lg text-accent">{place.distance}</span>
+                </span>
+              </a>
+            ))}
+          </div>
+
+          <a
+            href={`${basePath}/places-to-visit-in-shantiniketan`}
+            className="mt-9 inline-flex items-center gap-2 text-xs font-bold uppercase tracking-[.1em] text-primary underline decoration-accent decoration-2 underline-offset-4"
+            data-testid="link-places-page"
+          >
+            Read more &mdash; all {NEIGHBOURHOOD_COUNT} places, with distances <ArrowUpRight size={14} />
+          </a>
+        </section>
+
+        <section id="food" className="scroll-mt-24 border-y border-border bg-card py-24 md:py-32" aria-labelledby="food-title">
+          <div className="section-shell"><div className="flex flex-col justify-between gap-8 md:flex-row md:items-end"><div><p className="eyebrow mb-5 text-accent">Eat at your pace</p><h2 id="food-title" className="font-journal text-5xl leading-[.94] text-primary md:text-7xl">A kitchen<br /><em>with options.</em></h2></div><p className="max-w-[290px] text-sm leading-6 text-muted-foreground">The best meal plan is the one that leaves room for another cup of tea.</p></div>
+            <div className="mt-14 grid gap-4 md:grid-cols-3">
+              {[
+                { icon: Sparkles, title: 'Cafe Soi', text: 'Cafe Soi is inside the premises when you want a meal without leaving your little orbit.' },
+                { icon: CookingPot, title: 'Make it yours', text: 'Basic cooking utensils, induction setup, microwave, refrigerator and a water filter are available.' },
+                { icon: HeartHandshake, title: 'Cooked with care', text: 'Ask the caretaker about the home-cooked meal option. Zomato is available too.' },
+              ].map(({ icon: Icon, title, text }, index) => <div key={title} className={`lift rounded-[1.4rem] p-7 ${index === 1 ? 'bg-primary text-primary-foreground' : 'border border-border bg-background'}`}><Icon size={24} className={index === 1 ? 'text-secondary' : 'text-accent'} strokeWidth={1.4} /><p className="mt-16 font-journal text-3xl">{title}</p><p className={`mt-4 text-sm leading-6 ${index === 1 ? 'text-primary-foreground/70' : 'text-muted-foreground'}`}>{text}</p></div>)}
+            </div>
+          </div>
+        </section>
+
+        {/* ------------------------------------------------------- gallery
+            A teaser, not the gallery. The twelve photographs live on /gallery
+            so the homepage does not make every visitor download a megabyte of
+            pictures to reach the enquiry form below them. */}
+        <section id="gallery" className="scroll-mt-24 section-shell py-24 md:py-36" aria-labelledby="gallery-title">
+          <div className="flex flex-col justify-between gap-8 md:flex-row md:items-end">
+            <div>
+              <p className="eyebrow mb-5 text-accent">A visual diary</p>
+              <h2 id="gallery-title" className="font-journal text-5xl leading-[.94] text-primary md:text-7xl">A look<br /><em>around home.</em></h2>
+            </div>
+            <a
+              href={`${basePath}/gallery`}
+              className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-[.1em] text-primary underline decoration-accent decoration-2 underline-offset-4"
+              data-testid="link-gallery-page"
+            >
+              View all photos <ArrowUpRight size={14} />
+            </a>
+          </div>
+          <div className="mt-12 grid gap-4 sm:grid-cols-2 md:gap-5">
+            {GALLERY_TEASER.map((photo) => (
+              <a
+                key={photo.file}
+                href={`${basePath}/gallery`}
+                className="group relative block min-h-[280px] overflow-hidden rounded-[1.4rem] md:min-h-[420px]"
+                data-testid={`gallery-teaser-${photo.file.split('.')[0]!.toLowerCase().replace(/%20|\s/g, '-')}`}
+              >
+                <img
+                  src={asset(photo.file)}
+                  alt={photo.alt}
+                  width={photo.width}
+                  height={photo.height}
+                  loading="lazy"
+                  decoding="async"
+                  className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.05]"
+                />
+                <div className="absolute inset-0 bg-gradient-to-t from-black/55 via-black/10 to-transparent" />
+                <div className="absolute inset-x-0 bottom-0 p-4">
+                  <p className="font-journal text-2xl leading-none text-white md:text-3xl">{photo.title}</p>
+                </div>
+              </a>
+            ))}
+          </div>
+        </section>
+
         <section id="posters" className="scroll-mt-24 bg-primary py-24 text-primary-foreground md:py-32" aria-labelledby="posters-title">
           <div className="section-shell">
             <div className="flex flex-col justify-between gap-8 md:flex-row md:items-end">
@@ -808,19 +803,35 @@ function Home() {
         <div className="section-shell"><div className="grid gap-12 border-b border-[#f5eadb]/15 pb-12 md:grid-cols-[1.2fr_.8fr_.8fr]"><div><div className="flex items-center gap-3"><span className="grid h-10 w-10 place-items-center rounded-full bg-[#e4c9a4] text-[#172d25]"><Leaf size={19} /></span><span><span className="block font-mono-ui text-[10px] tracking-[.18em] text-[#f5eadb]/70">RAJ KUTHIR</span><span className="font-journal text-2xl">Homestays</span></span></div><p className="mt-6 max-w-[300px] text-sm leading-6 text-[#f5eadb]/60">Sobuj Potro — a private home in nature, in Bolpur / Shantiniketan.</p></div><div><p className="eyebrow mb-5 text-[#e4c9a4]">Explore</p><div className="flex flex-col items-start gap-3 text-sm text-[#f5eadb]/70"><a href={`${basePath}/our-story`} className="transition-colors hover:text-[#e4c9a4]" data-testid="link-footer-story">Our story</a><a href={`${basePath}/places-to-visit-in-shantiniketan`} className="transition-colors hover:text-[#e4c9a4]" data-testid="link-footer-places">Places to visit</a><a href={`${basePath}/gallery`} className="transition-colors hover:text-[#e4c9a4]" data-testid="link-footer-gallery">Photos</a><a href={`${basePath}/pet-friendly-homestay-shantiniketan`} className="transition-colors hover:text-[#e4c9a4]" data-testid="link-footer-pet">Staying with a pet</a><a href={`${basePath}/house-rules`} className="transition-colors hover:text-[#e4c9a4]" data-testid="link-footer-house-rules">House rules</a><a href={`${basePath}/welcome`} className="transition-colors hover:text-[#e4c9a4]" data-testid="link-footer-welcome">Arriving guests</a></div></div><div><p className="eyebrow mb-5 text-[#e4c9a4]">Connect</p><div className="flex flex-col items-start gap-3 text-sm text-[#f5eadb]/70"><a href={CONFIG.instagramUrl} target="_blank" rel="noreferrer" className="flex items-center gap-2 hover:text-[#e4c9a4]" data-testid="link-footer-instagram"><Instagram size={15} /> Instagram</a><a href={CONFIG.reviewUrl} target="_blank" rel="noreferrer" className="flex items-center gap-2 hover:text-[#e4c9a4]" data-testid="link-footer-review"><Star size={15} /> Google Reviews</a><a href={phoneHref(CONFIG.hostPhone)} className="flex items-center gap-2 hover:text-[#e4c9a4]" data-testid="link-footer-call"><Phone size={15} /> {CONFIG.hostPhone}</a></div></div></div><div className="flex flex-col justify-between gap-4 pt-6 text-[10px] uppercase tracking-[.13em] text-[#f5eadb]/40 sm:flex-row"><p>© {new Date().getFullYear()} Raj Kuthir Homestays</p><p>Made for slower days</p></div></div>
       </footer>
 
-      {/* The other half of the arrival answer: a button that follows the guest
-          down every page. On a phone it sits clear of the contact bar below it;
-          on a laptop it takes the bottom-right corner, where nothing else is. */}
-      <a
-        href={`${basePath}/welcome`}
-        onClick={() => track('arrival_pack_click', { placement: 'floating' })}
-        className="group fixed bottom-[5.4rem] right-3 z-40 flex items-center gap-2 rounded-full bg-primary px-4 py-3 text-primary-foreground shadow-xl ring-1 ring-secondary/25 transition-transform hover:-translate-y-0.5 active:scale-95 md:bottom-6 md:right-6 md:gap-3 md:px-5 md:py-4"
-        aria-label="Open my arrival pack — for guests with a confirmed booking"
-        data-testid="link-floating-arrival"
-      >
-        <KeyRound size={17} strokeWidth={1.6} className="shrink-0" />
-        <span className="text-[11px] font-bold uppercase tracking-[.1em]">Arrival pack</span>
-      </a>
+      {/* The two things a guest needs that are not on the page: how to get
+          here, and what to do once they have booked. Both follow them down
+          every screen. The stack sits clear of the mobile contact bar below
+          it; on a laptop it takes the bottom-right corner, where nothing
+          else lives. */}
+      <div className="fixed bottom-[5.4rem] right-3 z-40 flex flex-col items-end gap-2 md:bottom-6 md:right-6">
+        <a
+          href={CONFIG.mapsUrl}
+          target="_blank"
+          rel="noreferrer"
+          onClick={() => track('directions_click', { placement: 'floating' })}
+          className="group flex items-center gap-2 rounded-full bg-secondary px-4 py-3 text-primary shadow-xl ring-1 ring-primary/15 transition-transform hover:-translate-y-0.5 active:scale-95 md:gap-3 md:px-5 md:py-4"
+          aria-label="Get directions to Raj Kuthir Homestays on Google Maps"
+          data-testid="link-floating-directions"
+        >
+          <Navigation size={17} strokeWidth={1.7} className="shrink-0" />
+          <span className="text-[11px] font-bold uppercase tracking-[.1em]">Get directions</span>
+        </a>
+        <a
+          href={`${basePath}/welcome`}
+          onClick={() => track('arrival_pack_click', { placement: 'floating' })}
+          className="group flex items-center gap-2 rounded-full bg-primary px-4 py-3 text-primary-foreground shadow-xl ring-1 ring-secondary/25 transition-transform hover:-translate-y-0.5 active:scale-95 md:gap-3 md:px-5 md:py-4"
+          aria-label="Open my arrival pack — for guests with a confirmed booking"
+          data-testid="link-floating-arrival"
+        >
+          <KeyRound size={17} strokeWidth={1.6} className="shrink-0" />
+          <span className="text-[11px] font-bold uppercase tracking-[.1em]">Arrival pack</span>
+        </a>
+      </div>
 
       <div className="fixed inset-x-3 bottom-3 z-40 flex items-center gap-2 rounded-full border border-border bg-background/95 p-2 shadow-lg backdrop-blur-md md:hidden" data-testid="mobile-contact-bar"><a href={phoneHref(CONFIG.hostPhone)} className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-secondary text-primary" aria-label="Call host" data-testid="button-sticky-call"><Phone size={18} /></a><a href={whatsappUrl} target="_blank" rel="noreferrer" className="flex flex-1 items-center justify-center gap-2 rounded-full bg-primary py-3 text-xs font-bold uppercase tracking-[.1em] text-primary-foreground" data-testid="button-sticky-whatsapp"><MessageCircle size={16} /> Enquire on WhatsApp</a><button onClick={scrollToBooking} className="grid h-11 w-11 shrink-0 place-items-center rounded-full border border-border text-primary" aria-label="Book now" data-testid="button-sticky-book"><CalendarDays size={18} /></button></div>
     </div>
