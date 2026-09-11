@@ -12,6 +12,7 @@ export const CALENDAR_PUBLIC_KEY = ['/api/calendar/public'];
 export const SYNC_STATUS_KEY = ['/api/calendar/sync-status'];
 export const FEED_INFO_KEY = ['/api/calendar/feed-info'];
 export const FEED_SOURCES_KEY = ['/api/calendar/feed-sources'];
+export const MAIL_ACCOUNTS_KEY = ['/api/mail/accounts'];
 
 export type AdminSession = {
   signedIn: boolean;
@@ -208,6 +209,178 @@ export function useFeedInfo(enabled: boolean) {
     enabled,
     retry: false,
     staleTime: 5 * 60_000,
+  });
+}
+
+/* ---------------------------------------------------------------------- *
+ * Booking emails
+ *
+ * Some channels announce a booking by email rather than by putting it on a
+ * calendar feed, so the server reads a mailbox over IMAP and parses the
+ * vouchers. These hooks drive that from the owner console.
+ *
+ * Note what is missing: there is no hook that reads a mailbox password back.
+ * The server has no endpoint for it either — a password can be written and
+ * replaced, never retrieved. `MailAccount` is the whole of what the browser
+ * is ever told about a mailbox.
+ * ---------------------------------------------------------------------- */
+
+export type MailAccount = {
+  id: string;
+  label: string;
+  host: string;
+  port: number;
+  secure: boolean;
+  username: string;
+  folder: string;
+  enabled: boolean;
+  /** Highest IMAP message number already read, so mail is never read twice. */
+  lastSeenUid: number;
+  lastCheckedAt: string | null;
+  lastError: string | null;
+};
+
+export type MailSyncAccountResult = {
+  accountId: string;
+  label: string;
+  status: 'ok' | 'error';
+  scanned: number;
+  matched: number;
+  imported: number;
+  uidValidityReset: boolean;
+  highestUid: number;
+  message: string;
+};
+
+export type MailSyncResult = {
+  syncedAt: string;
+  accounts: MailSyncAccountResult[];
+  imported: number;
+};
+
+export type MailAccountsResponse = {
+  accounts: MailAccount[];
+  /** False when MAIL_ENCRYPTION_KEY is unusable; nothing can sync until it is. */
+  encryptionConfigured: boolean;
+  /** Why it is unusable, in words. Never contains any part of the key. */
+  encryptionProblem: string | null;
+  lastSync: MailSyncResult | null;
+  running: boolean;
+};
+
+export type NewMailbox = {
+  label: string;
+  host: string;
+  port: number;
+  username: string;
+  password: string;
+  folder: string;
+  secure: boolean;
+};
+
+export function useMailAccounts(enabled: boolean) {
+  return useQuery({
+    queryKey: MAIL_ACCOUNTS_KEY,
+    queryFn: () => adminFetch<MailAccountsResponse>('/api/mail/accounts'),
+    enabled,
+    retry: false,
+    staleTime: 30_000,
+  });
+}
+
+export function useAddMailbox() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (mailbox: NewMailbox) =>
+      adminFetch<{ account: MailAccount }>('/api/mail/accounts', {
+        method: 'POST',
+        body: JSON.stringify(mailbox),
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: MAIL_ACCOUNTS_KEY });
+    },
+  });
+}
+
+/**
+ * Changes one mailbox. Send only the fields that changed.
+ *
+ * An omitted or empty `password` leaves the stored one untouched — the server
+ * treats a blank field as "leave it alone" rather than "erase it", so the
+ * form can safely post without one.
+ */
+export function useUpdateMailbox() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({
+      id,
+      ...patch
+    }: { id: string } & Partial<Omit<NewMailbox, 'secure'>> & {
+        enabled?: boolean;
+      }) =>
+      adminFetch<{ account: MailAccount }>(`/api/mail/accounts/${id}`, {
+        method: 'PATCH',
+        body: JSON.stringify(patch),
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: MAIL_ACCOUNTS_KEY });
+    },
+  });
+}
+
+export function useDeleteMailbox() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (id: string) =>
+      adminFetch<{ deleted: boolean }>(`/api/mail/accounts/${id}`, {
+        method: 'DELETE',
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: MAIL_ACCOUNTS_KEY });
+    },
+  });
+}
+
+/**
+ * Forgets how far this mailbox was read, so the next check starts from the
+ * beginning of the folder. For after a parser fix, when mail that was passed
+ * over needs a second look. Safe to run: a booking is saved against the
+ * channel's own reference, so re-reading the same mail cannot duplicate it.
+ */
+export function useRewindMailbox() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (id: string) =>
+      adminFetch<{ rewound: boolean }>(`/api/mail/accounts/${id}/rewind`, {
+        method: 'POST',
+        body: JSON.stringify({}),
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: MAIL_ACCOUNTS_KEY });
+    },
+  });
+}
+
+export function useRunMailSync() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: () =>
+      adminFetch<{ result: MailSyncResult }>('/api/mail/sync', {
+        method: 'POST',
+        body: JSON.stringify({}),
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: MAIL_ACCOUNTS_KEY });
+      // An imported booking becomes a calendar event, so the calendar and the
+      // sync counters on this page are both stale now.
+      queryClient.invalidateQueries({ queryKey: CALENDAR_EVENTS_KEY });
+      queryClient.invalidateQueries({ queryKey: SYNC_STATUS_KEY });
+    },
   });
 }
 
