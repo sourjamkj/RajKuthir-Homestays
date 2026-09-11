@@ -3,6 +3,11 @@
   "compilerOptions": {
     "incremental": true,
     "tsBuildInfoFile": ".tsbuildinfo",
+    // The modules the tests load import each other with explicit .ts
+    // extensions, because `node --test` runs them as ESM and resolves the
+    // specifier literally. tsc has to accept the same spelling; it never
+    // emits here (typecheck is --noEmit, the bundle is esbuild's).
+    "allowImportingTsExtensions": true,
     "outDir": "dist",
     "rootDir": "src",
     "types": [
