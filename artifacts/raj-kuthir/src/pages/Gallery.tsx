@@ -1,7 +1,7 @@
-import { useEffect } from 'react';
-import { ArrowLeft, ArrowUpRight, Leaf, MessageCircle, Phone } from 'lucide-react';
+import { useEffect, useRef } from 'react';
+import { ArrowLeft, ArrowUpRight, ChevronLeft, ChevronRight, Leaf, MessageCircle } from 'lucide-react';
 
-import { CONFIG, asset, basePath, phoneHref, track } from '@/lib/site';
+import { asset, basePath, track } from '@/lib/site';
 
 /**
  * The photographs, on a page of their own.
@@ -15,6 +15,14 @@ import { CONFIG, asset, basePath, phoneHref, track } from '@/lib/site';
  * Here everything is rendered, grouped rather than filtered, so all twelve
  * photographs are in the markup at once. Only the first two load eagerly —
  * the rest wait until they are near the viewport.
+ *
+ * Each group is a carousel rather than a grid, which is what keeps the page
+ * to a couple of screens instead of six. It is deliberately built on native
+ * horizontal scrolling with CSS snap points, not a slider library: every
+ * photograph stays in the DOM and in the markup a crawler reads, it swipes on
+ * a phone without any JavaScript at all, and the arrows are a convenience on
+ * top rather than the only way through. A slider that mounts one slide at a
+ * time would hide eleven of the twelve from Google Images.
  *
  * Every `width`/`height` below is measured from the file in public/, not
  * guessed. The browser uses them to reserve the right space before the image
@@ -175,6 +183,75 @@ export const GALLERY_TEASER: Photo[] = ['The villa, morning', 'The bedroom']
   .map((title) => GALLERY.find((photo) => photo.title === title))
   .filter((photo): photo is Photo => Boolean(photo));
 
+
+/**
+ * One group's photographs, as a swipeable rail.
+ *
+ * `scroll-snap` does the work. The arrows nudge by most of the visible width
+ * rather than exactly one card, so a partially visible photograph at the edge
+ * is a hint that there is more, not a thing that gets skipped.
+ */
+function PhotoRail({ photos, label, startEager }: { photos: Photo[]; label: string; startEager: boolean }) {
+  const rail = useRef<HTMLDivElement>(null);
+
+  const nudge = (direction: 1 | -1) => {
+    const el = rail.current;
+    if (!el) return;
+    el.scrollBy({ left: direction * el.clientWidth * 0.82, behavior: 'smooth' });
+  };
+
+  return (
+    <div className="relative mt-8">
+      <div
+        ref={rail}
+        role="region"
+        aria-label={label}
+        tabIndex={0}
+        className="flex snap-x snap-mandatory gap-4 overflow-x-auto scroll-smooth pb-3 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+      >
+        {photos.map((photo, index) => (
+          <figure
+            key={photo.file}
+            className="group relative m-0 aspect-[4/3] w-[82%] shrink-0 snap-start overflow-hidden rounded-[1.4rem] sm:w-[52%] lg:w-[38%]"
+            data-testid={`gallery-photo-${photo.file.split('.')[0]!.toLowerCase().replace(/%20|\s/g, '-')}`}
+          >
+            <img
+              src={asset(photo.file)}
+              alt={photo.alt}
+              width={photo.width}
+              height={photo.height}
+              loading={startEager && index === 0 ? 'eager' : 'lazy'}
+              decoding="async"
+              className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.04]"
+            />
+            <div className="absolute inset-0 bg-gradient-to-t from-black/55 via-black/10 to-transparent" />
+            <figcaption className="absolute inset-x-0 bottom-0 p-4">
+              <p className="font-journal text-2xl leading-none text-white">{photo.title}</p>
+            </figcaption>
+          </figure>
+        ))}
+      </div>
+
+      <button
+        type="button"
+        onClick={() => nudge(-1)}
+        aria-label={`Scroll ${label} back`}
+        className="absolute -left-2 top-1/2 hidden h-11 w-11 -translate-y-1/2 place-items-center rounded-full border border-border bg-background/95 text-primary shadow-lg backdrop-blur transition-colors hover:border-primary sm:grid"
+      >
+        <ChevronLeft size={18} />
+      </button>
+      <button
+        type="button"
+        onClick={() => nudge(1)}
+        aria-label={`Scroll ${label} forward`}
+        className="absolute -right-2 top-1/2 hidden h-11 w-11 -translate-y-1/2 place-items-center rounded-full border border-border bg-background/95 text-primary shadow-lg backdrop-blur transition-colors hover:border-primary sm:grid"
+      >
+        <ChevronRight size={18} />
+      </button>
+    </div>
+  );
+}
+
 export default function Gallery() {
   useEffect(() => {
     const previous = document.title;
@@ -183,8 +260,6 @@ export default function Gallery() {
       document.title = previous;
     };
   }, []);
-
-  let rendered = 0;
 
   return (
     <div className="min-h-[100dvh] bg-background text-foreground">
@@ -210,7 +285,7 @@ export default function Gallery() {
       </header>
 
       {/* Breadcrumb, matching the BreadcrumbList the server emits. */}
-      <nav aria-label="Breadcrumb" className="section-shell pt-8">
+      <nav aria-label="Breadcrumb" className="section-shell pt-7">
         <ol className="flex flex-wrap items-center gap-2 font-mono-ui text-[10px] uppercase tracking-[.14em] text-muted-foreground">
           <li><a href={`${basePath}/`} className="hover:text-primary" data-testid="link-gallery-crumb-home">Home</a></li>
           <li aria-hidden="true">/</li>
@@ -220,138 +295,79 @@ export default function Gallery() {
 
       <main>
         {/* ---------------------------------------------------------- hero */}
-        <section className="section-shell pb-14 pt-10 md:pb-20 md:pt-14" aria-labelledby="gallery-hero">
-          <p className="eyebrow mb-5 text-accent">A visual diary</p>
-          <h1 id="gallery-hero" className="max-w-[760px] font-journal text-[clamp(3rem,7vw,5.5rem)] leading-[.92] tracking-[-.035em] text-primary">
-            A look<br /><em>around home.</em>
+        <section className="section-shell pb-4 pt-8 md:pb-6 md:pt-10" aria-labelledby="gallery-hero">
+          <p className="eyebrow mb-4 text-accent">A visual diary</p>
+          <h1 id="gallery-hero" className="max-w-[760px] font-journal text-[clamp(2.6rem,6vw,4.6rem)] leading-[.94] tracking-[-.035em] text-primary">
+            A look <em>around home.</em>
           </h1>
-          <p className="mt-8 max-w-[560px] text-lg leading-8 text-primary/75">
-            {GALLERY.length} photographs of Sobuj Potro — the rooms as they are, the
-            garden, and the short walk into Shantiniketan. Nothing here is a stock
-            picture of somewhere else.
+          <p className="mt-5 max-w-[620px] text-base leading-7 text-muted-foreground">
+            {GALLERY.length} photographs of Sobuj Potro &mdash; the rooms as they
+            are, the garden, and the short walk into Shantiniketan. Swipe each
+            row. Nothing here is a stock picture of somewhere else.
           </p>
-          <div className="mt-9 flex flex-wrap gap-3">
-            <a
-              href={`${basePath}/#booking`}
-              onClick={() => track('check_availability', { placement: 'gallery_hero' })}
-              className="flex items-center gap-2 rounded-full bg-primary px-5 py-3 text-xs font-bold uppercase tracking-[.1em] text-primary-foreground transition-transform hover:-translate-y-0.5"
-              data-testid="link-gallery-hero-book"
-            >
-              Check availability <ArrowUpRight size={15} />
-            </a>
-            <a
-              href={`${basePath}/pet-friendly-homestay-shantiniketan`}
-              className="flex items-center gap-2 rounded-full border border-primary/25 px-5 py-3 text-xs font-bold uppercase tracking-[.1em] text-primary transition-colors hover:bg-primary/5"
-              data-testid="link-gallery-pet"
-            >
-              Staying here with a pet
-            </a>
-          </div>
         </section>
 
-        {/* -------------------------------------------------------- groups */}
+        {/* -------------------------------------------------------- rails */}
         {GROUPS.map((group, groupIndex) => (
           <section
             key={group.id}
             id={group.id}
-            className={`scroll-mt-24 py-16 md:py-24 ${groupIndex % 2 === 1 ? 'border-y border-border bg-card' : ''}`}
+            className={`scroll-mt-24 py-10 md:py-14 ${groupIndex % 2 === 1 ? 'border-y border-border bg-card' : ''}`}
             aria-labelledby={`${group.id}-title`}
           >
             <div className="section-shell">
-              <div className="grid gap-8 lg:grid-cols-[.8fr_1.2fr] lg:gap-16">
+              <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
                 <div>
-                  <p className="eyebrow mb-5 text-accent">{group.eyebrow}</p>
+                  <p className="eyebrow mb-3 text-accent">{group.eyebrow}</p>
                   <h2
                     id={`${group.id}-title`}
-                    className="whitespace-pre-line font-journal text-4xl leading-[.95] text-primary md:text-6xl"
+                    className="font-journal text-3xl leading-tight text-primary md:text-4xl"
                   >
-                    {group.heading}
+                    {group.heading.replace('\n', ' ')}
                   </h2>
                 </div>
-                <p className="max-w-[520px] self-end text-base leading-7 text-muted-foreground">
-                  {group.lede}
-                </p>
+                <p className="max-w-[540px] text-sm leading-6 text-muted-foreground">{group.lede}</p>
               </div>
 
-              <div className="mt-12 grid grid-cols-2 gap-3 md:grid-cols-3 md:gap-5">
-                {group.photos.map((photo) => {
-                  // The first two pictures on the page are what a visitor sees
-                  // immediately; everything after waits for the scroll.
-                  const eager = rendered++ < 2;
-                  return (
-                    <figure
-                      key={photo.file}
-                      className="group relative m-0 min-h-[220px] overflow-hidden rounded-[1.25rem] md:min-h-[300px]"
-                      data-testid={`gallery-photo-${photo.file.split('.')[0]!.toLowerCase().replace(/%20|\s/g, '-')}`}
-                    >
-                      <img
-                        src={asset(photo.file)}
-                        alt={photo.alt}
-                        width={photo.width}
-                        height={photo.height}
-                        loading={eager ? 'eager' : 'lazy'}
-                        decoding="async"
-                        className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.05]"
-                      />
-                      <div className="absolute inset-0 bg-gradient-to-t from-black/55 via-black/10 to-transparent" />
-                      <figcaption className="absolute inset-x-0 bottom-0 p-4">
-                        <p className="font-journal text-2xl leading-none text-white">{photo.title}</p>
-                      </figcaption>
-                    </figure>
-                  );
-                })}
-              </div>
+              <PhotoRail
+                photos={group.photos}
+                label={group.eyebrow}
+                startEager={groupIndex === 0}
+              />
             </div>
           </section>
         ))}
-
-        {/* ------------------------------------------------------ closing */}
-        <section className="bg-primary py-20 text-primary-foreground md:py-28" aria-labelledby="gallery-cta">
-          <div className="section-shell grid gap-10 lg:grid-cols-[1.1fr_.9fr] lg:items-end">
-            <div>
-              <p className="eyebrow mb-5 text-secondary">Seen enough</p>
-              <h2 id="gallery-cta" className="max-w-[540px] font-journal text-4xl leading-[.94] md:text-6xl">
-                The rest is<br /><em>better in person.</em>
-              </h2>
-              <p className="mt-7 max-w-[460px] text-lg leading-8 text-primary-foreground/70">
-                Tell us your dates and who is coming, and the host will confirm
-                availability directly. No payment is taken on this site.
-              </p>
-            </div>
-            <div className="flex flex-wrap gap-3 lg:justify-end">
-              <a
-                href={`${basePath}/#booking`}
-                onClick={() => track('check_availability', { placement: 'gallery_footer' })}
-                className="flex items-center gap-2 rounded-full bg-secondary px-5 py-3 text-xs font-bold uppercase tracking-[.1em] text-primary transition-transform hover:-translate-y-0.5"
-                data-testid="link-gallery-cta-book"
-              >
-                Enquire to stay <ArrowUpRight size={15} />
-              </a>
-              <a
-                href={`https://wa.me/916290399165?text=${encodeURIComponent(
-                  'Hello Raj Kuthir, I have been looking at the photos of Sobuj Potro and would like to enquire about a stay.',
-                )}`}
-                target="_blank"
-                rel="noreferrer"
-                onClick={() => track('whatsapp_click', { placement: 'gallery_footer' })}
-                className="flex items-center gap-2 rounded-full border border-primary-foreground/25 px-5 py-3 text-xs font-bold uppercase tracking-[.1em] text-primary-foreground transition-colors hover:bg-primary-foreground/10"
-                data-testid="link-gallery-whatsapp"
-              >
-                <MessageCircle size={15} /> WhatsApp
-              </a>
-              <a
-                href={phoneHref(CONFIG.hostPhone)}
-                className="flex items-center gap-2 rounded-full border border-primary-foreground/25 px-5 py-3 text-xs font-bold uppercase tracking-[.1em] text-primary-foreground transition-colors hover:bg-primary-foreground/10"
-                data-testid="link-gallery-call"
-              >
-                <Phone size={15} /> Call the host
-              </a>
-            </div>
-          </div>
-        </section>
       </main>
 
-      <footer className="bg-[#172d25] py-14 text-[#f5eadb]">
+      {/* The page's actions, floating rather than parked in a band at the
+          bottom. The point of a gallery is to look; the moment someone is
+          ready to ask, the button is already under their thumb. */}
+      <div className="fixed bottom-4 right-3 z-40 flex flex-col items-end gap-2 md:bottom-6 md:right-6">
+        <a
+          href={`${basePath}/#booking`}
+          onClick={() => track('check_availability', { placement: 'gallery_floating' })}
+          className="flex items-center gap-2 rounded-full bg-primary px-4 py-3 text-primary-foreground shadow-xl ring-1 ring-secondary/25 transition-transform hover:-translate-y-0.5 active:scale-95 md:gap-3 md:px-5 md:py-4"
+          data-testid="link-gallery-floating-book"
+        >
+          <span className="text-[11px] font-bold uppercase tracking-[.1em]">Check availability</span>
+          <ArrowUpRight size={16} className="shrink-0" />
+        </a>
+        <a
+          href={`https://wa.me/916290399165?text=${encodeURIComponent(
+            'Hello Raj Kuthir, I have been looking at the photos of Sobuj Potro and would like to enquire about a stay.',
+          )}`}
+          target="_blank"
+          rel="noreferrer"
+          onClick={() => track('whatsapp_click', { placement: 'gallery_floating' })}
+          className="flex items-center gap-2 rounded-full bg-secondary px-4 py-3 text-primary shadow-xl ring-1 ring-primary/15 transition-transform hover:-translate-y-0.5 active:scale-95 md:gap-3 md:px-5 md:py-4"
+          data-testid="link-gallery-whatsapp"
+        >
+          <MessageCircle size={16} className="shrink-0" />
+          <span className="text-[11px] font-bold uppercase tracking-[.1em]">WhatsApp</span>
+        </a>
+      </div>
+
+      <footer className="bg-[#172d25] py-12 pb-24 text-[#f5eadb] md:pb-12">
         <div className="section-shell flex flex-col justify-between gap-6 sm:flex-row sm:items-center">
           <div>
             <p className="font-journal text-2xl">Raj Kuthir Homestays</p>
@@ -361,9 +377,9 @@ export default function Gallery() {
           </div>
           <div className="flex flex-col gap-2 text-sm text-[#f5eadb]/70 sm:text-right">
             <a href={`${basePath}/`} className="hover:text-[#e4c9a4]">The stay</a>
-            <a href={`${basePath}/pet-friendly-homestay-shantiniketan`} className="hover:text-[#e4c9a4]">Staying with a pet</a>
+            <a href={`${basePath}/our-story`} className="hover:text-[#e4c9a4]">Our story</a>
+            <a href={`${basePath}/places-to-visit-in-shantiniketan`} className="hover:text-[#e4c9a4]">Places to visit</a>
             <a href={`${basePath}/house-rules`} className="hover:text-[#e4c9a4]">House rules</a>
-            <a href={`${basePath}/#booking`} className="hover:text-[#e4c9a4]">Check availability</a>
           </div>
         </div>
       </footer>

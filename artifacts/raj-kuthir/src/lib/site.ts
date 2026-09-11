@@ -29,7 +29,14 @@ export const CONFIG = {
   caretakerPhone: '+91 78726 85558',
   mapsUrl: 'https://maps.app.goo.gl/D1tUUb3JfpVdcHwu5',
   instagramUrl: 'https://www.instagram.com/rajkuthirhomestays?igsh=MTBkOWljNTZmbWttdg==',
+  /** The Maps listing — where a visitor goes to READ what guests have said. */
   reviewUrl: 'https://maps.app.goo.gl/Ptrm6eaXuXNoiXBbA?g_st=ac',
+  /**
+   * Google's own "write a review" deep link for this listing. It opens the
+   * review box directly instead of dropping someone on the listing to find it,
+   * which is the difference between a guest leaving a review and meaning to.
+   */
+  leaveReviewUrl: 'https://g.page/r/CR9H9DboJM75EBM/review',
 } as const;
 
 /**
