@@ -108,7 +108,14 @@ const clientDist = clientDistCandidates.find((p) => existsSync(p));
 
 if (clientDist) {
   logger.info({ clientDist }, "Serving frontend from disk");
-  app.use(express.static(clientDist));
+  // `index: false` is load-bearing, not tidiness. With the default,
+  // express.static answers a bare "/" with the built index.html straight off
+  // disk — the request never reaches the middleware below, so the homepage,
+  // and only the homepage, went out with the build's placeholder <title>, no
+  // JSON-LD and no analytics tag while every other route was injected
+  // correctly. Turning the directory index off makes "/" fall through like
+  // everything else. seo.test.ts asserts this option is still set.
+  app.use(express.static(clientDist, { index: false }));
 
   /**
    * The built index.html, read once. Railway restarts the process on every

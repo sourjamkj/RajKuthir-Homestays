@@ -162,7 +162,7 @@ export const PAGES: Record<string, PageMeta> = {
     title: "Private 2BHK Villa in Shantiniketan | Raj Kuthir Homestays",
     description:
       "An entire two-bedroom villa with a private garden in Bolpur, Shantiniketan. Pet-friendly, family-friendly, and bookable direct with the owner.",
-    lastmod: "2026-09-10",
+    lastmod: "2026-09-11",
     changefreq: "weekly",
     priority: "1.0",
   },
@@ -180,6 +180,20 @@ export const PAGES: Record<string, PageMeta> = {
     changefreq: "monthly",
     priority: "0.9",
     faq: PET_FRIENDLY_FAQ,
+  },
+  "/gallery": {
+    title: "Villa Photos in Shantiniketan | Raj Kuthir Homestays",
+    description:
+      "Every room, the garden and the walk outside \u2014 photographs of Sobuj Potro, the two-bedroom villa at Raj Kuthir Homestays in Bolpur, Shantiniketan.",
+    ogImage: {
+      url: `${SITE_ORIGIN}/External%20Villa%20Morning.jpg`,
+      width: 1448,
+      height: 1086,
+      alt: "Raj Kuthir Homestays, Sobuj Potro, from the garden on a clear morning",
+    },
+    lastmod: "2026-09-11",
+    changefreq: "monthly",
+    priority: "0.6",
   },
   "/house-rules": {
     title: "House Rules | Raj Kuthir Homestays, Shantiniketan",
@@ -210,6 +224,7 @@ const PRIVATE_PREFIXES = ["/admin", "/sign-in", "/welcome"];
  */
 const CLIENT_ROUTES = new Set([
   "/",
+  "/gallery",
   "/house-rules",
   "/pet-friendly-homestay-shantiniketan",
   "/welcome",

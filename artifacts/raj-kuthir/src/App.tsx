@@ -62,6 +62,7 @@ import AdminRates from '@/pages/AdminRates';
 import AdminGuests from '@/pages/AdminGuests';
 import HouseRules from '@/pages/HouseRules';
 import PetFriendly from '@/pages/PetFriendly';
+import Gallery, { GALLERY_TEASER } from '@/pages/Gallery';
 import Welcome from '@/pages/Welcome';
 import AdminGuestInfo from '@/pages/AdminGuestInfo';
 import {
@@ -71,7 +72,7 @@ import {
   formatRupeesCompact,
 } from '@/lib/rates';
 import { Route, Switch, useLocation, Router as WouterRouter } from 'wouter';
-import { CONFIG, NEIGHBOURHOOD, asset, basePath, phoneHref } from '@/lib/site';
+import { CONFIG, NEIGHBOURHOOD, asset, basePath, phoneHref, track } from '@/lib/site';
 import {
   ADMIN_SESSION_KEY,
   AdminApiError,
@@ -106,19 +107,14 @@ const queryClient: QueryClient = new QueryClient({
 
 // basePath, CONFIG and asset() now live in lib/site.ts — see the import above.
 
+// Photographs used by the homepage itself. The gallery's twelve live in
+// pages/Gallery.tsx with their measured dimensions and alt text; the four
+// shown in the teaser below come from there, not from here.
 const IMG = {
-  villaExterior: asset('External%20Villa%20Morning.jpg'),
-  villaDay: asset('villa-day.jpg'),
   villaNight: asset('villa-night.jpg'),
   bedroom: asset('Bedroom.jpg'),
-  dining: asset('Dining%20Space.jpg'),
   pet: asset('Pet%20View.jpg'),
   statue: asset('Rabiguru%20Statue.jpg'),
-  interiorBedroom: asset('interior-bedroom.jpg'),
-  interiorKitchen: asset('interior-kitchen.jpg'),
-  interiorLiving: asset('interior-living.jpg'),
-  interiorDining: asset('interior-dining.jpg'),
-  interiorEntrance: asset('interior-entrance.jpg'),
   review1: asset('Review%201.jpg'),
   review2: asset('Review%202.jpg'),
   review3: asset('Review%203.jpg'),
@@ -153,7 +149,7 @@ const NAV_ITEMS = [
   { label: 'Experience', href: '#experience' },
   { label: 'Pet Friendly', href: '#pet-friendly' },
   { label: 'Food', href: '#food' },
-  { label: 'Gallery', href: '#gallery' },
+  { label: 'Gallery', href: `${basePath}/gallery` },
   { label: 'Location', href: '#location' },
   { label: 'Availability', href: '#availability' },
   { label: 'Reviews', href: '#reviews' },
@@ -167,20 +163,6 @@ type BusyPeriod = {
   end: string;
 };
 
-const galleryItems = [
-  { title: 'External villa', category: 'Home', img: IMG.villaExterior, tone: 'sage' },
-  { title: 'Evening lights', category: 'Home', img: IMG.villaNight, tone: 'ink' },
-  { title: 'Under open sky', category: 'Nature', img: IMG.villaDay, tone: 'sage' },
-  { title: 'The bedroom', category: 'Home', img: IMG.bedroom, tone: 'clay' },
-  { title: 'Bedroom, evening', category: 'Home', img: IMG.interiorBedroom, tone: 'clay' },
-  { title: 'The living room', category: 'Home', img: IMG.interiorLiving, tone: 'clay' },
-  { title: 'The kitchen', category: 'Details', img: IMG.interiorKitchen, tone: 'ochre' },
-  { title: 'Dining space', category: 'Details', img: IMG.dining, tone: 'ochre' },
-  { title: 'Set for dinner', category: 'Details', img: IMG.interiorDining, tone: 'ochre' },
-  { title: 'The entrance', category: 'Details', img: IMG.interiorEntrance, tone: 'clay' },
-  { title: 'Rabindra statue', category: 'Nature', img: IMG.statue, tone: 'ink' },
-  { title: 'Pet friendly', category: 'Details', img: IMG.pet, tone: 'clay' },
-];
 
 const faqs = [
   {
@@ -237,7 +219,6 @@ const eventTouchesDay = (event: BusyPeriod, day: string) =>
 
 function Home() {
   const [menuOpen, setMenuOpen] = useState(false);
-  const [galleryFilter, setGalleryFilter] = useState('All');
   const [openFaq, setOpenFaq] = useState<number | null>(0);
   const [submitted, setSubmitted] = useState(false);
   const [calendarMonth, setCalendarMonth] = useState(() => new Date(new Date().getFullYear(), new Date().getMonth(), 1));
@@ -302,7 +283,6 @@ function Home() {
     const rates = Object.values(ratePlan.data?.rates ?? {});
     return rates.length ? Math.min(...rates) / 100 : null;
   }, [ratePlan.data]);
-  const filteredGallery = galleryFilter === 'All' ? galleryItems : galleryItems.filter((item) => item.category === galleryFilter);
   const busyPeriods = useMemo(
     () =>
       (publicCalendar.data?.blocks ?? []).map((block, index) => ({
@@ -437,38 +417,88 @@ function Home() {
       </header>
 
       <main id="top">
-        <section className="relative overflow-hidden pb-16 pt-32 md:pb-24 md:pt-40" aria-labelledby="hero-title">
-          <div className="absolute right-[-8rem] top-[-5rem] h-[28rem] w-[28rem] rounded-full bg-secondary/45 blur-3xl" aria-hidden="true" />
-          <div className="section-shell relative grid items-center gap-12 lg:grid-cols-[.9fr_1.1fr] lg:gap-20">
-            <div className="reveal">
-              <p className="eyebrow mb-6 text-accent">A private home in nature</p>
-              <h1 id="hero-title" className="max-w-[680px] font-journal text-[clamp(3.5rem,9vw,7.7rem)] leading-[.88] tracking-[-.045em] text-primary">
-                Stay for the<br /><em className="text-accent">unhurried</em> hours.
+        {/* --------------------------------------------------------- cover
+            The villa after sundown, full width, with the headline sitting in
+            the dark at the foot of the frame.
+
+            This photograph is the Largest Contentful Paint for the whole site,
+            so it is the one image that loads eagerly and at high priority —
+            everything else on the page waits its turn. Its dimensions are
+            declared so the browser reserves the frame before the bytes land,
+            which is what keeps the headline from jumping as it arrives. */}
+        <section className="relative isolate flex min-h-[clamp(560px,86vh,880px)] items-end overflow-hidden" aria-labelledby="hero-title">
+          <img
+            src={IMG.villaNight}
+            alt="Raj Kuthir Homestays, Sobuj Potro, lit up after sundown in Bolpur, Shantiniketan"
+            width={1600}
+            height={900}
+            loading="eager"
+            fetchPriority="high"
+            decoding="async"
+            className="absolute inset-0 h-full w-full object-cover"
+          />
+          {/* Two overlays rather than one: a vertical wash dark enough to carry
+              white type at the foot, and a soft vignette that keeps the eye on
+              the lit house rather than the corners. */}
+          <div className="absolute inset-0 bg-gradient-to-t from-[#0a1712]/92 via-[#0a1712]/45 to-[#0a1712]/5" aria-hidden="true" />
+          <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_50%_45%,transparent_30%,rgba(10,23,18,.6)_100%)]" aria-hidden="true" />
+
+          <div className="section-shell relative z-10 w-full pb-14 pt-40 md:pb-20 md:pt-48">
+            <div className="reveal max-w-[820px]">
+              <span className="mb-7 flex items-center gap-3">
+                <span className="h-px w-10 bg-secondary/70" aria-hidden="true" />
+                <span className="whitespace-nowrap font-mono-ui text-[9px] uppercase tracking-[.22em] text-secondary sm:text-[10px] sm:tracking-[.3em]">Bolpur &middot; Shantiniketan</span>
+              </span>
+              <h1 id="hero-title" className="font-journal text-[clamp(3.1rem,8.4vw,7rem)] leading-[.9] tracking-[-.04em] text-white [text-wrap:balance]">
+                Stay for the<br /><em className="text-secondary">unhurried</em> hours.
               </h1>
-              <p className="mt-8 max-w-[475px] text-[15px] leading-7 text-muted-foreground md:text-[17px]">
-                An entire two-bedroom villa in Bolpur, made for couples, families and the four-legged members of the family. Come to Shantiniketan. Take your time.
+              <p className="mt-8 max-w-[520px] text-[15px] leading-7 text-white/75 md:text-[17px]">
+                An entire two-bedroom villa in Bolpur, made for couples, families
+                and the four-legged members of the family. Come to Shantiniketan.
+                Take your time.
               </p>
-              <div className="mt-9 flex flex-wrap items-center gap-4">
-                <button onClick={scrollToBooking} className="group flex items-center gap-3 rounded-full bg-primary px-6 py-4 text-xs font-bold uppercase tracking-[.12em] text-primary-foreground transition-all hover:-translate-y-1 hover:shadow-lg active:scale-95" data-testid="button-hero-book">
+              <div className="mt-10 flex flex-wrap items-center gap-4">
+                <button onClick={scrollToBooking} className="group flex items-center gap-3 rounded-full bg-secondary px-6 py-4 text-xs font-bold uppercase tracking-[.12em] text-primary transition-all hover:-translate-y-1 hover:shadow-xl active:scale-95" data-testid="button-hero-book">
                   Check availability <ArrowRight size={16} className="transition-transform group-hover:translate-x-1" />
                 </button>
-                <a href="#stay" className="flex items-center gap-2 px-2 py-3 text-xs font-bold uppercase tracking-[.12em] text-primary" data-testid="link-hero-stay">
+                <a href="#stay" className="flex items-center gap-2 rounded-full border border-white/30 px-6 py-4 text-xs font-bold uppercase tracking-[.12em] text-white transition-colors hover:bg-white/10" data-testid="link-hero-stay">
                   Read the story <ArrowUpRight size={15} />
                 </a>
               </div>
-              <p className="mt-7 flex items-center gap-2 text-xs text-muted-foreground"><MapPin size={14} className="text-accent" /> {CONFIG.place}</p>
             </div>
-            <div className="reveal reveal-delay-2 relative">
-              <img
-                src={IMG.villaExterior}
-                alt="Raj Kuthir Homestays villa exterior in the morning"
-                className="min-h-[410px] w-full rounded-[2rem] object-cover shadow-xl md:min-h-[560px]"
-              />
-              <div className="absolute -bottom-5 -left-4 hidden max-w-[190px] rounded-2xl bg-secondary px-5 py-4 text-primary shadow-lg sm:block">
-                <p className="font-journal text-xl leading-tight">A home, not a room.</p>
-                <p className="mt-2 font-mono-ui text-[9px] uppercase tracking-[.13em]">Entire villa · private garden</p>
+          </div>
+        </section>
+
+        {/* --------------------------------------------------- arriving guests
+            Directly under the cover, and repeated as a floating button at the
+            corner of every screen. Someone who has already booked is usually
+            standing at the gate on a phone, not browsing — they should never
+            have to scroll a marketing page to find the door code. */}
+        <section id="arrival" className="scroll-mt-24 border-b border-primary/10 bg-secondary py-14 md:py-16" aria-labelledby="arriving-title">
+          <div className="section-shell flex flex-col items-start justify-between gap-8 md:flex-row md:items-center">
+            <div className="flex items-start gap-5">
+              <span className="grid h-14 w-14 shrink-0 place-items-center rounded-full bg-primary text-secondary">
+                <KeyRound size={24} strokeWidth={1.5} />
+              </span>
+              <div>
+                <p className="eyebrow text-primary/70">Already booked with us?</p>
+                <h2 id="arriving-title" className="mt-2 font-journal text-4xl leading-[1.02] text-primary md:text-5xl">
+                  Your arrival details,<br className="hidden sm:block" /> ready when you are.
+                </h2>
+                <p className="mt-3 max-w-[520px] text-sm leading-6 text-primary/75">
+                  Directions, Wi-Fi, and who to call for what. Enter your booking
+                  reference to open it.
+                </p>
               </div>
             </div>
+            <a
+              href={`${basePath}/welcome`}
+              onClick={() => track('arrival_pack_click', { placement: 'band' })}
+              className="group flex shrink-0 items-center gap-3 rounded-full bg-primary px-7 py-4 text-xs font-bold uppercase tracking-[.12em] text-primary-foreground transition-all hover:-translate-y-1 hover:shadow-lg active:scale-95"
+              data-testid="link-guest-welcome"
+            >
+              Open my arrival pack <ArrowRight size={16} className="transition-transform group-hover:translate-x-1" />
+            </a>
           </div>
         </section>
 
@@ -485,68 +515,6 @@ function Home() {
                 <div><p className="text-sm font-bold text-primary">{title}</p><p className="mt-1 text-[11px] text-muted-foreground">{detail}</p></div>
               </div>
             ))}
-          </div>
-        </section>
-
-        {/* Arriving guests. Sits high on the page rather than in the footer,
-            because the person who needs it is usually standing at the gate on a
-            phone, not browsing. Distinct colour so it reads as a different kind
-            of thing from the marketing sections around it. */}
-        <section className="bg-secondary py-12 md:py-14" aria-labelledby="arriving-title">
-          <div className="section-shell flex flex-col items-start justify-between gap-7 md:flex-row md:items-center">
-            <div className="flex items-start gap-5">
-              <span className="grid h-12 w-12 shrink-0 place-items-center rounded-full bg-primary text-secondary">
-                <KeyRound size={21} strokeWidth={1.5} />
-              </span>
-              <div>
-                <p className="eyebrow text-primary/70">Already booked with us?</p>
-                <h2 id="arriving-title" className="mt-2 font-journal text-3xl leading-tight text-primary md:text-4xl">
-                  Your arrival details, ready when you are.
-                </h2>
-                <p className="mt-2 max-w-[520px] text-sm leading-6 text-primary/75">
-                  Directions, Wi-Fi, and who to call for what. Enter your booking reference to open it.
-                </p>
-              </div>
-            </div>
-            <a
-              href={`${basePath}/welcome`}
-              className="group flex shrink-0 items-center gap-3 rounded-full bg-primary px-7 py-4 text-xs font-bold uppercase tracking-[.12em] text-primary-foreground transition-all hover:-translate-y-1 hover:shadow-lg active:scale-95"
-              data-testid="link-guest-welcome"
-            >
-              Open my arrival pack <ArrowRight size={16} className="transition-transform group-hover:translate-x-1" />
-            </a>
-          </div>
-        </section>
-
-        <section className="section-shell py-24 md:py-36" aria-labelledby="intro-title">
-          <div className="grid gap-12 lg:grid-cols-[.75fr_1.25fr] lg:gap-28">
-            <div>
-              <p className="eyebrow mb-5 text-accent">The idea</p>
-              <h2 id="intro-title" className="font-journal text-5xl leading-[.95] text-primary md:text-7xl">Come as guests.<br /><em>Leave lighter.</em></h2>
-            </div>
-            <div className="max-w-[640px]">
-              <p className="text-xl leading-8 text-primary md:text-2xl md:leading-9">Raj Kuthir is a small invitation to do Shantiniketan differently: with a morning that does not need an itinerary, a garden that belongs to your group, and a house that lets everyone find their own corner.</p>
-              <div className="mt-9 grid gap-7 border-t border-border pt-7 sm:grid-cols-2">
-                <div><p className="font-journal text-3xl text-accent">01</p><p className="mt-2 text-sm leading-6 text-muted-foreground">A private home in nature for the pace of real life.</p></div>
-                <div><p className="font-journal text-3xl text-accent">02</p><p className="mt-2 text-sm leading-6 text-muted-foreground">Warm Bengali hospitality, led by a thoughtful local team.</p></div>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        {/* Full-bleed night shot. Decorative, so the caption lives in the DOM
-            rather than in alt text, and the image is lazy — it is below the fold. */}
-        <section className="relative isolate" aria-label="Raj Kuthir after sundown">
-          <img
-            src={IMG.villaNight}
-            alt="Raj Kuthir Homestays lit up after sundown"
-            loading="lazy"
-            className="h-[320px] w-full object-cover md:h-[540px]"
-          />
-          <div className="absolute inset-0 bg-gradient-to-t from-black/65 via-black/20 to-transparent" />
-          <div className="section-shell absolute inset-x-0 bottom-0 pb-10 md:pb-16">
-            <p className="eyebrow text-secondary">After sundown</p>
-            <p className="mt-4 max-w-[540px] font-journal text-4xl leading-[.98] text-white md:text-6xl">The lights come on,<br /><em>and the day slows.</em></p>
           </div>
         </section>
 
@@ -660,18 +628,46 @@ function Home() {
           </div>
         </section>
 
+        {/* ------------------------------------------------------- gallery
+            A teaser, not the gallery. The twelve photographs live on /gallery
+            so the homepage does not make every visitor download a megabyte of
+            pictures to reach the enquiry form below them. */}
         <section id="gallery" className="scroll-mt-24 section-shell py-24 md:py-36" aria-labelledby="gallery-title">
-          <div className="flex flex-col justify-between gap-8 md:flex-row md:items-end"><div><p className="eyebrow mb-5 text-accent">A visual diary</p><h2 id="gallery-title" className="font-journal text-5xl leading-[.94] text-primary md:text-7xl">A look<br /><em>around home.</em></h2></div><div className="flex flex-wrap gap-2" role="tablist" aria-label="Gallery categories">{['All', 'Home', 'Nature', 'Details'].map((filter) => <button key={filter} onClick={() => setGalleryFilter(filter)} role="tab" aria-selected={galleryFilter === filter} className={`rounded-full border px-4 py-2 text-xs font-bold transition-colors ${galleryFilter === filter ? 'border-primary bg-primary text-primary-foreground' : 'border-border text-muted-foreground hover:border-primary hover:text-primary'}`} data-testid={`button-gallery-${filter.toLowerCase()}`}>{filter}</button>)}</div></div>
-          <div className="mt-12 grid grid-cols-2 gap-3 md:grid-cols-3 md:gap-5">
-            {filteredGallery.map((item) => (
-              <div key={item.title} className="group relative min-h-[220px] overflow-hidden rounded-[1.25rem] md:min-h-[300px]" data-testid={`gallery-card-${item.title.toLowerCase().replace(/\s/g, '-')}`}>
-                <img src={item.img} alt={item.title} className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.05]" />
+          <div className="flex flex-col justify-between gap-8 md:flex-row md:items-end">
+            <div>
+              <p className="eyebrow mb-5 text-accent">A visual diary</p>
+              <h2 id="gallery-title" className="font-journal text-5xl leading-[.94] text-primary md:text-7xl">A look<br /><em>around home.</em></h2>
+            </div>
+            <a
+              href={`${basePath}/gallery`}
+              className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-[.1em] text-primary underline decoration-accent decoration-2 underline-offset-4"
+              data-testid="link-gallery-page"
+            >
+              See all photos <ArrowUpRight size={14} />
+            </a>
+          </div>
+          <div className="mt-12 grid grid-cols-2 gap-3 md:grid-cols-4 md:gap-5">
+            {GALLERY_TEASER.map((photo) => (
+              <a
+                key={photo.file}
+                href={`${basePath}/gallery`}
+                className="group relative block min-h-[200px] overflow-hidden rounded-[1.25rem] md:min-h-[260px]"
+                data-testid={`gallery-teaser-${photo.file.split('.')[0]!.toLowerCase().replace(/%20|\s/g, '-')}`}
+              >
+                <img
+                  src={asset(photo.file)}
+                  alt={photo.alt}
+                  width={photo.width}
+                  height={photo.height}
+                  loading="lazy"
+                  decoding="async"
+                  className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.05]"
+                />
                 <div className="absolute inset-0 bg-gradient-to-t from-black/55 via-black/10 to-transparent" />
                 <div className="absolute inset-x-0 bottom-0 p-4">
-                  <p className="font-journal text-2xl leading-none text-white">{item.title}</p>
-                  <p className="mt-1 font-mono-ui text-[9px] uppercase tracking-[.1em] text-white/80">{item.category}</p>
+                  <p className="font-journal text-xl leading-none text-white">{photo.title}</p>
                 </div>
-              </div>
+              </a>
             ))}
           </div>
         </section>
@@ -828,8 +824,22 @@ function Home() {
       </main>
 
       <footer className="bg-[#172d25] py-14 pb-28 text-[#f5eadb] md:pb-14" data-testid="site-footer">
-        <div className="section-shell"><div className="grid gap-12 border-b border-[#f5eadb]/15 pb-12 md:grid-cols-[1.2fr_.8fr_.8fr]"><div><div className="flex items-center gap-3"><span className="grid h-10 w-10 place-items-center rounded-full bg-[#e4c9a4] text-[#172d25]"><Leaf size={19} /></span><span><span className="block font-mono-ui text-[10px] tracking-[.18em] text-[#f5eadb]/70">RAJ KUTHIR</span><span className="font-journal text-2xl">Homestays</span></span></div><p className="mt-6 max-w-[300px] text-sm leading-6 text-[#f5eadb]/60">Sobuj Potro — a private home in nature, in Bolpur / Shantiniketan.</p></div><div><p className="eyebrow mb-5 text-[#e4c9a4]">Explore</p><div className="flex flex-col items-start gap-3 text-sm text-[#f5eadb]/70">{NAV_ITEMS.slice(0, 4).map((item) => <a key={item.href} href={item.href} className="transition-colors hover:text-[#e4c9a4]" data-testid={`link-footer-${item.label.toLowerCase().replace(/\s/g, '-')}`}>{item.label}</a>)}<a href={`${basePath}/house-rules`} className="transition-colors hover:text-[#e4c9a4]" data-testid="link-footer-house-rules">House rules</a><a href={`${basePath}/welcome`} className="transition-colors hover:text-[#e4c9a4]" data-testid="link-footer-welcome">Arriving guests</a></div></div><div><p className="eyebrow mb-5 text-[#e4c9a4]">Connect</p><div className="flex flex-col items-start gap-3 text-sm text-[#f5eadb]/70"><a href={CONFIG.instagramUrl} target="_blank" rel="noreferrer" className="flex items-center gap-2 hover:text-[#e4c9a4]" data-testid="link-footer-instagram"><Instagram size={15} /> Instagram</a><a href={CONFIG.reviewUrl} target="_blank" rel="noreferrer" className="flex items-center gap-2 hover:text-[#e4c9a4]" data-testid="link-footer-review"><Star size={15} /> Google Reviews</a><a href={phoneHref(CONFIG.hostPhone)} className="flex items-center gap-2 hover:text-[#e4c9a4]" data-testid="link-footer-call"><Phone size={15} /> {CONFIG.hostPhone}</a></div></div></div><div className="flex flex-col justify-between gap-4 pt-6 text-[10px] uppercase tracking-[.13em] text-[#f5eadb]/40 sm:flex-row"><p>© {new Date().getFullYear()} Raj Kuthir Homestays</p><p>Made for slower days</p></div></div>
+        <div className="section-shell"><div className="grid gap-12 border-b border-[#f5eadb]/15 pb-12 md:grid-cols-[1.2fr_.8fr_.8fr]"><div><div className="flex items-center gap-3"><span className="grid h-10 w-10 place-items-center rounded-full bg-[#e4c9a4] text-[#172d25]"><Leaf size={19} /></span><span><span className="block font-mono-ui text-[10px] tracking-[.18em] text-[#f5eadb]/70">RAJ KUTHIR</span><span className="font-journal text-2xl">Homestays</span></span></div><p className="mt-6 max-w-[300px] text-sm leading-6 text-[#f5eadb]/60">Sobuj Potro — a private home in nature, in Bolpur / Shantiniketan.</p></div><div><p className="eyebrow mb-5 text-[#e4c9a4]">Explore</p><div className="flex flex-col items-start gap-3 text-sm text-[#f5eadb]/70">{NAV_ITEMS.slice(0, 4).map((item) => <a key={item.href} href={item.href} className="transition-colors hover:text-[#e4c9a4]" data-testid={`link-footer-${item.label.toLowerCase().replace(/\s/g, '-')}`}>{item.label}</a>)}<a href={`${basePath}/gallery`} className="transition-colors hover:text-[#e4c9a4]" data-testid="link-footer-gallery">Photos</a><a href={`${basePath}/house-rules`} className="transition-colors hover:text-[#e4c9a4]" data-testid="link-footer-house-rules">House rules</a><a href={`${basePath}/welcome`} className="transition-colors hover:text-[#e4c9a4]" data-testid="link-footer-welcome">Arriving guests</a></div></div><div><p className="eyebrow mb-5 text-[#e4c9a4]">Connect</p><div className="flex flex-col items-start gap-3 text-sm text-[#f5eadb]/70"><a href={CONFIG.instagramUrl} target="_blank" rel="noreferrer" className="flex items-center gap-2 hover:text-[#e4c9a4]" data-testid="link-footer-instagram"><Instagram size={15} /> Instagram</a><a href={CONFIG.reviewUrl} target="_blank" rel="noreferrer" className="flex items-center gap-2 hover:text-[#e4c9a4]" data-testid="link-footer-review"><Star size={15} /> Google Reviews</a><a href={phoneHref(CONFIG.hostPhone)} className="flex items-center gap-2 hover:text-[#e4c9a4]" data-testid="link-footer-call"><Phone size={15} /> {CONFIG.hostPhone}</a></div></div></div><div className="flex flex-col justify-between gap-4 pt-6 text-[10px] uppercase tracking-[.13em] text-[#f5eadb]/40 sm:flex-row"><p>© {new Date().getFullYear()} Raj Kuthir Homestays</p><p>Made for slower days</p></div></div>
       </footer>
+
+      {/* The other half of the arrival answer: a button that follows the guest
+          down every page. On a phone it sits clear of the contact bar below it;
+          on a laptop it takes the bottom-right corner, where nothing else is. */}
+      <a
+        href={`${basePath}/welcome`}
+        onClick={() => track('arrival_pack_click', { placement: 'floating' })}
+        className="group fixed bottom-[5.4rem] right-3 z-40 flex items-center gap-2 rounded-full bg-primary px-4 py-3 text-primary-foreground shadow-xl ring-1 ring-secondary/25 transition-transform hover:-translate-y-0.5 active:scale-95 md:bottom-6 md:right-6 md:gap-3 md:px-5 md:py-4"
+        aria-label="Open my arrival pack — for guests with a confirmed booking"
+        data-testid="link-floating-arrival"
+      >
+        <KeyRound size={17} strokeWidth={1.6} className="shrink-0" />
+        <span className="text-[11px] font-bold uppercase tracking-[.1em]">Arrival pack</span>
+      </a>
 
       <div className="fixed inset-x-3 bottom-3 z-40 flex items-center gap-2 rounded-full border border-border bg-background/95 p-2 shadow-lg backdrop-blur-md md:hidden" data-testid="mobile-contact-bar"><a href={phoneHref(CONFIG.hostPhone)} className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-secondary text-primary" aria-label="Call host" data-testid="button-sticky-call"><Phone size={18} /></a><a href={whatsappUrl} target="_blank" rel="noreferrer" className="flex flex-1 items-center justify-center gap-2 rounded-full bg-primary py-3 text-xs font-bold uppercase tracking-[.1em] text-primary-foreground" data-testid="button-sticky-whatsapp"><MessageCircle size={16} /> Enquire on WhatsApp</a><button onClick={scrollToBooking} className="grid h-11 w-11 shrink-0 place-items-center rounded-full border border-border text-primary" aria-label="Book now" data-testid="button-sticky-book"><CalendarDays size={18} /></button></div>
     </div>
@@ -854,6 +864,7 @@ function Router() {
         {/* SEO landing page. Adding a route here also requires an entry in
             api-server/src/lib/seo.ts — a test enforces it. */}
         <Route path="/pet-friendly-homestay-shantiniketan" component={PetFriendly} />
+        <Route path="/gallery" component={Gallery} />
         {/* Guest arrival pack, unlocked with a booking reference. */}
         <Route path="/welcome" component={Welcome} />
         <Route path="/admin" component={AdminDashboard} />

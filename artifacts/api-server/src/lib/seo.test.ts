@@ -46,6 +46,16 @@ const PET_PAGE_TSX = readFileSync(
   "utf8",
 );
 
+/** The gallery page, read so every photograph can be checked for alt text and
+ *  measured dimensions. */
+const GALLERY_PAGE_TSX = readFileSync(
+  path.join(clientRoot, "src/pages/Gallery.tsx"),
+  "utf8",
+);
+
+/** app.ts, read so the wiring that serves the homepage can be asserted. */
+const APP_TS = readFileSync(path.join(here, "../app.ts"), "utf8");
+
 const PUBLIC_ROUTES = [
   "/",
   "/house-rules",
@@ -220,6 +230,7 @@ test("point 2 · the sitemap lists exactly the public, indexable pages", () => {
 
   assert.deepEqual(locs.sort(), [
     `${SITE_ORIGIN}/`,
+    `${SITE_ORIGIN}/gallery`,
     `${SITE_ORIGIN}/house-rules`,
     `${SITE_ORIGIN}/pet-friendly-homestay-shantiniketan`,
   ]);
@@ -744,4 +755,84 @@ test("route parity · every public page in seo.ts is a real client route", () =>
       `seo.ts describes ${route} but App.tsx has no route for it — it would 404`,
     );
   }
+});
+
+// =========================================================== POINT 9
+// The homepage actually reaches the middleware that describes it.
+
+test("point 9 · express.static does not answer / with the raw index.html", () => {
+  // This is the one that bit us. express.static's default `index` option
+  // serves index.html for a bare "/" straight off disk, so the homepage —
+  // alone among every route — went out with the build's placeholder title, no
+  // JSON-LD and no analytics tag, while /house-rules and the pet page were
+  // injected correctly. The option must stay off.
+  const call = APP_TS.match(/express\.static\([^)]*\)/s);
+
+  assert.ok(call, "app.ts no longer calls express.static — update this test");
+  assert.match(
+    call[0],
+    /index:\s*false/,
+    "express.static is mounted without `index: false`, so / will be served " +
+      "from disk and never reach injectMeta",
+  );
+});
+
+test("point 9 · the homepage's own metadata is not the pet page's", () => {
+  // The symptom that gave the bug away: / was serving the pet page's title.
+  // Two URLs competing for one phrase is worth failing a build over.
+  const titles = Object.entries(PAGES)
+    .filter(([route, meta]) => !meta.noindex && !isPrivatePath(route))
+    .map(([, meta]) => meta.title);
+
+  assert.equal(
+    new Set(titles).size,
+    titles.length,
+    "two indexable pages share a <title>",
+  );
+});
+
+// =========================================================== POINT 10
+// The gallery page: every photograph described, measured and deferred.
+
+test("point 10 · every gallery photograph has alt text and real dimensions", () => {
+  const entries = [...GALLERY_PAGE_TSX.matchAll(
+    /\{\s*file: '([^']+)',\s*title: '([^']*)',\s*alt: '([^']*)',\s*width: (\d+),\s*height: (\d+),\s*\}/g,
+  )];
+
+  assert.ok(entries.length >= 10, `only ${entries.length} photographs parsed`);
+
+  for (const [, file, title, alt, width, height] of entries) {
+    assert.ok(title!.length > 2, `${file} has no caption`);
+    assert.ok(
+      alt!.length > 20,
+      `${file} has alt text too short to describe it: "${alt}"`,
+    );
+    assert.ok(
+      Number(width) > 0 && Number(height) > 0,
+      `${file} has no usable dimensions`,
+    );
+    // A file listed here but missing from public/ is a broken image in prod.
+    const onDisk = path.join(clientRoot, "public", decodeURIComponent(file!));
+    assert.ok(
+      readFileSync(onDisk).length > 0,
+      `${file} is in the gallery but not in public/`,
+    );
+  }
+});
+
+test("point 10 · the homepage links to the gallery rather than inlining it", () => {
+  assert.match(
+    APP_TSX,
+    /GALLERY_TEASER/,
+    "the homepage no longer renders the gallery teaser",
+  );
+  assert.match(
+    APP_TSX,
+    /\$\{basePath\}\/gallery/,
+    "the homepage has no link through to /gallery",
+  );
+  assert.ok(
+    !APP_TSX.includes("filteredGallery"),
+    "the old filtered gallery is still on the homepage",
+  );
 });
