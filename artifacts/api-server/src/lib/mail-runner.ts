@@ -1,9 +1,13 @@
 import { logger } from "./logger";
 import { upsertImportedBooking } from "./ledger-repo";
-import { readMailbox } from "./mail-imap";
 import { listForSync, saveProgress } from "./mail-repo";
-import { encryptionAvailable } from "./secret-box";
-import { syncAccounts, type MailSyncResult } from "./mail-sync";
+import { encryptionProblem } from "./secret-box";
+import {
+  syncAccounts,
+  type MailboxRead,
+  type MailSyncResult,
+  type SyncableAccount,
+} from "./mail-sync";
 import type { ParsedVoucher } from "./mail-parsers/index";
 
 /**
@@ -12,6 +16,23 @@ import type { ParsedVoucher } from "./mail-parsers/index";
  * Everything here is a one-line adapter on purpose. The decisions live in
  * mail-sync.ts where they can be tested; if this file grows logic of its own,
  * that logic is untested and it belongs next door.
+ *
+ * NOTE THE MISSING IMPORT. ./mail-imap is loaded on demand inside readMailbox,
+ * never at the top of this file, and that is deliberate.
+ *
+ * mail-imap pulls in imapflow and mailparser. A static import chains them into
+ * the server's startup path — index.ts -> mail-cron -> here -> mail-imap —
+ * so anything wrong with those packages stops the server booting rather than
+ * stopping the mail feature. That is not a hypothetical: on 11 September a
+ * bundler setting left mailparser's copy of nodemailer out of the image and
+ * the whole site went down for half an hour, because a homestay website could
+ * not read its email.
+ *
+ * Loaded here instead, a broken or missing mail dependency surfaces as a
+ * rejected promise inside syncAccount, which already knows what to do with
+ * one: record it against the mailbox, leave the high-water mark alone, carry
+ * on with the others. The website stays up. A test asserts this file has no
+ * static import of the adapter.
  */
 
 let inFlight: Promise<MailSyncResult> | null = null;
@@ -23,6 +44,21 @@ export function getLastMailSync(): MailSyncResult | null {
 
 export function isMailSyncInFlight(): boolean {
   return inFlight !== null;
+}
+
+/**
+ * Opens a mailbox, loading the IMAP adapter the first time it is needed.
+ *
+ * `import()` caches, so this costs one resolution per process, not one per
+ * run. If the adapter cannot be loaded at all the rejection lands in
+ * syncAccount's read error path and is recorded against the mailbox.
+ */
+async function readMailbox(
+  account: SyncableAccount,
+  sinceUid: number,
+): Promise<MailboxRead> {
+  const { readMailbox: open } = await import("./mail-imap");
+  return open(account, sinceUid);
 }
 
 /**
@@ -56,12 +92,13 @@ export async function runMailSync(): Promise<MailSyncResult> {
   if (inFlight) return inFlight;
 
   inFlight = (async () => {
-    if (!encryptionAvailable()) {
-      // Without the key the stored passwords cannot be opened, so there is
-      // nothing to try. Say so once rather than failing per account.
-      logger.warn(
-        "MAIL_ENCRYPTION_KEY is not set; skipping mailbox sync entirely.",
-      );
+    const problem = encryptionProblem();
+    if (problem) {
+      // Without a usable key the stored passwords cannot be opened, so there
+      // is nothing to try. Say so once rather than failing per account — and
+      // say *why*, because "not set" and "set to the wrong thing" send you
+      // looking in completely different places.
+      logger.warn({ problem }, "Skipping mailbox sync entirely.");
       return { syncedAt: new Date().toISOString(), accounts: [], imported: 0 };
     }
 

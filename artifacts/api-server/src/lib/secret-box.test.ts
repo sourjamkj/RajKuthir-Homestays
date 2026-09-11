@@ -2,7 +2,13 @@ import assert from "node:assert/strict";
 import { randomBytes } from "node:crypto";
 import test from "node:test";
 
-import { SecretBoxError, encryptionAvailable, open, seal } from "./secret-box.ts";
+import {
+  SecretBoxError,
+  encryptionAvailable,
+  encryptionProblem,
+  open,
+  seal,
+} from "./secret-box.ts";
 
 /**
  * These run without a database or a mailbox. The point of them is that a
@@ -89,4 +95,74 @@ test("secret-box · malformed sealed values are rejected by shape", () => {
       assert.throws(() => open(bad), SecretBoxError, `accepted "${bad}"`);
     }
   });
+});
+
+
+/**
+ * The diagnosis tests.
+ *
+ * On 11 September the server logged "MAIL_ENCRYPTION_KEY is not set" while
+ * the variable was plainly there in Railway, and half an hour went into
+ * looking for a missing variable instead of a bad value. These pin the
+ * distinction: every unusable key has to say which kind of unusable it is,
+ * and none of the messages may repeat the key back.
+ */
+
+test("secret-box · a good key reports no problem at all", () => {
+  withKey(GOOD_KEY, () => {
+    assert.equal(encryptionProblem(), null);
+    assert.equal(encryptionAvailable(), true);
+  });
+});
+
+test("secret-box · an absent key and a blank key both read as not set", () => {
+  for (const value of [undefined, "", "   "]) {
+    withKey(value, () => {
+      assert.match(String(encryptionProblem()), /not set/i);
+    });
+  }
+});
+
+test("secret-box · a hex key is named as a hex key, not as 'not set'", () => {
+  // The likeliest paste mistake: 64 hex characters decode, via base64, to
+  // 48 bytes. Saying "48" without saying why sends you nowhere.
+  withKey(randomBytes(32).toString("hex"), () => {
+    const problem = String(encryptionProblem());
+    assert.ok(!/not set/i.test(problem), "a present key was reported as absent");
+    assert.match(problem, /48/);
+    assert.match(problem, /hex/i);
+  });
+});
+
+test("secret-box · a key with shell quoting left on it is called a paste error", () => {
+  withKey(`"${GOOD_KEY}"`, () => {
+    assert.match(String(encryptionProblem()), /not valid base64/i);
+  });
+});
+
+test("secret-box · a short key reports its length", () => {
+  withKey(randomBytes(16).toString("base64"), () => {
+    assert.match(String(encryptionProblem()), /got 16/);
+  });
+});
+
+test("secret-box · surrounding whitespace is forgiven, not fatal", () => {
+  // Copying out of a terminal picks up a trailing newline; that should not
+  // cost anyone an evening.
+  withKey(`\n  ${GOOD_KEY}  \n`, () => {
+    assert.equal(encryptionProblem(), null);
+    assert.equal(open(seal("still works")), "still works");
+  });
+});
+
+test("secret-box · no problem message ever contains the key", () => {
+  for (const value of ["", randomBytes(32).toString("hex"), `"${GOOD_KEY}"`, randomBytes(16).toString("base64")]) {
+    withKey(value, () => {
+      const problem = String(encryptionProblem());
+      const body = value.replace(/[^A-Za-z0-9+/=_-]/g, "");
+      if (body.length > 8) {
+        assert.ok(!problem.includes(body), "the key value leaked into the error");
+      }
+    });
+  }
 });

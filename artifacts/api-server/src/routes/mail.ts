@@ -10,7 +10,7 @@ import {
   updateAccount,
 } from "../lib/mail-repo";
 import { getLastMailSync, isMailSyncInFlight, runMailSync } from "../lib/mail-runner";
-import { encryptionAvailable } from "../lib/secret-box";
+import { encryptionAvailable, encryptionProblem } from "../lib/secret-box";
 
 /**
  * Mailbox administration.
@@ -45,8 +45,10 @@ router.get("/mail/accounts", async (_req, res) => {
   res.json({
     accounts: await listAccounts(),
     // The screen needs to explain why nothing is syncing when the key is
-    // missing, rather than showing mailboxes that silently never run.
+    // missing, rather than showing mailboxes that silently never run — and
+    // the reason, so a mis-pasted key is not mistaken for an absent one.
     encryptionConfigured: encryptionAvailable(),
+    encryptionProblem: encryptionProblem(),
     lastSync: getLastMailSync(),
     running: isMailSyncInFlight(),
   });

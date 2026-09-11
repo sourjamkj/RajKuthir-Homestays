@@ -46,7 +46,10 @@ function b64u(buffer: Buffer): string {
  * changing it in Railway takes effect on restart without a rebuild.
  */
 function key(): Buffer {
-  const raw = process.env.MAIL_ENCRYPTION_KEY;
+  // Trim before the emptiness check, not after: a variable set to a stray
+  // space is empty in every sense that matters here, and calling it malformed
+  // would point at the wrong repair.
+  const raw = (process.env.MAIL_ENCRYPTION_KEY ?? "").trim();
 
   if (!raw) {
     throw new SecretBoxError(
@@ -54,30 +57,51 @@ function key(): Buffer {
     );
   }
 
-  let decoded: Buffer;
-  try {
-    decoded = Buffer.from(raw, "base64");
-  } catch {
-    throw new SecretBoxError("MAIL_ENCRYPTION_KEY is not valid base64.");
+  // Buffer.from(..., "base64") does not reject junk, it silently drops the
+  // characters it does not recognise. So a hex key, or a value that still has
+  // shell quoting wrapped around it, would decode to *something* and be
+  // reported as a length problem rather than as the paste error it is.
+  if (!/^[A-Za-z0-9+/_-]+={0,2}$/.test(raw)) {
+    throw new SecretBoxError(
+      "MAIL_ENCRYPTION_KEY is not valid base64 — it looks like the value was not pasted cleanly.",
+    );
   }
+
+  const decoded = Buffer.from(raw, "base64");
 
   if (decoded.length !== KEY_BYTES) {
     throw new SecretBoxError(
-      `MAIL_ENCRYPTION_KEY must decode to ${KEY_BYTES} bytes; got ${decoded.length}.`,
+      `MAIL_ENCRYPTION_KEY must decode to ${KEY_BYTES} bytes; got ${decoded.length}. ` +
+        (decoded.length === 48
+          ? "48 bytes is what a 64-character hex key decodes to — generate the key as base64, not hex."
+          : "Generate it with: node -e \"console.log(require('crypto').randomBytes(32).toString('base64'))\""),
     );
   }
 
   return decoded;
 }
 
-/** True when a key is configured and usable, without revealing anything about it. */
-export function encryptionAvailable(): boolean {
+/**
+ * Why encryption is unusable, or null when it is fine.
+ *
+ * This exists because "unusable" has several causes that look identical from
+ * the outside — unset, mis-pasted, wrong length — and the server used to log
+ * all of them as "not set", which sent us looking for a missing variable when
+ * the variable was there all along. None of the messages contain the key, or
+ * any part of it: the worst they reveal is how many bytes it decoded to.
+ */
+export function encryptionProblem(): string | null {
   try {
     key();
-    return true;
-  } catch {
-    return false;
+    return null;
+  } catch (error) {
+    return error instanceof Error ? error.message : "Encryption is unavailable.";
   }
+}
+
+/** True when a key is configured and usable, without revealing anything about it. */
+export function encryptionAvailable(): boolean {
+  return encryptionProblem() === null;
 }
 
 export function seal(plaintext: string): string {

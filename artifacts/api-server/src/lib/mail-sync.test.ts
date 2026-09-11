@@ -237,3 +237,46 @@ test("mail · one failing mailbox does not stop the others", async () => {
   assert.equal(saved.length, 1);
   assert.equal(progress.length, 2, "every mailbox should record an outcome");
 });
+
+// ================================================ THE STARTUP PATH
+// The mail feature must never be able to stop the website from booting.
+
+test("mail · the runner does not import the IMAP adapter at module load", () => {
+  // On 11 September a static import of ./mail-imap put imapflow and
+  // mailparser on the server's startup path. A bundler setting left one of
+  // their dependencies out of the image, the process crashed on boot, and the
+  // site was down for half an hour — because a homestay website could not
+  // read its email.
+  //
+  // Loaded on demand instead, the same failure becomes one mailbox reporting
+  // an error. This test is the thing standing between here and a repeat.
+  const runner = readFileSync(path.join(here, "mail-runner.ts"), "utf8");
+
+  const staticImport = /^\s*import\s[^;]*["']\.\/mail-imap["']/m;
+  assert.ok(
+    !staticImport.test(runner),
+    "mail-runner.ts imports ./mail-imap statically — a broken mail dependency will now take the whole server down on boot",
+  );
+
+  assert.match(
+    runner,
+    /await import\(\s*["']\.\/mail-imap["']\s*\)/,
+    "mail-runner.ts no longer loads ./mail-imap on demand either — how does it open a mailbox?",
+  );
+});
+
+test("mail · an adapter that cannot be loaded is reported, not thrown", () => {
+  // What the dynamic import buys us, expressed as behaviour rather than as a
+  // fact about the source: a read that rejects is already handled.
+  const h = harness(async () => {
+    throw new Error("Cannot find package 'nodemailer'");
+  });
+
+  return syncAccounts([account()], h.deps).then((result) => {
+    assert.equal(result.accounts[0]?.status, "error");
+    assert.match(result.accounts[0]?.message ?? "", /nodemailer/);
+    assert.equal(result.imported, 0);
+    // The run completed. Nothing was thrown out of syncAccounts, which is
+    // what keeps the cron — and therefore the process — alive.
+  });
+});
