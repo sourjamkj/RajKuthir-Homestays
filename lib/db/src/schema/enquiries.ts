@@ -46,6 +46,28 @@ export const enquiries = pgTable(
     requests: text("requests"),
     status: enquiryStatusEnum("status").notNull().default("new"),
 
+    /**
+     * What was quoted to this guest, and when it was sent.
+     *
+     * Stored rather than recomputed because a quote is a promise: if the rate
+     * plan changes next week, what the guest was told does not. Money in
+     * PAISE, matching the ledger and the rate plan. Null until a quote is
+     * actually sent — these three move together or not at all.
+     */
+    quotedTotalPaise: integer("quoted_total_paise"),
+    quotedAdvancePaise: integer("quoted_advance_paise"),
+    quoteSentAt: timestamp("quote_sent_at", { withTimezone: true }),
+
+    /**
+     * When the advance actually arrived. Null means it has not.
+     *
+     * This is the only thing that stops a quoted enquiry's dates being
+     * released 24 hours after the quote went out. The hold itself is not
+     * stored — it is derived from these two timestamps, so it cannot be left
+     * behind by a job that failed to run. See lib/enquiry-hold.ts.
+     */
+    advancePaidAt: timestamp("advance_paid_at", { withTimezone: true }),
+
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),

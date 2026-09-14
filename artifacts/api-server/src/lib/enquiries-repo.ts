@@ -33,6 +33,65 @@ export async function listEnquiries(limit = 200): Promise<Enquiry[]> {
     .limit(limit);
 }
 
+/** One enquiry, for the screens that act on a single row. */
+export async function getEnquiry(id: string): Promise<Enquiry | null> {
+  const [found] = await db
+    .select()
+    .from(enquiries)
+    .where(eq(enquiries.id, id))
+    .limit(1);
+
+  return found ?? null;
+}
+
+/**
+ * Records what a guest was quoted, at the moment it was sent.
+ *
+ * Written only after the message has actually left, so a failed send leaves
+ * no trace and the owner can try again. Writing it first would mark an
+ * enquiry as quoted when the guest never heard from us, which is the worse
+ * of the two failures — the owner would stop chasing.
+ */
+export async function markQuoteSent(
+  id: string,
+  amounts: { totalPaise: number; advancePaise: number },
+  sentAt = new Date(),
+): Promise<Enquiry | null> {
+  const [updated] = await db
+    .update(enquiries)
+    .set({
+      quotedTotalPaise: amounts.totalPaise,
+      quotedAdvancePaise: amounts.advancePaise,
+      quoteSentAt: sentAt,
+    })
+    .where(eq(enquiries.id, id))
+    .returning();
+
+  return updated ?? null;
+}
+
+/**
+ * Marks the advance as received, or takes the mark back off.
+ *
+ * Reversible on purpose: this is a human confirming a screenshot, and humans
+ * click the wrong row. Clearing it puts the enquiry back under the same
+ * 24-hour clock it was on before, measured from when the quote was sent —
+ * not restarted, because the guest's deadline has not moved.
+ */
+export async function setAdvancePaid(
+  id: string,
+  paid: boolean,
+  paidAt = new Date(),
+): Promise<Enquiry | null> {
+  const [updated] = await db
+    .update(enquiries)
+    .set({ advancePaidAt: paid ? paidAt : null })
+    .where(eq(enquiries.id, id))
+    .returning();
+
+  return updated ?? null;
+}
+
 export async function setEnquiryStatus(
   id: string,
   status: EnquiryStatus,

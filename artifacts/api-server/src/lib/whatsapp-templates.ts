@@ -1,5 +1,8 @@
 import type { Booking } from "@workspace/db";
 
+import type { Quote } from "./enquiry-quote";
+import { formatDeadline, HOLD_HOURS } from "./enquiry-hold";
+
 /**
  * The four message templates, and how a booking fills them in.
  *
@@ -119,3 +122,99 @@ export function buildTemplate(
       };
   }
 }
+
+
+/* ---------------------------------------------------------------------- *
+ * The enquiry quote
+ *
+ * Deliberately not one of the four `MessageKind`s above. Those go through the
+ * outbox, which lives in `whatsapp_messages` and in the `message_kind`
+ * Postgres enum; adding a fifth would mean altering an enum in a table that
+ * does not exist in production yet. A quote is sent once, by hand, from the
+ * enquiries screen, and recorded on the enquiry row itself — so it needs none
+ * of that machinery and does not wait for it.
+ * ---------------------------------------------------------------------- */
+
+/**
+ * Where to send the money, read from the environment rather than committed.
+ *
+ * A UPI handle in a git history is there permanently and travels with every
+ * clone and fork. It is also the one thing here most likely to change — a new
+ * bank, a new handle — and a Railway variable changes in a minute, whereas a
+ * value baked into an approved WhatsApp template takes days to re-approve.
+ * Hence `{{8}}`: the payee reaches Meta as a parameter, not as fixed text.
+ *
+ * Read per call so a change takes effect on restart, without a rebuild.
+ */
+export function upiDetails(): { id: string; name: string } | null {
+  const id = process.env["RAJ_KUTHIR_UPI_ID"]?.trim();
+  const name = process.env["RAJ_KUTHIR_UPI_NAME"]?.trim();
+  return id && name ? { id, name } : null;
+}
+
+/** Paise to the way a price is written in India: 1,24,500 rather than 124,500. */
+export function rupees(paise: number): string {
+  const value = paise / 100;
+  return new Intl.NumberFormat("en-IN", {
+    minimumFractionDigits: Number.isInteger(value) ? 0 : 2,
+    maximumFractionDigits: 2,
+  }).format(value);
+}
+
+/**
+ * The quote a guest receives after enquiring.
+ *
+ * Every figure here comes from `quoteForEnquiry`, which refuses rather than
+ * guesses, so this function never has to decide what to do about a missing
+ * price — by the time it is called there is one.
+ */
+export function buildEnquiryQuoteTemplate(input: {
+  guestName: string | null;
+  quote: Quote;
+  upi: { id: string; name: string };
+  /** When the dates stop being held. Derived, never stored — see enquiry-hold. */
+  holdExpiresAt: Date;
+}): TemplateSpec {
+  const guest = firstName(input.guestName);
+  const arrive = prettyDate(input.quote.checkIn);
+  const depart = prettyDate(input.quote.checkOut);
+  const nights = String(input.quote.nights);
+  const guests = String(input.quote.guests);
+  const total = rupees(input.quote.totalPaise);
+  const advance = rupees(input.quote.advancePaise);
+  const deadline = formatDeadline(input.holdExpiresAt);
+  const payee = `${input.upi.id} (${input.upi.name})`;
+
+  return {
+    name: "rk_enquiry_quote",
+    category: "utility",
+    languageCode: "en",
+    params: [
+      guest,
+      arrive,
+      depart,
+      nights,
+      guests,
+      total,
+      advance,
+      deadline,
+      payee,
+    ],
+    preview:
+      `Hello ${guest}, thank you for your enquiry about Raj Kuthir Homestays — Sobuj Potro.\n\n` +
+      `Your dates: ${arrive} to ${depart} — ${nights} night${input.quote.nights === 1 ? "" : "s"} for ${guests} guest${input.quote.guests === 1 ? "" : "s"}.\n` +
+      `Total for the stay: ₹${total}\n` +
+      `To confirm, please send ₹${advance} by ${deadline}. The balance is payable at check-in.\n\n` +
+      `UPI: ${payee}\n\n` +
+      `Reply here with the payment screenshot and we will confirm your booking straight away. ` +
+      `If the advance does not reach us by then, these dates are released automatically ` +
+      `and offered to other guests.\n\n` +
+      `Any questions, call ${CONTACT.hostPhone}.`,
+  };
+}
+
+/**
+ * The hold window, in words, for the enquiry form and the house rules.
+ * One place, so the page and the message can never disagree about it.
+ */
+export const HOLD_WINDOW_TEXT = `${HOLD_HOURS} hours`;

@@ -1,0 +1,29 @@
+rk_enquiry_quote   ·   category: Utility   ·   language: English
+Submit this body EXACTLY as written in WhatsApp Manager. Nine variables,
+in this order. A mismatch between the body here and the body there is
+rejected at send time, not at approval time.
+
+---------------------------------------------------------------------
+Hello {{1}}, thank you for your enquiry about Raj Kuthir Homestays - Sobuj Potro.
+
+Your dates: {{2}} to {{3}} - {{4}} nights for {{5}} guests.
+Total for the stay: Rs {{6}}
+To confirm, please send Rs {{7}} by {{8}}. The balance is payable at check-in.
+
+UPI: {{9}}
+
+Reply here with the payment screenshot and we will confirm your booking straight away. If the advance does not reach us by then, these dates are released automatically and offered to other guests.
+
+Any questions, call +91 62903 99165.
+---------------------------------------------------------------------
+
+Sample values for the approval form:
+  {{1}} Sudipta
+  {{2}} 2 Oct 2026
+  {{3}} 4 Oct 2026
+  {{4}} 2
+  {{5}} 3
+  {{6}} 8,400
+  {{7}} 4,200
+  {{8}} 13 Sept 2026, 4:30 pm
+  {{9}} yourname@bank (YOUR NAME)

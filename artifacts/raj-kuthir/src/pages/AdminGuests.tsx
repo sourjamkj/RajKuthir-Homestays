@@ -10,6 +10,8 @@ import {
   LogOut,
   MessageCircle,
   Phone,
+  Send,
+  Timer,
   Trash2,
   Users,
 } from 'lucide-react';
@@ -20,6 +22,35 @@ const ENQUIRIES_KEY = ['/api/enquiries'];
 const CONTACTS_KEY = ['/api/contacts'];
 
 type EnquiryStatus = 'new' | 'contacted' | 'converted' | 'closed';
+
+/**
+ * What this enquiry would be quoted at today, or why it cannot be priced.
+ * Calculated server-side from the live rate plan so the owner sees the number
+ * before deciding to send it.
+ */
+type QuoteResult =
+  | {
+      ok: true;
+      checkIn: string;
+      checkOut: string;
+      nights: number;
+      guests: number;
+      totalPaise: number;
+      advancePaise: number;
+      balancePaise: number;
+    }
+  | { ok: false; reason: string };
+
+/**
+ * Whether these dates are still being held. Derived server-side from the
+ * quote and payment timestamps, so it is never stale and never needs
+ * clearing — a hold that nobody attends to simply stops being one.
+ */
+type HoldState =
+  | { state: 'none' }
+  | { state: 'held'; expiresAt: string; hoursLeft: number }
+  | { state: 'released'; expiresAt: string }
+  | { state: 'paid'; paidAt: string };
 
 type Enquiry = {
   id: string;
@@ -34,6 +65,13 @@ type Enquiry = {
   requests: string | null;
   status: EnquiryStatus;
   createdAt: string;
+  quote: QuoteResult;
+  /** Set once a quote has actually reached the guest, never before. */
+  quotedTotalPaise: number | null;
+  quotedAdvancePaise: number | null;
+  quoteSentAt: string | null;
+  advancePaidAt: string | null;
+  hold: HoldState;
 };
 
 type Contact = {
@@ -82,7 +120,10 @@ export default function AdminGuests() {
 
   const enquiries = useQuery({
     queryKey: ENQUIRIES_KEY,
-    queryFn: () => adminFetch<{ enquiries: Enquiry[] }>('/api/enquiries'),
+    queryFn: () =>
+      adminFetch<{ enquiries: Enquiry[]; quotingReady: boolean }>(
+        '/api/enquiries',
+      ),
     enabled: signedIn,
     retry: false,
   });
@@ -104,6 +145,24 @@ export default function AdminGuests() {
       adminFetch(`/api/enquiries/${id}`, {
         method: 'PATCH',
         body: JSON.stringify({ status }),
+      }),
+    onSuccess: refresh,
+  });
+
+  const sendQuote = useMutation({
+    mutationFn: (id: string) =>
+      adminFetch(`/api/enquiries/${id}/quote`, {
+        method: 'POST',
+        body: JSON.stringify({}),
+      }),
+    onSuccess: refresh,
+  });
+
+  const setAdvancePaid = useMutation({
+    mutationFn: ({ id, paid }: { id: string; paid: boolean }) =>
+      adminFetch(`/api/enquiries/${id}/advance-received`, {
+        method: 'POST',
+        body: JSON.stringify({ paid }),
       }),
     onSuccess: refresh,
   });
@@ -132,6 +191,7 @@ export default function AdminGuests() {
   }
 
   const rows = enquiries.data?.enquiries ?? [];
+  const quotingReady = enquiries.data?.quotingReady ?? false;
   const list = contacts.data?.contacts ?? [];
   const newCount = rows.filter((row) => row.status === 'new').length;
   const reachable = list.filter((c) => !c.marketingOptOut).length;
@@ -267,6 +327,94 @@ export default function AdminGuests() {
                       <Trash2 size={13} />
                     </button>
                   </div>
+                </div>
+
+                {/*
+                  The price, and the one button that sends it. Shown on every
+                  card rather than behind a menu: the owner's first question
+                  about a new enquiry is always "what is this worth", and the
+                  answer should not need a click.
+                */}
+                <div className="mt-4 border-t border-border pt-4">
+                  {row.quote.ok ? (
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      <div>
+                        <p className="text-[10px] font-bold uppercase tracking-[.1em] text-muted-foreground">
+                          {row.quote.nights} night{row.quote.nights === 1 ? '' : 's'} · {row.quote.guests} guest{row.quote.guests === 1 ? '' : 's'}
+                        </p>
+                        <p className="mt-1 text-sm text-primary">
+                          <span className="font-bold">
+                            {formatRupees(row.quote.totalPaise)}
+                          </span>{' '}
+                          total
+                          <span className="text-muted-foreground">
+                            {' '}· {formatRupees(row.quote.advancePaise)} advance
+                          </span>
+                        </p>
+                      </div>
+
+                      {row.quoteSentAt ? (
+                        <div className="flex flex-wrap items-center gap-3">
+                          <HoldBadge hold={row.hold} />
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setAdvancePaid.mutate({
+                                id: row.id,
+                                paid: row.hold.state !== 'paid',
+                              })
+                            }
+                            disabled={setAdvancePaid.isPending}
+                            className={
+                              row.hold.state === 'paid'
+                                ? 'flex shrink-0 items-center justify-center gap-1.5 rounded-lg border border-border px-3 py-2 text-[11px] font-bold uppercase tracking-[.07em] text-muted-foreground transition-colors hover:border-primary hover:text-primary disabled:cursor-not-allowed disabled:opacity-40'
+                                : 'flex shrink-0 items-center justify-center gap-1.5 rounded-lg bg-primary px-4 py-2.5 text-[11px] font-bold uppercase tracking-[.07em] text-primary-foreground transition-transform hover:-translate-y-0.5 disabled:translate-y-0 disabled:cursor-not-allowed disabled:opacity-40'
+                            }
+                            data-testid={`button-advance-${row.id}`}
+                          >
+                            {setAdvancePaid.isPending && (
+                              <Loader2 size={12} className="animate-spin" />
+                            )}
+                            {row.hold.state === 'paid'
+                              ? 'Not received after all'
+                              : 'Advance received'}
+                          </button>
+                        </div>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => sendQuote.mutate(row.id)}
+                          disabled={sendQuote.isPending || !quotingReady}
+                          title={
+                            quotingReady
+                              ? undefined
+                              : 'WhatsApp sending or the UPI details are not configured on the server.'
+                          }
+                          className="flex shrink-0 items-center justify-center gap-1.5 rounded-lg bg-primary px-4 py-2.5 text-[11px] font-bold uppercase tracking-[.07em] text-primary-foreground transition-transform hover:-translate-y-0.5 disabled:translate-y-0 disabled:cursor-not-allowed disabled:opacity-40"
+                          data-testid={`button-send-quote-${row.id}`}
+                        >
+                          {sendQuote.isPending ? (
+                            <Loader2 size={13} className="animate-spin" />
+                          ) : (
+                            <Send size={13} />
+                          )}
+                          Send quote
+                        </button>
+                      )}
+                    </div>
+                  ) : (
+                    <p className="text-[13px] leading-6 text-muted-foreground">
+                      No quote — {row.quote.reason}
+                    </p>
+                  )}
+
+                  {sendQuote.isError && sendQuote.variables === row.id && (
+                    <p className="mt-2 text-xs text-[#A65E45]" role="alert">
+                      {sendQuote.error instanceof Error
+                        ? sendQuote.error.message
+                        : 'The quote could not be sent.'}
+                    </p>
+                  )}
                 </div>
 
                 <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-border pt-4">
@@ -416,4 +564,46 @@ function Heading({
       </p>
     </div>
   );
+}
+
+/**
+ * What is happening to these dates right now.
+ *
+ * Four states, and the one that matters is "released" — it is the only one
+ * that means the owner is free to sell the dates to somebody else, and it
+ * arrives without anybody doing anything.
+ */
+function HoldBadge({ hold }: { hold: HoldState }) {
+  if (hold.state === 'paid') {
+    return (
+      <span className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[.07em] text-[#4b5340]">
+        <Timer size={11} /> Advance received{' '}
+        {format(parseISO(hold.paidAt), 'd MMM')}
+      </span>
+    );
+  }
+
+  if (hold.state === 'held') {
+    return (
+      <span
+        className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[.07em] text-primary"
+        title={`Releases ${format(parseISO(hold.expiresAt), "d MMM, h:mm a")}`}
+      >
+        <Timer size={11} /> Held · {hold.hoursLeft}h left
+      </span>
+    );
+  }
+
+  if (hold.state === 'released') {
+    return (
+      <span
+        className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[.07em] text-[#A65E45]"
+        title={`Released ${format(parseISO(hold.expiresAt), "d MMM, h:mm a")}`}
+      >
+        <Timer size={11} /> Released — dates back on sale
+      </span>
+    );
+  }
+
+  return null;
 }
