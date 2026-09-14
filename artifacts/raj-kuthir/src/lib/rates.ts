@@ -34,11 +34,95 @@ export type RateOverride = {
   effectivePercent?: number;
 };
 
+/**
+ * What extra heads and pets cost, sent with the plan rather than hard-coded
+ * here. One source for these numbers means the page cannot advertise ₹500
+ * while the server charges ₹550 — which is worse than saying nothing at all.
+ */
+export type RateExtras = {
+  /** Under this age a guest is charged the child rate for an extra head. */
+  childUnderAge: number;
+  extraAdultPaise: number;
+  extraChildPaise: number;
+  /** Per pet, once for the stay — not per night. */
+  petPaise: number;
+};
+
 export type RatePlan = {
   rates: Record<string, number>;
   overrides: RateOverride[];
   maxGuests: number;
+  extras?: RateExtras;
 };
+
+export type Party = { adults: number; children: number; pets: number };
+
+export type PartyBreakdown = {
+  heads: number;
+  ratedGuests: number;
+  extraChildren: number;
+  extraAdults: number;
+  pets: number;
+};
+
+/**
+ * Mirrors the server's party.ts. A child counts as a guest: two adults and
+ * two children are a party of four at the four-guest rate, with nothing
+ * added. The per-child charge is what an extra head costs once the party is
+ * larger than the rate card goes — never a fee for bringing a child.
+ */
+export function breakdownOf(plan: RatePlan | undefined, party: Party): PartyBreakdown {
+  const cap = plan?.maxGuests ?? 5;
+  const adults = Math.max(0, Math.floor(party.adults));
+  const children = Math.max(0, Math.floor(party.children));
+  const heads = adults + children;
+  const overflow = Math.max(0, heads - cap);
+
+  // Children take the cheaper surcharge first.
+  const extraChildren = Math.min(children, overflow);
+
+  return {
+    heads,
+    ratedGuests: Math.min(heads, cap),
+    extraChildren,
+    extraAdults: overflow - extraChildren,
+    pets: Math.max(0, Math.floor(party.pets)),
+  };
+}
+
+export function surchargePerNight(
+  plan: RatePlan | undefined,
+  breakdown: PartyBreakdown,
+): number {
+  const extras = plan?.extras;
+  if (!extras) return 0;
+
+  return (
+    breakdown.extraChildren * extras.extraChildPaise +
+    breakdown.extraAdults * extras.extraAdultPaise
+  );
+}
+
+/** Pets, once for the stay. */
+export function petCharge(
+  plan: RatePlan | undefined,
+  breakdown: PartyBreakdown,
+): number {
+  return breakdown.pets * (plan?.extras?.petPaise ?? 0);
+}
+
+/** What one night costs this party: the rate card plus any extra heads. */
+export function nightlyForParty(
+  plan: RatePlan | undefined,
+  isoDate: string,
+  party: Party,
+): number | null {
+  const breakdown = breakdownOf(plan, party);
+  const base = rateForNight(plan, isoDate, breakdown.ratedGuests);
+  if (base === null) return null;
+
+  return base + surchargePerNight(plan, breakdown);
+}
 
 /**
  * `/api/rates` is public and carries `Cache-Control: max-age=300`, which is

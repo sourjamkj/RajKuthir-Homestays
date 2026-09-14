@@ -1,3 +1,12 @@
+import {
+  breakdownOf,
+  petCharge,
+  stayTotalPaise,
+  surchargePerNight,
+  type Party,
+  type PartyBreakdown,
+} from "./party.ts";
+
 /**
  * Turning an enquiry into a price.
  *
@@ -5,10 +14,11 @@
  * willing to be held to. Everything awkward in between lives here: missing
  * dates, a check-out before the check-in, an occupancy nobody has priced.
  *
- * Nothing in this file reads the database or the clock. The pricing itself is
- * injected as `priceStay`, which in production is `totalForStay` bound to the
- * live rate plan — so the whole of the money logic can be tested against a
- * handful of made-up rates in milliseconds.
+ * Nothing in this file reads the database or the clock. The nightly rate is
+ * injected as `nightlyRate`, which in production is `rateForNight` bound to
+ * the live plan — so the whole of the money logic can be tested against a
+ * handful of made-up rates in milliseconds. Who is in the party, and what
+ * that adds, is party.ts; this file is about the stay.
  *
  * The rule throughout: when a quote cannot be produced honestly, return the
  * reason instead of a number. A wrong price sent to a guest over WhatsApp is
@@ -18,25 +28,27 @@
 /** How much of the total is asked for up front, the balance at check-in. */
 export const ADVANCE_PERCENT = 50;
 
-export type QuoteInput = {
+export type QuoteInput = Party & {
   checkIn: string | null;
   checkOut: string | null;
-  adults: number | null;
-  children: number | null;
 };
 
-export type PriceStay = (
-  checkIn: string,
-  checkOut: string,
-  guests: number,
-) => { nights: number; totalPaise: number };
+/** The standing price for one night at a given occupancy, in paise. */
+export type NightlyRate = (isoDate: string, guests: number) => number;
 
 export type Quote = {
   checkIn: string;
   checkOut: string;
   nights: number;
-  /** Heads the price was calculated for: adults plus children. */
+  /** Everyone sleeping here, children included. */
   guests: number;
+  breakdown: PartyBreakdown;
+  /** The nights themselves, before extra heads and pets. */
+  roomPaise: number;
+  /** Extra heads, across the whole stay. */
+  extraGuestPaise: number;
+  /** Pets, charged once. */
+  petPaise: number;
   totalPaise: number;
   advancePaise: number;
   balancePaise: number;
@@ -47,6 +59,28 @@ export type QuoteResult =
   | { ok: false; reason: string };
 
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
+const DAY_MS = 86_400_000;
+
+/**
+ * Every night of a stay, check-in included and check-out excluded — the same
+ * half-open convention the calendar and the bookings ledger already use.
+ * Capped, so a typo in a year cannot walk a loop for a decade.
+ */
+export function nightsOf(checkIn: string, checkOut: string): string[] {
+  const start = Date.parse(`${checkIn}T00:00:00Z`);
+  const end = Date.parse(`${checkOut}T00:00:00Z`);
+
+  if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) {
+    return [];
+  }
+
+  const nights: string[] = [];
+  for (let time = start; time < end && nights.length < 366; time += DAY_MS) {
+    nights.push(new Date(time).toISOString().slice(0, 10));
+  }
+
+  return nights;
+}
 
 /**
  * The advance, rounded up to a whole rupee.
@@ -61,20 +95,9 @@ export function advanceOf(totalPaise: number): number {
   return Math.ceil(half / 100) * 100;
 }
 
-/**
- * Children count towards occupancy.
- *
- * Sobuj Potro prices by heads in beds rather than by age, so a family of two
- * adults and two children is priced as four. If that ever stops being true,
- * this one line is the place it changes — not six call sites.
- */
-function headcount(input: QuoteInput): number {
-  return (input.adults ?? 0) + (input.children ?? 0);
-}
-
 export function quoteForEnquiry(
   input: QuoteInput,
-  priceStay: PriceStay,
+  nightlyRate: NightlyRate,
 ): QuoteResult {
   const { checkIn, checkOut } = input;
 
@@ -90,35 +113,45 @@ export function quoteForEnquiry(
     return { ok: false, reason: "Check-out is not after check-in." };
   }
 
-  const guests = headcount(input);
+  const breakdown = breakdownOf(input);
 
-  if (guests < 1) {
+  if (breakdown.heads < 1) {
     // Occupancy is the whole basis of the price here, so guessing "probably
     // two" would be inventing the number the guest is asked to pay.
     return { ok: false, reason: "No guest count on this enquiry." };
   }
 
-  const { nights, totalPaise } = priceStay(checkIn, checkOut, guests);
+  const nights = nightsOf(checkIn, checkOut);
 
-  if (nights < 1) {
+  if (nights.length < 1) {
     return { ok: false, reason: "That date range is not a stay." };
   }
 
-  if (totalPaise <= 0) {
+  const roomPaise = nights.reduce(
+    (total, isoDate) => total + nightlyRate(isoDate, breakdown.ratedGuests),
+    0,
+  );
+
+  if (roomPaise <= 0) {
     return {
       ok: false,
-      reason: `No rate is set for ${guests} guest${guests === 1 ? "" : "s"}.`,
+      reason: `No rate is set for ${breakdown.ratedGuests} guest${breakdown.ratedGuests === 1 ? "" : "s"}.`,
     };
   }
 
+  const totalPaise = stayTotalPaise({ nights, breakdown, nightlyRate });
   const advancePaise = advanceOf(totalPaise);
 
   return {
     ok: true,
     checkIn,
     checkOut,
-    nights,
-    guests,
+    nights: nights.length,
+    guests: breakdown.heads,
+    breakdown,
+    roomPaise,
+    extraGuestPaise: surchargePerNight(breakdown) * nights.length,
+    petPaise: petCharge(breakdown),
     totalPaise,
     advancePaise,
     balancePaise: totalPaise - advancePaise,

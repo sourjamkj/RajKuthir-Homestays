@@ -71,6 +71,8 @@ import {
   rateForNight,
   totalForStay,
   formatRupeesCompact,
+  formatRupees,
+  nightlyForParty,
 } from '@/lib/rates';
 import { Route, Switch, useLocation, Router as WouterRouter } from 'wouter';
 import { CONFIG, NEIGHBOURHOOD, asset, basePath, phoneHref, track } from '@/lib/site';
@@ -557,6 +559,29 @@ function Home() {
                   enquiry underneath and skip the platform fees &mdash; the host
                   confirms directly, and no payment is taken here.
                 </p>
+
+                {/* Said before anybody asks. A family arriving to find two
+                    children they thought were free on the bill is a bad first
+                    hour, and the honest version costs one paragraph. */}
+                {ratePlan.data?.extras && (
+                  <ul className="mt-6 max-w-[430px] space-y-2 border-l-2 border-primary/20 pl-4 text-[13px] leading-6 text-primary/75" data-testid="list-charges-note">
+                    <li>
+                      Children under {ratePlan.data.extras.childUnderAge} count as
+                      guests. Two adults and two little ones are a party of four,
+                      at the four-guest price &mdash; nothing extra.
+                    </li>
+                    <li>
+                      Above {ratePlan.data.maxGuests} guests, each extra person is{' '}
+                      {formatRupees(ratePlan.data.extras.extraAdultPaise)} a night, or{' '}
+                      {formatRupees(ratePlan.data.extras.extraChildPaise)} for a child
+                      under {ratePlan.data.extras.childUnderAge}.
+                    </li>
+                    <li>
+                      Pets are {formatRupees(ratePlan.data.extras.petPaise)} for the
+                      stay, not per night.
+                    </li>
+                  </ul>
+                )}
               </div>
               <div className="flex flex-col gap-3 border-t border-primary/15 pt-6 lg:border-0 lg:pt-0 lg:text-right">
                 <a href={phoneHref(CONFIG.hostPhone)} className="flex items-center gap-3 text-sm font-bold text-primary lg:justify-end" data-testid="link-booking-host">
@@ -587,23 +612,71 @@ function Home() {
                 </div>
               </div>
 
-              <div className="mt-5 flex flex-wrap items-center gap-3 border-b border-border pb-5">
-                <span className="text-[10px] font-bold uppercase tracking-[.08em] text-muted-foreground">Prices for</span>
-                <div className="flex flex-wrap gap-1.5" role="group" aria-label="Number of guests">
-                  {[1, 2, 3, 4, 5].map((count) => (
+              {/* The rate card covers one to five. Past that each head is a
+                  surcharge, so the chips stop at five and a stepper carries
+                  on — and the prices in the grid below move with it, which is
+                  the point: a party of seven should see what seven costs
+                  before they write to ask. */}
+              <div className="mt-5 border-b border-border pb-5">
+                <div className="flex flex-wrap items-center gap-3">
+                  <span className="text-[10px] font-bold uppercase tracking-[.08em] text-muted-foreground">Prices for</span>
+                  <div className="flex flex-wrap gap-1.5" role="group" aria-label="Number of guests">
+                    {[1, 2, 3, 4, 5].map((count) => (
+                      <button
+                        key={count}
+                        type="button"
+                        onClick={() => setCalendarGuests(count)}
+                        aria-pressed={calendarGuests === count}
+                        className={`h-9 min-w-9 rounded-full border px-3 text-xs font-bold transition-colors ${calendarGuests === count ? 'border-primary bg-primary text-primary-foreground' : 'border-border text-muted-foreground hover:border-primary hover:text-primary'}`}
+                        data-testid={`button-calendar-guests-${count}`}
+                      >
+                        {count}
+                      </button>
+                    ))}
+
+                    {calendarGuests > 5 && (
+                      <span
+                        className="grid h-9 min-w-9 place-items-center rounded-full border border-primary bg-primary px-3 text-xs font-bold text-primary-foreground"
+                        data-testid="text-calendar-guests-large"
+                      >
+                        {calendarGuests}
+                      </span>
+                    )}
+
                     <button
-                      key={count}
                       type="button"
-                      onClick={() => setCalendarGuests(count)}
-                      aria-pressed={calendarGuests === count}
-                      className={`h-9 min-w-9 rounded-full border px-3 text-xs font-bold transition-colors ${calendarGuests === count ? 'border-primary bg-primary text-primary-foreground' : 'border-border text-muted-foreground hover:border-primary hover:text-primary'}`}
-                      data-testid={`button-calendar-guests-${count}`}
+                      onClick={() => setCalendarGuests(Math.max(1, calendarGuests - 1))}
+                      disabled={calendarGuests <= 5}
+                      className="h-9 w-9 rounded-full border border-border text-xs font-bold text-muted-foreground transition-colors hover:border-primary hover:text-primary disabled:cursor-not-allowed disabled:opacity-30"
+                      aria-label="One guest fewer"
+                      data-testid="button-calendar-guests-fewer"
                     >
-                      {count}
+                      &minus;
                     </button>
-                  ))}
+                    <button
+                      type="button"
+                      onClick={() => setCalendarGuests(Math.min(12, calendarGuests + 1))}
+                      disabled={calendarGuests >= 12}
+                      className="h-9 w-9 rounded-full border border-border text-xs font-bold text-muted-foreground transition-colors hover:border-primary hover:text-primary disabled:cursor-not-allowed disabled:opacity-30"
+                      aria-label="One guest more"
+                      data-testid="button-calendar-guests-more"
+                    >
+                      +
+                    </button>
+                  </div>
+                  <span className="text-[10px] text-muted-foreground">{calendarGuests === 1 ? 'guest' : 'guests'}</span>
                 </div>
-                <span className="text-[10px] text-muted-foreground">{calendarGuests === 1 ? 'guest' : 'guests'}</span>
+
+                {calendarGuests > 5 && ratePlan.data?.extras && (
+                  <p className="mt-3 text-[11px] leading-5 text-muted-foreground" data-testid="text-extra-guest-note">
+                    Above five guests the prices below include{' '}
+                    {formatRupees(ratePlan.data.extras.extraAdultPaise)} a night for each
+                    extra guest &mdash;{' '}
+                    {formatRupees(ratePlan.data.extras.extraChildPaise)} for a child under{' '}
+                    {ratePlan.data.extras.childUnderAge}, which the host adjusts when
+                    confirming.
+                  </p>
+                )}
               </div>
 
               <div className="mt-6 grid grid-cols-7 gap-1.5 text-center">
@@ -613,7 +686,13 @@ function Home() {
                   const dayEvents = busyPeriods.filter((event) => eventTouchesDay(event, key));
                   const isOutsideMonth = day.getMonth() !== calendarMonth.getMonth();
                   const isToday = key === dateKey(new Date());
-                  const nightPaise = rateForNight(ratePlan.data, key, calendarGuests);
+                  // Extra heads are priced as adults here, the dearer of the two, so the
+                  // page never quotes under what the host will charge.
+                  const nightPaise = nightlyForParty(ratePlan.data, key, {
+                    adults: calendarGuests,
+                    children: 0,
+                    pets: 0,
+                  });
                   return (
                     <div key={key} className={`min-h-[76px] rounded-lg border p-2 text-left transition-colors ${isOutsideMonth ? 'border-transparent bg-background/40 opacity-35' : dayEvents.length ? 'border-accent/35 bg-secondary/40' : 'border-border bg-background'} ${isToday ? 'ring-2 ring-accent/60 ring-offset-1 ring-offset-card' : ''}`} data-testid={`calendar-day-${key}`}>
                       <p className={`text-xs font-bold ${isToday ? 'text-accent' : 'text-primary'}`}>{day.getDate()}</p>

@@ -16,7 +16,9 @@ import {
 } from "../lib/enquiries-repo";
 import { quoteForEnquiry, type QuoteResult } from "../lib/enquiry-quote";
 import { holdExpiryOf, holdStateOf } from "../lib/enquiry-hold";
-import { getRatePlan, totalForStay } from "../lib/rates-repo";
+import { firstConflict } from "../lib/availability";
+import { listPublicBlocks } from "../lib/calendar-repo";
+import { getRatePlan, rateForNight } from "../lib/rates-repo";
 import {
   buildEnquiryQuoteTemplate,
   upiDetails,
@@ -109,6 +111,36 @@ router.post("/enquiries", async (req, res) => {
   const checkIn = text(req.body?.checkIn, 10);
   const checkOut = text(req.body?.checkOut, 10);
 
+  const wantsDates =
+    checkIn && checkOut && ISO_DATE.test(checkIn) && ISO_DATE.test(checkOut);
+
+  /*
+    Turn away an enquiry for dates that are already taken, before it is stored.
+
+    Better here than in the owner's inbox: the guest finds out while they are
+    still on the page and can pick other dates, rather than waiting a day for
+    a reply that says no. The same merged ranges the public availability feed
+    publishes, so the form and the calendar can never disagree.
+
+    Provisional holds are deliberately not in this set — an advance that has
+    not arrived should not stop somebody else asking.
+  */
+  if (wantsDates) {
+    const conflict = firstConflict(
+      { startDate: checkIn, endDate: checkOut },
+      await listPublicBlocks(),
+    );
+
+    if (conflict) {
+      res.status(409).json({
+        error:
+          "Those dates are already taken. Please check the calendar and try different dates — we would still love to have you.",
+        conflict,
+      });
+      return;
+    }
+  }
+
   try {
     const created = await createEnquiry({
       name,
@@ -145,8 +177,8 @@ router.get("/enquiries", requireAdmin, async (_req, res) => {
   const rows = await listEnquiries();
   const plan = await getRatePlan();
 
-  const priceStay = (checkIn: string, checkOut: string, guests: number) =>
-    totalForStay(plan, checkIn, checkOut, guests);
+  const nightlyRate = (isoDate: string, guests: number) =>
+    rateForNight(plan, isoDate, guests);
 
   // One clock for the whole list, so two rows quoted in the same second can
   // never disagree about how long they have left.
@@ -155,7 +187,7 @@ router.get("/enquiries", requireAdmin, async (_req, res) => {
   res.json({
     enquiries: rows.map((row) => ({
       ...row,
-      quote: quoteForEnquiry(row, priceStay),
+      quote: quoteForEnquiry(row, nightlyRate),
       hold: holdStateOf(row, now),
     })),
     // The screen disables the send button and explains itself rather than
@@ -210,8 +242,8 @@ router.post("/enquiries/:id/quote", requireAdmin, async (req, res) => {
   }
 
   const plan = await getRatePlan();
-  const quote: QuoteResult = quoteForEnquiry(enquiry, (checkIn, checkOut, guests) =>
-    totalForStay(plan, checkIn, checkOut, guests),
+  const quote: QuoteResult = quoteForEnquiry(enquiry, (isoDate, guests) =>
+    rateForNight(plan, isoDate, guests),
   );
 
   if (!quote.ok) {

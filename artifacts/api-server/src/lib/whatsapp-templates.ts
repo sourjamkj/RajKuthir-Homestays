@@ -1,7 +1,7 @@
 import type { Booking } from "@workspace/db";
 
-import type { Quote } from "./enquiry-quote";
-import { formatDeadline, HOLD_HOURS } from "./enquiry-hold";
+import type { Quote } from "./enquiry-quote.ts";
+import { formatDeadline, HOLD_HOURS } from "./enquiry-hold.ts";
 
 /**
  * The four message templates, and how a booking fills them in.

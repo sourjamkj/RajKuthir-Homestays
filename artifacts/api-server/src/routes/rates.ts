@@ -1,5 +1,11 @@
 import { Router, type IRouter } from "express";
 import { MAX_GUESTS } from "@workspace/db";
+import {
+  CHILD_UNDER_AGE,
+  EXTRA_ADULT_PAISE,
+  EXTRA_CHILD_PAISE,
+  PET_PAISE,
+} from "../lib/party";
 import { requireAdmin } from "../lib/admin-auth";
 import {
   createOverride,
@@ -67,10 +73,26 @@ function parseAmounts(raw: unknown): Record<string, number> {
  * Public: guests see prices on the availability calendar, so this is
  * deliberately unauthenticated. It exposes prices only, never bookings.
  */
+/**
+ * The public rate card, including the surcharge rules.
+ *
+ * The extras ship with the plan rather than being hard-coded in the browser
+ * so there is exactly one place these numbers live. The booking page shows
+ * what the server will charge, by construction, instead of a copy that
+ * quietly goes stale the day a price changes.
+ */
 router.get("/rates", async (_req, res) => {
   const plan = await getRatePlan();
   res.setHeader("Cache-Control", "public, max-age=300");
-  res.json(plan);
+  res.json({
+    ...plan,
+    extras: {
+      childUnderAge: CHILD_UNDER_AGE,
+      extraAdultPaise: EXTRA_ADULT_PAISE,
+      extraChildPaise: EXTRA_CHILD_PAISE,
+      petPaise: PET_PAISE,
+    },
+  });
 });
 
 router.put("/rates", requireAdmin, async (req, res) => {
