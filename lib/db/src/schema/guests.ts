@@ -1,5 +1,6 @@
 import {
   boolean,
+  customType,
   date,
   index,
   integer,
@@ -9,9 +10,17 @@ import {
   timestamp,
   uniqueIndex,
   uuid,
-  bytea,
 } from "drizzle-orm/pg-core";
 import { bookings } from "./bookings";
+
+// Drizzle 0.45.x documents PostgreSQL bytea but does not export the helper.
+// Define the column type locally so this schema remains compatible with the
+// version pinned by the workspace.
+const bytea = customType<{ data: Buffer }>({
+  dataType() {
+    return "bytea";
+  },
+});
 
 export const guestDocumentStatusEnum = pgEnum("guest_document_status", [
   "pending",
