@@ -1660,10 +1660,19 @@ test("onboarding · check-in and check-out times agree everywhere they are state
   // The 48-hour deadline is measured from check-in, so it has to use the same
   // hour — it was anchored to 11:00 once, which made every deadline an hour
   // early.
+  // The constant moved to guest-verification-rules.ts when the deadline logic
+  // was separated out so it could be unit-tested; that module is now where the
+  // published hours live.
+  const rules = readFileSync(path.join(here, "./guest-verification-rules.ts"), "utf8");
   assert.match(
-    ONBOARDING_REPO_TS,
+    rules,
     /CHECK_IN_LOCAL = "12:00:00\+05:30"/,
     "the verification deadline is anchored to the wrong check-in time",
+  );
+  assert.match(rules, /CHECK_OUT_LOCAL = "11:00:00\+05:30"/);
+  assert.ok(
+    ONBOARDING_REPO_TS.includes('from "./guest-verification-rules.ts"'),
+    "the onboarding repo no longer uses the shared hours",
   );
 
   // And the guest's confirmation message must not name a different hour.

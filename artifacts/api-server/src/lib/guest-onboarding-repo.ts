@@ -11,8 +11,15 @@ import {
   normalisePhone,
 } from "@workspace/db";
 
+import {
+  MANAGEMENT_FORBIDDEN_KEYS as FORBIDDEN_KEYS,
+  linkExpiry,
+  readinessOf,
+  verificationDeadline,
+  type Readiness,
+} from "./guest-verification-rules.ts";
+
 const TOKEN_BYTES = 32;
-const LINK_TTL_DAYS = 30;
 const MAX_DOCUMENT_BYTES = 8 * 1024 * 1024;
 
 export type GuestDocumentInput = {
@@ -28,40 +35,6 @@ function hashToken(token: string): string {
   return crypto.createHash("sha256").update(token).digest("hex");
 }
 
-/**
- * The house's published hours, Asia/Kolkata: check-in from 12:00, check-out by
- * 11:00.
- *
- * These are not arbitrary. They are what the house rules page states
- * ("Check-in from 12:00 PM, check-out by 11:00 AM") and what the
- * LodgingBusiness structured data emits as checkinTime / checkoutTime. This
- * file used to assume check-in was 11:00, which set the verification deadline
- * an hour early and — because the same figure was typed into the guest's
- * confirmation message — told guests to arrive an hour before the house
- * actually opens. If the hours ever change, all three must move together.
- */
-const CHECK_IN_LOCAL = "12:00:00+05:30";
-const CHECK_OUT_LOCAL = "11:00:00+05:30";
-
-function verificationDeadline(checkIn: string): Date {
-  // Exactly 48 hours before the scheduled check-in time.
-  const d = new Date(`${checkIn}T${CHECK_IN_LOCAL}`);
-  d.setTime(d.getTime() - 48 * 60 * 60 * 1000);
-  return d;
-}
-
-/**
- * The guest's link stops working once they have left. A stay that is already
- * over gets a short rolling window instead, so a late submission chased up by
- * the owner still has somewhere to land.
- */
-function expiry(checkOut: string): Date {
-  const checkOutAt = new Date(`${checkOut}T${CHECK_OUT_LOCAL}`);
-  return checkOutAt.getTime() > Date.now()
-    ? checkOutAt
-    : new Date(Date.now() + LINK_TTL_DAYS * 86400000);
-}
-
 export function makeGuestOnboardingToken(): string {
   return crypto.randomBytes(TOKEN_BYTES).toString("base64url");
 }
@@ -73,7 +46,7 @@ export async function createOrRefreshOnboarding(bookingId: string) {
   const token = makeGuestOnboardingToken();
   const tokenHash = hashToken(token);
   const verification = verificationDeadline(booking.checkIn);
-  const expires = expiry(booking.checkOut);
+  const expires = linkExpiry(booking.checkOut);
 
   const existing = (await db.select().from(guestOnboarding).where(eq(guestOnboarding.bookingId, bookingId)).limit(1))[0];
 
@@ -95,6 +68,105 @@ export async function createOrRefreshOnboarding(bookingId: string) {
   }
 
   return { token, verificationDeadline: verification, expiresAt: expires, booking };
+}
+
+/**
+ * Everything management is allowed to be told about a stay.
+ *
+ * This type is the whitelist. It exists because the alternative — passing the
+ * admin's booking row to a message builder and trusting whoever edits that
+ * builder next not to interpolate a rupee figure — is a discipline problem,
+ * and discipline problems come back. Here a financial field cannot be leaked
+ * by accident because it is never fetched: buildManagementDto() names its
+ * columns explicitly and `bookings.grossPaise`, `bookings.receivedPaise`,
+ * commission and tax are not among them.
+ *
+ * Management gets what it needs to receive a guest at the door and nothing
+ * that belongs to the owner's ledger.
+ *
+ * If you add a field here, it must be operational. Money is not operational.
+ */
+export type ManagementGuestVerificationDTO = {
+  guestName: string | null;
+  guestPhone: string | null;
+  checkIn: string;
+  checkOut: string;
+  /** Per-status counts of the identity documents filed for this stay. */
+  documents: {
+    count: number;
+    submitted: number;
+    verified: number;
+    rejected: number;
+  };
+  /** Operational readiness, derived — never the raw booking status. */
+  readiness: Readiness;
+  verificationDeadline: string | null;
+};
+
+/** Re-exported so callers of this repo need only one import. */
+export const MANAGEMENT_FORBIDDEN_KEYS = FORBIDDEN_KEYS;
+
+/**
+ * Builds the management view of one booking, reading only whitelisted columns.
+ */
+export async function buildManagementDto(
+  bookingId: string,
+  now = new Date(),
+): Promise<ManagementGuestVerificationDTO | null> {
+  // Note what is NOT selected here. This is the whole security control.
+  const booking = (
+    await db
+      .select({
+        id: bookings.id,
+        guestName: bookings.guestName,
+        guestPhone: bookings.guestPhone,
+        checkIn: bookings.checkIn,
+        checkOut: bookings.checkOut,
+      })
+      .from(bookings)
+      .where(eq(bookings.id, bookingId))
+      .limit(1)
+  )[0];
+
+  if (!booking) return null;
+
+  const onboarding = (
+    await db
+      .select({
+        status: guestOnboarding.status,
+        verificationDeadline: guestOnboarding.verificationDeadline,
+      })
+      .from(guestOnboarding)
+      .where(eq(guestOnboarding.bookingId, bookingId))
+      .limit(1)
+  )[0];
+
+  const docs = await db
+    .select({ status: guestDocuments.status })
+    .from(guestDocuments)
+    .where(and(eq(guestDocuments.bookingId, bookingId), isNull(guestDocuments.deletedAt)));
+
+  const documents = {
+    count: docs.length,
+    submitted: docs.filter((d) => d.status === "submitted").length,
+    verified: docs.filter((d) => d.status === "verified").length,
+    rejected: docs.filter((d) => d.status === "rejected").length,
+  };
+
+  return {
+    guestName: booking.guestName,
+    guestPhone: booking.guestPhone,
+    checkIn: booking.checkIn,
+    checkOut: booking.checkOut,
+    documents,
+    readiness: readinessOf({
+      onboardingStatus: onboarding?.status ?? null,
+      verificationDeadline: onboarding?.verificationDeadline ?? null,
+      documents,
+      now,
+    }),
+    verificationDeadline: onboarding?.verificationDeadline?.toISOString() ?? null,
+  };
 }
 
 export async function createOrRefreshManagementAccess(bookingId: string) {

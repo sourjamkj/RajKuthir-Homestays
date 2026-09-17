@@ -97,6 +97,25 @@ type Enquiry = {
 };
 
 
+/**
+ * The client mirror of the server's ManagementGuestVerificationDTO.
+ *
+ * Deliberately has NO financial fields. buildManagementMessage below takes
+ * only this type, so a rupee figure cannot be interpolated into a management
+ * message without first adding a money field to this interface and to the
+ * server whitelist that fills it — which is exactly the friction that is
+ * wanted. A test asserts both.
+ */
+type ManagementGuestVerification = {
+  guestName: string | null;
+  guestPhone: string | null;
+  checkIn: string;
+  checkOut: string;
+  documents: { count: number; submitted: number; verified: number; rejected: number };
+  readiness: 'ready' | 'documents_submitted' | 'awaiting_documents' | 'deadline_passed' | 'blocked';
+  verificationDeadline: string | null;
+};
+
 type GuestStay = {
   bookingId: string;
   reference: string | null;
@@ -200,9 +219,23 @@ export default function AdminGuests() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: GUEST_STAYS_KEY }),
   });
 
+  /**
+   * Asks the server for a management access link AND the management view of
+   * the booking.
+   *
+   * The `management` half is the important part: it is a
+   * ManagementGuestVerificationDTO built server-side from whitelisted columns,
+   * so the financial fields on `stay` are not merely unused here, they are
+   * never sent on this path. The message below is composed from the DTO only
+   * — `stay` is used for nothing but its bookingId.
+   */
   const prepareManagement = useMutation({
     mutationFn: async (stay: GuestStay) => {
-      const result = await adminFetch<{ url: string }>(
+      const result = await adminFetch<{
+        url: string;
+        expiresAt: string;
+        management: ManagementGuestVerification;
+      }>(
         `/api/admin/guest-stays/${stay.bookingId}/management-access`,
         { method: 'POST', body: JSON.stringify({}) },
       );
@@ -210,25 +243,28 @@ export default function AdminGuests() {
     },
   });
 
+  const managementSubject = (dto: ManagementGuestVerification) =>
+    `Sobuj Potro — Guest Arrival / Verification — ${dto.guestName ?? 'Guest'}`;
+
   const openManagementWhatsApp = async (stay: GuestStay) => {
     const result = await prepareManagement.mutateAsync(stay);
-    const message = buildManagementMessage(stay, result.url);
+    const message = buildManagementMessage(result.management, result.url);
     window.open(`https://wa.me/${MANAGEMENT_WHATSAPP}?text=${encodeURIComponent(message)}`, '_blank', 'noopener,noreferrer');
   };
 
   const openManagementEmail = async (stay: GuestStay) => {
     const result = await prepareManagement.mutateAsync(stay);
-    const message = buildManagementMessage(stay, result.url);
+    const message = buildManagementMessage(result.management, result.url);
     // No management address is committed: the mail client lets the owner pick
     // the management recipient while the subject/body are already prepared.
-    window.location.href = `mailto:?subject=${encodeURIComponent(`Sobuj Potro — Guest Arrival / Verification — ${stay.guestName ?? 'Guest'}`)}&body=${encodeURIComponent(message)}`;
+    window.location.href = `mailto:?subject=${encodeURIComponent(managementSubject(result.management))}&body=${encodeURIComponent(message)}`;
   };
 
   const openManagementBoth = async (stay: GuestStay) => {
     const result = await prepareManagement.mutateAsync(stay);
-    const message = buildManagementMessage(stay, result.url);
+    const message = buildManagementMessage(result.management, result.url);
     window.open(`https://wa.me/${MANAGEMENT_WHATSAPP}?text=${encodeURIComponent(message)}`, '_blank', 'noopener,noreferrer');
-    window.location.href = `mailto:?subject=${encodeURIComponent(`Sobuj Potro — Guest Arrival / Verification — ${stay.guestName ?? 'Guest'}`)}&body=${encodeURIComponent(message)}`;
+    window.location.href = `mailto:?subject=${encodeURIComponent(managementSubject(result.management))}&body=${encodeURIComponent(message)}`;
   };
 
   const verifyDocuments = useMutation({
@@ -615,7 +651,31 @@ export default function AdminGuests() {
               </tbody>
             </table>
             {guestStays.isLoading && <p className="p-5 text-sm text-muted-foreground">Loading guest stays…</p>}
-            {!guestStays.isLoading && (guestStays.data?.stays ?? []).length === 0 && <p className="p-5 text-sm text-muted-foreground">No bookings yet.</p>}
+            {/* An empty list and a failed request are different things. This
+                panel used to render "No bookings yet." for both, which is how a
+                500 from /api/admin/guest-stays looked exactly like a quiet
+                Tuesday. Say which one it is. */}
+            {!guestStays.isLoading && guestStays.isError && (
+              <div className="p-5">
+                <p className="text-sm font-semibold text-[#A65E45]">Could not load guest stays.</p>
+                <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                  {guestStays.error instanceof Error ? guestStays.error.message : 'The server did not answer.'}
+                </p>
+                <p className="mt-2 text-xs leading-5 text-muted-foreground">
+                  This is not the same as having no bookings — the readiness list is
+                  unavailable, so the WhatsApp actions below cannot attach a verification link.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => void guestStays.refetch()}
+                  className="mt-3 rounded-lg border border-border px-3 py-2 text-[10px] font-bold uppercase tracking-[.07em] text-primary hover:border-primary"
+                  data-testid="button-retry-guest-stays"
+                >
+                  Try again
+                </button>
+              </div>
+            )}
+            {!guestStays.isLoading && !guestStays.isError && (guestStays.data?.stays ?? []).length === 0 && <p className="p-5 text-sm text-muted-foreground">No bookings yet.</p>}
           </div>
         </section>
 
@@ -729,6 +789,21 @@ export default function AdminGuests() {
                           >
                             <MessageCircle size={12} /> WhatsApp
                           </button>
+                        ) : guestStays.isError ? (
+                          // The stays list failed to load, so we cannot tell
+                          // whether this guest has a booking. Sending the
+                          // generic message here would quietly omit the
+                          // mandatory verification link, which is the one part
+                          // that must not go missing. Refuse instead.
+                          <button
+                            type="button"
+                            disabled
+                            className="inline-flex cursor-not-allowed items-center gap-1.5 rounded-lg border border-[#A65E45]/40 px-3 py-2 text-[10px] font-bold uppercase tracking-[.07em] text-[#A65E45] opacity-70"
+                            data-testid={`button-whatsapp-contact-${contact.phone}`}
+                            title="Guest stays could not be loaded, so the verification link cannot be attached"
+                          >
+                            <MessageCircle size={12} /> Unavailable
+                          </button>
                         ) : (
                           <a
                             href={waLink(contact.phone, contact.name)}
@@ -736,7 +811,7 @@ export default function AdminGuests() {
                             rel="noreferrer"
                             className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-2 text-[10px] font-bold uppercase tracking-[.07em] text-primary hover:border-primary"
                             data-testid={`button-whatsapp-contact-${contact.phone}`}
-                            title="Open WhatsApp"
+                            title="No booking found for this number — opens WhatsApp without a verification link"
                           >
                             <MessageCircle size={12} /> WhatsApp
                           </a>
@@ -777,14 +852,50 @@ function buildGuestWhatsAppMessage(stay: GuestStay, verificationUrl: string): st
   return `Greetings from Raj Kuthir Homestays – Sobuj Potro, Shantiniketan! 🌿\n\nDear ${stay.guestName ?? 'Guest'},\n\nThank you for choosing Raj Kuthir Homestays – Sobuj Potro. We are pleased to confirm your booking.\n\n🔴 IMPORTANT – ACTION REQUIRED BEFORE ARRIVAL\n\n📄 Document Verification / Pre-Arrival Check-in:\n${verificationUrl}\n\nPlease complete the mandatory guest information and ID document verification at least 48 hours before your scheduled check-in time.\n\n⚠️ Failure to complete the mandatory verification within this timeframe may result in check-in being denied without refund, in accordance with the booking terms.\n\n📅 Check-in: ${prettyGuestDate(stay.checkIn)} – ${CHECK_IN_TIME} onwards\n📅 Check-out: ${prettyGuestDate(stay.checkOut)} – ${CHECK_OUT_TIME}\n👥 Guests: ${stay.guests ?? 'As booked'}\n🏡 Accommodation: Entire Two-Bedroom Villa${nights ? ` (${nights} Nights)` : ''}${stay.pets ? `\n🐾 Pets: ${stay.pets}` : ''}\n\n💰 Booking Details\n\n- Total Booking Amount: ₹${total}\n- Advance Received: ₹${advance} ✅\n- Balance Amount Due: ₹${balance} (Payable at the property during check-in)\n\n📍 Google Maps: https://maps.app.goo.gl/aEdaJaaeEy1DZ8Ps8?g_st=ac\n\n📞 Contact Numbers\n- Host: +91 62903 99165\n- Designated Caretaker: +91 78726 85558\n\nAdditional Information\n\n- High-speed Wi-Fi is available and suitable for work/staycations.\n- Cafe Soi, located within the premises, serves snacks and beverages.\n- Home-cooked meals can also be arranged after discussing the menu and charges directly with the caretaker.\n- Zomato is available in the area with multiple restaurant options. Delivery availability and timings may vary depending on weather and local conditions.\n- Basic cooking utensils are available for simple meals. Additional utensils for elaborate cooking can be arranged subject to availability. Guests are also welcome to bring their own induction/microwave-compatible cookware if required.\n\nWe look forward to hosting you and wish you a wonderful stay at Raj Kuthir Homestays – Sobuj Potro.\n\nWarm regards,\nTeam Raj Kuthir Homestays – Sobuj Potro`;
 }
 
-function buildManagementMessage(stay: GuestStay, managementUrl: string): string {
+function buildManagementMessage(
+  dto: ManagementGuestVerification,
+  managementUrl: string,
+): string {
+  // Note the parameter type. This function cannot reach a financial field
+  // because it is never given one.
   const docs = [
-    ...(stay.documents.verified ? [`${stay.documents.verified} ID document${stay.documents.verified === 1 ? '' : 's'} — Verified`] : []),
-    ...(stay.documents.submitted ? [`${stay.documents.submitted} ID document${stay.documents.submitted === 1 ? '' : 's'} — Uploaded / Pending Verification`] : []),
-    ...(stay.documents.rejected ? [`${stay.documents.rejected} ID document${stay.documents.rejected === 1 ? '' : 's'} — Rejected`] : []),
+    ...(dto.documents.verified
+      ? [`${dto.documents.verified} ID document${dto.documents.verified === 1 ? '' : 's'} \u2014 Verified`]
+      : []),
+    ...(dto.documents.submitted
+      ? [`${dto.documents.submitted} ID document${dto.documents.submitted === 1 ? '' : 's'} \u2014 Uploaded / Pending verification`]
+      : []),
+    ...(dto.documents.rejected
+      ? [`${dto.documents.rejected} ID document${dto.documents.rejected === 1 ? '' : 's'} \u2014 Rejected`]
+      : []),
   ];
-  const deadlinePassed = Boolean(stay.verificationDeadline && new Date(stay.verificationDeadline).getTime() <= Date.now() && stay.onboardingStatus !== 'verified');
-  return `SOBUJ POTRO — GUEST ARRIVAL / VERIFICATION\n\nGuest: ${stay.guestName ?? 'Not provided'}\nNumber: ${stay.guestPhone ?? 'Not provided'}\nCheck-in: ${prettyGuestDate(stay.checkIn)}\nCheck-out: ${prettyGuestDate(stay.checkOut)}\n\nGuest ID Documents:\n${docs.length ? docs.map((doc, i) => `${i + 1}. ${doc}`).join('\n') : '1. No documents uploaded yet'}\n\nSecure document access:\n${managementUrl}`;
+
+  const READINESS: Record<ManagementGuestVerification['readiness'], string> = {
+    ready: 'Ready for check-in \u2014 all documents verified',
+    documents_submitted: 'Documents uploaded \u2014 awaiting verification',
+    awaiting_documents: 'Awaiting guest documents',
+    // Reported, never acted on. The property decides what happens to the
+    // booking; this system does not cancel or refuse anything.
+    deadline_passed: 'Verification deadline passed \u2014 property to decide on check-in',
+    blocked: 'Check-in blocked \u2014 property to decide',
+  };
+
+  return [
+    'SOBUJ POTRO \u2014 GUEST ARRIVAL / VERIFICATION',
+    '',
+    `Guest: ${dto.guestName ?? 'Not provided'}`,
+    `Number: ${dto.guestPhone ?? 'Not provided'}`,
+    `Check-in: ${prettyGuestDate(dto.checkIn)}`,
+    `Check-out: ${prettyGuestDate(dto.checkOut)}`,
+    '',
+    'Guest ID documents:',
+    ...(docs.length ? docs.map((doc, i) => `${i + 1}. ${doc}`) : ['1. No documents uploaded yet']),
+    '',
+    `Status: ${READINESS[dto.readiness]}`,
+    '',
+    'Secure document access:',
+    managementUrl,
+  ].join('\n');
 }
 
 function Heading({

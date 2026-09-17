@@ -1,6 +1,7 @@
 import { Router, type IRouter } from "express";
 import { requireAdmin } from "../lib/admin-auth";
 import {
+  buildManagementDto,
   createOrRefreshManagementAccess,
   createOrRefreshOnboarding,
   findOnboarding,
@@ -127,11 +128,23 @@ router.post("/admin/guest-stays/:bookingId/management-access", requireAdmin, asy
     res.status(404).json({ error: "Booking not found." });
     return;
   }
+
+  // The management message is composed from THIS payload, not from the admin
+  // booking row the console already holds. buildManagementDto selects only
+  // whitelisted columns, so no financial field is fetched, serialised or sent
+  // on the management path at all — see ManagementGuestVerificationDTO.
+  const management = await buildManagementDto(bookingId);
+  if (!management) {
+    res.status(404).json({ error: "Booking not found." });
+    return;
+  }
+
   // Fragment, not path — this token opens scans of a guest's government ID.
   const base = `${req.protocol}://${req.get("host")}`;
   res.json({
     url: `${base}/management-documents#${encodeURIComponent(result.token)}`,
     expiresAt: result.expiresAt,
+    management,
   });
 });
 
