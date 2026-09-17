@@ -40,8 +40,12 @@ router.post("/admin/guest-stays/:bookingId/onboarding", requireAdmin, async (req
     res.status(404).json({ error: "Booking not found." });
     return;
   }
+  // The token goes after the '#'. A fragment is never sent to a server, so it
+  // cannot reach the proxy access log, a Referer header or our own logs — see
+  // the note in PreArrival.tsx. Everything after this point is unchanged: the
+  // page still POSTs the token to /guest/onboarding/lookup.
   const base = `${req.protocol}://${req.get("host")}`;
-  const url = `${base}/pre-arrival/${result.token}`;
+  const url = `${base}/pre-arrival#${encodeURIComponent(result.token)}`;
   res.json({
     url,
     verificationDeadline: result.verificationDeadline,
@@ -123,8 +127,12 @@ router.post("/admin/guest-stays/:bookingId/management-access", requireAdmin, asy
     res.status(404).json({ error: "Booking not found." });
     return;
   }
+  // Fragment, not path — this token opens scans of a guest's government ID.
   const base = `${req.protocol}://${req.get("host")}`;
-  res.json({ url: `${base}/management-documents/${result.token}`, expiresAt: result.expiresAt });
+  res.json({
+    url: `${base}/management-documents#${encodeURIComponent(result.token)}`,
+    expiresAt: result.expiresAt,
+  });
 });
 
 router.post("/management/documents/lookup", async (req, res) => {

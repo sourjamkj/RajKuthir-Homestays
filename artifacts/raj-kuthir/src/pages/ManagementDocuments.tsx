@@ -1,6 +1,16 @@
 import { useEffect, useState, type ReactNode } from 'react';
-import { useRoute } from 'wouter';
 import { AlertCircle, CheckCircle2, ExternalLink, FileText, Loader2 } from 'lucide-react';
+
+/**
+ * The access token rides in the URL fragment, not the path — see the note in
+ * PreArrival.tsx. It matters more here than there: this token opens scans of a
+ * guest's government ID, and a path-borne token would sit in the Railway proxy
+ * access log in plain text.
+ */
+function tokenFromFragment(): string {
+  if (typeof window === 'undefined') return '';
+  return decodeURIComponent(window.location.hash.replace(/^#/, '')).trim();
+}
 
 type DocumentItem = {
   id: string;
@@ -19,14 +29,28 @@ type ManagementData = {
 };
 
 export default function ManagementDocuments() {
-  const [, params] = useRoute('/management-documents/:token');
-  const token = params?.token ?? '';
+  const [token] = useState(tokenFromFragment);
   const [data, setData] = useState<ManagementData | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [opening, setOpening] = useState<string | null>(null);
 
   useEffect(() => {
     document.title = 'Guest document access | Sobuj Potro';
+
+    // This page lists another person's identity documents. It was missing the
+    // robots tag the other private pages carry; the server now also answers
+    // /management-documents with noindex and an X-Robots-Tag header.
+    document.querySelector('meta[name="robots"]')?.remove();
+    const meta = document.createElement('meta');
+    meta.name = 'robots';
+    meta.content = 'noindex, nofollow';
+    document.head.appendChild(meta);
+
+    if (!token) {
+      setError('This access link is incomplete. Please open the full link exactly as it was sent.');
+      return () => meta.remove();
+    }
+
     fetch('/api/management/documents/lookup', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -39,6 +63,8 @@ export default function ManagementDocuments() {
       })
       .then(setData)
       .catch((e) => setError(e instanceof Error ? e.message : 'This access link is unavailable.'));
+
+    return () => meta.remove();
   }, [token]);
 
   if (error) return <Shell><div className="max-w-[720px] rounded-2xl border border-border bg-card p-7"><AlertCircle className="text-accent"/><h1 className="mt-4 font-journal text-3xl text-primary">Document access unavailable</h1><p className="mt-3 text-sm leading-6 text-muted-foreground">{error}</p></div></Shell>;

@@ -17,14 +17,31 @@ import {
 } from 'lucide-react';
 import { adminFetch, useAdminSession, useLogout } from '@/lib/admin-api';
 import { formatRupees } from '@/lib/ledger-api';
+import { CONFIG } from '@/lib/site';
 
 const ENQUIRIES_KEY = ['/api/enquiries'];
 const CONTACTS_KEY = ['/api/contacts'];
 const GUEST_STAYS_KEY = ['/api/admin/guest-stays'];
 
-// Temporary management WhatsApp recipient for end-to-end testing.
-// Replace with the final management number/config before production use.
-const MANAGEMENT_TEST_WHATSAPP = '916290399165';
+/**
+ * Where the management handoff message is addressed.
+ *
+ * This was the literal '916290399165' marked "temporary, replace before
+ * production" — which is the host's own number from CONFIG, typed a second
+ * time. Reading it from site.ts means changing the number in one place
+ * changes it everywhere, and nothing here is labelled a test any more.
+ */
+const MANAGEMENT_WHATSAPP = CONFIG.hostPhone.replace(/\D/g, '');
+
+/**
+ * The house's published hours. The same two figures are in the house rules
+ * page, in the LodgingBusiness structured data, and in
+ * guest-onboarding-repo.ts, which anchors the 48-hour verification deadline to
+ * check-in. The confirmation message below used to say 11:00 AM / 10:00 AM,
+ * an hour early on both counts.
+ */
+const CHECK_IN_TIME = '12:00 PM';
+const CHECK_OUT_TIME = '11:00 AM';
 
 type EnquiryStatus = 'new' | 'contacted' | 'converted' | 'closed';
 
@@ -196,7 +213,7 @@ export default function AdminGuests() {
   const openManagementWhatsApp = async (stay: GuestStay) => {
     const result = await prepareManagement.mutateAsync(stay);
     const message = buildManagementMessage(stay, result.url);
-    window.open(`https://wa.me/${MANAGEMENT_TEST_WHATSAPP}?text=${encodeURIComponent(message)}`, '_blank', 'noopener,noreferrer');
+    window.open(`https://wa.me/${MANAGEMENT_WHATSAPP}?text=${encodeURIComponent(message)}`, '_blank', 'noopener,noreferrer');
   };
 
   const openManagementEmail = async (stay: GuestStay) => {
@@ -210,7 +227,7 @@ export default function AdminGuests() {
   const openManagementBoth = async (stay: GuestStay) => {
     const result = await prepareManagement.mutateAsync(stay);
     const message = buildManagementMessage(stay, result.url);
-    window.open(`https://wa.me/${MANAGEMENT_TEST_WHATSAPP}?text=${encodeURIComponent(message)}`, '_blank', 'noopener,noreferrer');
+    window.open(`https://wa.me/${MANAGEMENT_WHATSAPP}?text=${encodeURIComponent(message)}`, '_blank', 'noopener,noreferrer');
     window.location.href = `mailto:?subject=${encodeURIComponent(`Sobuj Potro — Guest Arrival / Verification — ${stay.guestName ?? 'Guest'}`)}&body=${encodeURIComponent(message)}`;
   };
 
@@ -757,7 +774,7 @@ function buildGuestWhatsAppMessage(stay: GuestStay, verificationUrl: string): st
   const balance = stay.grossPaise != null && stay.receivedPaise != null
     ? money(Math.max(0, stay.grossPaise - stay.receivedPaise))
     : 'To be confirmed';
-  return `Greetings from Raj Kuthir Homestays – Sobuj Potro, Shantiniketan! 🌿\n\nDear ${stay.guestName ?? 'Guest'},\n\nThank you for choosing Raj Kuthir Homestays – Sobuj Potro. We are pleased to confirm your booking.\n\n🔴 IMPORTANT – ACTION REQUIRED BEFORE ARRIVAL\n\n📄 Document Verification / Pre-Arrival Check-in:\n${verificationUrl}\n\nPlease complete the mandatory guest information and ID document verification at least 48 hours before your scheduled check-in time.\n\n⚠️ Failure to complete the mandatory verification within this timeframe may result in check-in being denied without refund, in accordance with the booking terms.\n\n📅 Check-in: ${prettyGuestDate(stay.checkIn)} – 11:00 AM onwards\n📅 Check-out: ${prettyGuestDate(stay.checkOut)} – 10:00 AM\n👥 Guests: ${stay.guests ?? 'As booked'}\n🏡 Accommodation: Entire Two-Bedroom Villa${nights ? ` (${nights} Nights)` : ''}${stay.pets ? `\n🐾 Pets: ${stay.pets}` : ''}\n\n💰 Booking Details\n\n- Total Booking Amount: ₹${total}\n- Advance Received: ₹${advance} ✅\n- Balance Amount Due: ₹${balance} (Payable at the property during check-in)\n\n📍 Google Maps: https://maps.app.goo.gl/aEdaJaaeEy1DZ8Ps8?g_st=ac\n\n📞 Contact Numbers\n- Host: +91 62903 99165\n- Designated Caretaker: +91 78726 85558\n\nAdditional Information\n\n- High-speed Wi-Fi is available and suitable for work/staycations.\n- Cafe Soi, located within the premises, serves snacks and beverages.\n- Home-cooked meals can also be arranged after discussing the menu and charges directly with the caretaker.\n- Zomato is available in the area with multiple restaurant options. Delivery availability and timings may vary depending on weather and local conditions.\n- Basic cooking utensils are available for simple meals. Additional utensils for elaborate cooking can be arranged subject to availability. Guests are also welcome to bring their own induction/microwave-compatible cookware if required.\n\nWe look forward to hosting you and wish you a wonderful stay at Raj Kuthir Homestays – Sobuj Potro.\n\nWarm regards,\nTeam Raj Kuthir Homestays – Sobuj Potro`;
+  return `Greetings from Raj Kuthir Homestays – Sobuj Potro, Shantiniketan! 🌿\n\nDear ${stay.guestName ?? 'Guest'},\n\nThank you for choosing Raj Kuthir Homestays – Sobuj Potro. We are pleased to confirm your booking.\n\n🔴 IMPORTANT – ACTION REQUIRED BEFORE ARRIVAL\n\n📄 Document Verification / Pre-Arrival Check-in:\n${verificationUrl}\n\nPlease complete the mandatory guest information and ID document verification at least 48 hours before your scheduled check-in time.\n\n⚠️ Failure to complete the mandatory verification within this timeframe may result in check-in being denied without refund, in accordance with the booking terms.\n\n📅 Check-in: ${prettyGuestDate(stay.checkIn)} – ${CHECK_IN_TIME} onwards\n📅 Check-out: ${prettyGuestDate(stay.checkOut)} – ${CHECK_OUT_TIME}\n👥 Guests: ${stay.guests ?? 'As booked'}\n🏡 Accommodation: Entire Two-Bedroom Villa${nights ? ` (${nights} Nights)` : ''}${stay.pets ? `\n🐾 Pets: ${stay.pets}` : ''}\n\n💰 Booking Details\n\n- Total Booking Amount: ₹${total}\n- Advance Received: ₹${advance} ✅\n- Balance Amount Due: ₹${balance} (Payable at the property during check-in)\n\n📍 Google Maps: https://maps.app.goo.gl/aEdaJaaeEy1DZ8Ps8?g_st=ac\n\n📞 Contact Numbers\n- Host: +91 62903 99165\n- Designated Caretaker: +91 78726 85558\n\nAdditional Information\n\n- High-speed Wi-Fi is available and suitable for work/staycations.\n- Cafe Soi, located within the premises, serves snacks and beverages.\n- Home-cooked meals can also be arranged after discussing the menu and charges directly with the caretaker.\n- Zomato is available in the area with multiple restaurant options. Delivery availability and timings may vary depending on weather and local conditions.\n- Basic cooking utensils are available for simple meals. Additional utensils for elaborate cooking can be arranged subject to availability. Guests are also welcome to bring their own induction/microwave-compatible cookware if required.\n\nWe look forward to hosting you and wish you a wonderful stay at Raj Kuthir Homestays – Sobuj Potro.\n\nWarm regards,\nTeam Raj Kuthir Homestays – Sobuj Potro`;
 }
 
 function buildManagementMessage(stay: GuestStay, managementUrl: string): string {

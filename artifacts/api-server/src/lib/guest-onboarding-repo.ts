@@ -28,17 +28,37 @@ function hashToken(token: string): string {
   return crypto.createHash("sha256").update(token).digest("hex");
 }
 
+/**
+ * The house's published hours, Asia/Kolkata: check-in from 12:00, check-out by
+ * 11:00.
+ *
+ * These are not arbitrary. They are what the house rules page states
+ * ("Check-in from 12:00 PM, check-out by 11:00 AM") and what the
+ * LodgingBusiness structured data emits as checkinTime / checkoutTime. This
+ * file used to assume check-in was 11:00, which set the verification deadline
+ * an hour early and — because the same figure was typed into the guest's
+ * confirmation message — told guests to arrive an hour before the house
+ * actually opens. If the hours ever change, all three must move together.
+ */
+const CHECK_IN_LOCAL = "12:00:00+05:30";
+const CHECK_OUT_LOCAL = "11:00:00+05:30";
+
 function verificationDeadline(checkIn: string): Date {
-  // Raj Kuthir check-in is 11:00 AM Asia/Kolkata. The verification deadline is
-  // exactly 48 hours before that scheduled check-in time.
-  const d = new Date(`${checkIn}T11:00:00+05:30`);
+  // Exactly 48 hours before the scheduled check-in time.
+  const d = new Date(`${checkIn}T${CHECK_IN_LOCAL}`);
   d.setTime(d.getTime() - 48 * 60 * 60 * 1000);
   return d;
 }
 
+/**
+ * The guest's link stops working once they have left. A stay that is already
+ * over gets a short rolling window instead, so a late submission chased up by
+ * the owner still has somewhere to land.
+ */
 function expiry(checkOut: string): Date {
-  return new Date(`${checkOut}T12:00:00+05:30`).getTime() > Date.now()
-    ? new Date(`${checkOut}T12:00:00+05:30`)
+  const checkOutAt = new Date(`${checkOut}T${CHECK_OUT_LOCAL}`);
+  return checkOutAt.getTime() > Date.now()
+    ? checkOutAt
     : new Date(Date.now() + LINK_TTL_DAYS * 86400000);
 }
 

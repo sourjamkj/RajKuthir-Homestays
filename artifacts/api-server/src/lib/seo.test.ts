@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
@@ -1504,5 +1504,212 @@ test("places · no unverified travel time, and the core sights stay covered", ()
   assert.match(source, /NEIGHBOURHOOD\.map/);
   for (const topic of ["Sonajhuri", "Visva-Bharati", "Rabindra Bhavan", "Khoai"]) {
     assert.ok(site.includes(topic), `the places page no longer covers ${topic}`);
+  }
+});
+
+// ================================================== GUEST ONBOARDING LINKS
+// The pre-arrival and management pages are capability URLs: the path is
+// public, the token is not. These tests hold that line, because every part of
+// it was got wrong once already.
+
+const PRE_ARRIVAL_TSX = readFileSync(
+  path.join(clientRoot, "src/pages/PreArrival.tsx"),
+  "utf8",
+);
+
+const MANAGEMENT_DOCS_TSX = readFileSync(
+  path.join(clientRoot, "src/pages/ManagementDocuments.tsx"),
+  "utf8",
+);
+
+const ONBOARDING_ROUTES_TS = readFileSync(
+  path.join(here, "../routes/guest-onboarding.ts"),
+  "utf8",
+);
+
+const ONBOARDING_REPO_TS = readFileSync(
+  path.join(here, "./guest-onboarding-repo.ts"),
+  "utf8",
+);
+
+const ADMIN_GUESTS_TSX = readFileSync(
+  path.join(clientRoot, "src/pages/AdminGuests.tsx"),
+  "utf8",
+);
+
+test("onboarding · both capability routes are known, so neither is served as a 404", () => {
+  for (const route of ["/pre-arrival", "/management-documents"]) {
+    assert.ok(
+      isKnownPath(route),
+      `${route} would be answered with a 404 status, which also breaks link previews`,
+    );
+  }
+});
+
+test("onboarding · both capability routes are private and never indexed", () => {
+  for (const route of ["/pre-arrival", "/management-documents"]) {
+    assert.ok(isPrivatePath(route), `${route} is not treated as private`);
+
+    const head = injectMeta(BASE_HTML, route);
+    assert.match(
+      head,
+      /<meta name="robots" content="noindex, nofollow" \/>/,
+      `${route} is not marked noindex`,
+    );
+    // A noindex page has no URL worth indexing, so it must not name one.
+    assert.ok(
+      !/<link rel="canonical"/.test(head),
+      `${route} emits a canonical despite being noindex`,
+    );
+    assert.ok(
+      !/property="og:url"/.test(head),
+      `${route} emits an og:url despite being noindex`,
+    );
+  }
+});
+
+test("onboarding · neither capability route reaches the sitemap", () => {
+  const xml = sitemapXml();
+  assert.ok(!xml.includes("/pre-arrival"), "the sitemap lists /pre-arrival");
+  assert.ok(
+    !xml.includes("/management-documents"),
+    "the sitemap lists /management-documents",
+  );
+});
+
+test("onboarding · the token travels in the fragment, never in the path", () => {
+  // The server builds the links. A '#' keeps the token out of the Railway
+  // proxy access log, out of Referer headers and out of our own logs.
+  assert.match(
+    ONBOARDING_ROUTES_TS,
+    /\/pre-arrival#\$\{encodeURIComponent\(/,
+    "the pre-arrival link puts the token somewhere other than the fragment",
+  );
+  assert.match(
+    ONBOARDING_ROUTES_TS,
+    /\/management-documents#\$\{encodeURIComponent\(/,
+    "the management link puts the token somewhere other than the fragment",
+  );
+  assert.ok(
+    !/\/pre-arrival\/\$\{/.test(ONBOARDING_ROUTES_TS),
+    "the pre-arrival token is back in the URL path",
+  );
+  assert.ok(
+    !/\/management-documents\/\$\{/.test(ONBOARDING_ROUTES_TS),
+    "the management token is back in the URL path",
+  );
+
+  // And the pages read it from there rather than from a route parameter.
+  for (const [name, source] of [
+    ["PreArrival.tsx", PRE_ARRIVAL_TSX],
+    ["ManagementDocuments.tsx", MANAGEMENT_DOCS_TSX],
+  ] as const) {
+    assert.match(
+      source,
+      /window\.location\.hash/,
+      `${name} does not read the token from the fragment`,
+    );
+    assert.ok(
+      !/useRoute\([^)]*:token/.test(source),
+      `${name} still takes the token from the path`,
+    );
+  }
+
+  // App.tsx must not declare a :token parameter for either route, or the
+  // token would be back in the path the moment someone linked to it.
+  assert.ok(
+    !/<Route path="\/pre-arrival\/:token"/.test(APP_TSX),
+    "App.tsx routes /pre-arrival with the token in the path",
+  );
+  assert.ok(
+    !/<Route path="\/management-documents\/:token"/.test(APP_TSX),
+    "App.tsx routes /management-documents with the token in the path",
+  );
+});
+
+test("onboarding · the document pages carry a client-side robots tag too", () => {
+  for (const [name, source] of [
+    ["PreArrival.tsx", PRE_ARRIVAL_TSX],
+    ["ManagementDocuments.tsx", MANAGEMENT_DOCS_TSX],
+  ] as const) {
+    assert.match(
+      source,
+      /content = 'noindex, nofollow'/,
+      `${name} does not set a noindex meta of its own`,
+    );
+  }
+});
+
+test("onboarding · check-in and check-out times agree everywhere they are stated", () => {
+  const houseRules = readFileSync(
+    path.join(clientRoot, "src/pages/HouseRules.tsx"),
+    "utf8",
+  );
+
+  // The published source of truth.
+  assert.ok(
+    houseRules.includes("Check-in from 12:00 PM, check-out by 11:00 AM."),
+    "the house rules page no longer states the hours this test is pinned to",
+  );
+
+  // Structured data must match what a visitor can read.
+  const homepageLd = injectMeta(BASE_HTML, "/");
+  assert.ok(homepageLd.includes('"checkinTime":"12:00:00+05:30"'));
+  assert.ok(homepageLd.includes('"checkoutTime":"11:00:00+05:30"'));
+
+  // The 48-hour deadline is measured from check-in, so it has to use the same
+  // hour — it was anchored to 11:00 once, which made every deadline an hour
+  // early.
+  assert.match(
+    ONBOARDING_REPO_TS,
+    /CHECK_IN_LOCAL = "12:00:00\+05:30"/,
+    "the verification deadline is anchored to the wrong check-in time",
+  );
+
+  // And the guest's confirmation message must not name a different hour.
+  assert.ok(
+    !/11:00 AM onwards/.test(ADMIN_GUESTS_TSX),
+    "the guest message tells guests to arrive an hour before the house opens",
+  );
+  assert.ok(
+    !/– 10:00 AM/.test(ADMIN_GUESTS_TSX),
+    "the guest message states a check-out time the house rules do not",
+  );
+});
+
+test("onboarding · no test recipient is wired into the management handoff", () => {
+  assert.ok(
+    !/MANAGEMENT_TEST_WHATSAPP/.test(ADMIN_GUESTS_TSX),
+    "a constant named as a test recipient is still in the send path",
+  );
+  assert.ok(
+    !/const MANAGEMENT_WHATSAPP = '\d/.test(ADMIN_GUESTS_TSX),
+    "the management number is a hard-coded literal rather than CONFIG",
+  );
+});
+
+test("onboarding · every table the feature queries has a migration", () => {
+  // Migrations live in two places today: src/db/ and, for the management
+  // access table, the repo root. Read both rather than pretend otherwise.
+  const dirs = [path.join(here, "../db"), repoRoot];
+  const sql = dirs
+    .flatMap((dir) =>
+      readdirSync(dir)
+        .filter((file) => file.endsWith(".sql"))
+        .map((file) => readFileSync(path.join(dir, file), "utf8")),
+    )
+    .join("\n");
+
+  for (const table of [
+    "guests",
+    "booking_guests",
+    "guest_documents",
+    "guest_onboarding",
+    "guest_management_access",
+  ]) {
+    assert.ok(
+      new RegExp(`CREATE TABLE IF NOT EXISTS ${table}\\b`).test(sql),
+      `${table} is queried but no migration creates it`,
+    );
   }
 });

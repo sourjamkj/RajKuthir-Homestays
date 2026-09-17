@@ -1,6 +1,21 @@
 import { useEffect, useState, type ChangeEvent, type FormEvent, type ReactNode } from 'react';
-import { useRoute } from 'wouter';
 import { AlertCircle, CheckCircle2, FileText, Loader2, ShieldCheck, Upload } from 'lucide-react';
+
+/**
+ * THE TOKEN LIVES IN THE URL FRAGMENT, NOT THE PATH.
+ *
+ * It is a bearer credential: whoever holds it can file this guest's identity
+ * documents. In a path or query string it would be written verbatim into the
+ * Railway proxy access log, sent to any third-party asset in a Referer header,
+ * and kept in browser history — the same reasoning that keeps the booking
+ * reference out of the /welcome URL (see the note in routes/guest.ts). A
+ * fragment is never transmitted to any server: the browser holds it locally,
+ * and it is exchanged for booking data over POST exactly as before.
+ */
+function tokenFromFragment(): string {
+  if (typeof window === 'undefined') return '';
+  return decodeURIComponent(window.location.hash.replace(/^#/, '')).trim();
+}
 
 type Lookup = {
   booking: { reference: string | null; guestName: string | null; guestPhone: string | null; checkIn: string; checkOut: string; guests: number | null; pets: number | null };
@@ -12,8 +27,7 @@ type Lookup = {
 type DocumentDraft = { documentType: string; documentNumber: string; originalFilename: string; mimeType: string; dataBase64: string };
 
 export default function PreArrival() {
-  const [, params] = useRoute('/pre-arrival/:token');
-  const token = params?.token ?? '';
+  const [token] = useState(tokenFromFragment);
   const [lookup, setLookup] = useState<Lookup | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -28,6 +42,16 @@ export default function PreArrival() {
     document.title = 'Pre-arrival verification | Raj Kuthir Homestays';
     document.querySelector('meta[name="robots"]')?.remove();
     const meta = document.createElement('meta'); meta.name = 'robots'; meta.content = 'noindex, nofollow'; document.head.appendChild(meta);
+
+    // The fragment is deliberately left in the address bar rather than cleared
+    // with replaceState: a guest whose upload fails will reload the page, and
+    // clearing it would strand them on a link they cannot get back. It never
+    // leaves their own browser, which is the exposure that mattered.
+    if (!token) {
+      setError('This verification link is incomplete. Please open the full link from your WhatsApp message.');
+      return () => meta.remove();
+    }
+
     fetch('/api/guest/onboarding/lookup', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token }) })
       .then(async (r) => { const b = await r.json(); if (!r.ok) throw new Error(b.error); return b as Lookup; })
       .then((data) => { setLookup(data); setName(data.booking.guestName ?? ''); setPhone(data.booking.guestPhone ?? ''); })

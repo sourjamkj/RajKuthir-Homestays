@@ -1028,8 +1028,12 @@ function Router() {
         <Route path="/rates" component={Rates} />
         {/* Guest arrival pack, unlocked with a booking reference. */}
         <Route path="/welcome" component={Welcome} />
-        <Route path="/pre-arrival/:token" component={PreArrival} />
-        <Route path="/management-documents/:token" component={ManagementDocuments} />
+        {/* Capability links. The token rides in the URL fragment, not the
+            path, so it never reaches the server, the proxy access log or a
+            Referer header — see the note in PreArrival.tsx. The path itself
+            carries no parameter and is safe to serve to anyone. */}
+        <Route path="/pre-arrival" component={PreArrival} />
+        <Route path="/management-documents" component={ManagementDocuments} />
         <Route path="/admin" component={AdminDashboard} />
         <Route path="/admin/login" component={AdminLogin} />
         <Route path="/admin/earnings" component={AdminEarnings} />

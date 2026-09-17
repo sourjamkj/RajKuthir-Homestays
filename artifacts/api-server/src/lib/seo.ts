@@ -324,10 +324,43 @@ export const PAGES: Record<string, PageMeta> = {
     description: "Arrival details for guests with a confirmed booking.",
     noindex: true,
   },
+
+  /**
+   * Pre-arrival verification. The capability that opens it travels in the URL
+   * FRAGMENT, which is never sent to this server, so every visitor looks
+   * identical from here — including a crawler that found the bare path. The
+   * page says nothing about any booking until the fragment has been exchanged
+   * for data over POST.
+   */
+  "/pre-arrival": {
+    title: "Pre-arrival verification | Raj Kuthir Homestays",
+    description: "Guest verification for a confirmed booking.",
+    noindex: true,
+  },
+
+  /** Management's view of a guest's uploaded identity documents. */
+  "/management-documents": {
+    title: "Guest document access | Raj Kuthir Homestays",
+    description: "Document access for property management.",
+    noindex: true,
+  },
 };
 
-/** Admin and any private area: never indexed, never in the sitemap. */
-const PRIVATE_PREFIXES = ["/admin", "/sign-in", "/welcome"];
+/**
+ * Admin and any private area: never indexed, never in the sitemap.
+ *
+ * /pre-arrival and /management-documents are here because each is a capability
+ * URL. Neither may be indexed and neither may carry a canonical — metaFor()
+ * answers both with PRIVATE_META, and injectMeta() omits canonical and og:url
+ * whenever noindex is set.
+ */
+const PRIVATE_PREFIXES = [
+  "/admin",
+  "/sign-in",
+  "/welcome",
+  "/pre-arrival",
+  "/management-documents",
+];
 
 /**
  * Every path App.tsx has a <Route> for. Anything else is a genuine 404 and is
@@ -351,6 +384,8 @@ const CLIENT_ROUTES = new Set([
   "/admin/rates",
   "/admin/guests",
   "/admin/guest-info",
+  "/pre-arrival",
+  "/management-documents",
 ]);
 
 const CLIENT_ROUTE_PREFIXES = ["/sign-in"];
