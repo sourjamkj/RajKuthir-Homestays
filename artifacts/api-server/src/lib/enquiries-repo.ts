@@ -105,6 +105,33 @@ export async function setEnquiryStatus(
   return updated ?? null;
 }
 
+/**
+ * Undoes markQuoteSent.
+ *
+ * Needed because a quote can now be "sent" by opening WhatsApp with the
+ * message prefilled, and the server cannot see whether the owner then pressed
+ * send. Recording it optimistically is the right trade — one click instead of
+ * two, for something done dozens of times — but only if the mistake is
+ * reversible, because an unsent quote otherwise holds the dates against nobody
+ * for 24 hours.
+ *
+ * Clears the amounts along with the timestamp: a quote nobody sent is not a
+ * promise anybody made.
+ */
+export async function clearQuoteSent(id: string): Promise<Enquiry | null> {
+  const [updated] = await db
+    .update(enquiries)
+    .set({
+      quotedTotalPaise: null,
+      quotedAdvancePaise: null,
+      quoteSentAt: null,
+    })
+    .where(eq(enquiries.id, id))
+    .returning();
+
+  return updated ?? null;
+}
+
 export async function deleteEnquiry(id: string): Promise<boolean> {
   const deleted = await db
     .delete(enquiries)

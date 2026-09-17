@@ -8,6 +8,7 @@ import {
   getEnquiry,
   listContacts,
   listEnquiries,
+  clearQuoteSent,
   markQuoteSent,
   setAdvancePaid,
   setEnquiryStatus,
@@ -190,9 +191,21 @@ router.get("/enquiries", requireAdmin, async (_req, res) => {
       quote: quoteForEnquiry(row, nightlyRate),
       hold: holdStateOf(row, now),
     })),
-    // The screen disables the send button and explains itself rather than
-    // offering an action that cannot work.
-    quotingReady: isWhatsappEnabled() && upiDetails() !== null,
+    /*
+      The screen disables the send button and explains itself rather than
+      offering an action that cannot work.
+
+      WhatsApp configuration is deliberately NOT part of this any more. Without
+      it the quote goes out as a wa.me link from the owner's own WhatsApp,
+      which works perfectly well — gating on the Business API meant the button
+      stayed dead while waiting for an account that had not been approved yet.
+
+      UPI is still required: a quote with no payment details to pay into is not
+      a quote, and there is nothing sensible to put in the message.
+    */
+    quotingReady: upiDetails() !== null,
+    /** How a quote would go out right now, so the screen can say so. */
+    quoteDelivery: isWhatsappEnabled() ? "api" : "manual_whatsapp",
   });
 });
 
@@ -263,22 +276,50 @@ router.post("/enquiries/:id/quote", requireAdmin, async (req, res) => {
     holdExpiresAt: holdExpiryOf(sentAt),
   });
 
-  const sent = await sendTemplate({
-    to,
-    templateName: template.name,
-    languageCode: template.languageCode,
-    params: template.params,
-  });
+  /*
+    Two ways out of here, and the difference is honest in the response.
 
-  if (!sent.ok) {
+    With WHATSAPP_PHONE_NUMBER_ID and WHATSAPP_ACCESS_TOKEN set, the message
+    goes through Meta's API and the server knows it was accepted.
+
+    Without them — which is the state this property is in today — the send used
+    to fail and this endpoint answered 502, so the quote was never recorded and
+    the hold never started. The whole feature was unusable while waiting for a
+    Business API account. So the fallback returns the composed message and a
+    wa.me link for the owner to send from their own WhatsApp, exactly as the
+    guest onboarding handoff already does.
+
+    `delivery` says which happened. It is never "sent" for the manual path,
+    because opening WhatsApp is not delivering a message and this server has no
+    way to learn whether the owner pressed send.
+  */
+  const auto = isWhatsappEnabled()
+    ? await sendTemplate({
+        to,
+        templateName: template.name,
+        languageCode: template.languageCode,
+        params: template.params,
+      })
+    : null;
+
+  if (auto && !auto.ok) {
     logger.error(
-      { enquiryId: id, error: sent.error, retryable: sent.retryable },
+      { enquiryId: id, error: auto.error, retryable: auto.retryable },
       "Could not send the enquiry quote",
     );
-    res.status(502).json({ error: sent.error });
+    res.status(502).json({ error: auto.error });
     return;
   }
 
+  /*
+    The quote is recorded either way, because the 24-hour hold is measured from
+    quoteSentAt and dates that are not held are dates that get double-sold.
+
+    On the manual path that is optimistic: the owner might open WhatsApp and
+    wander off. That is why DELETE /enquiries/:id/quote exists — the mistake is
+    one click to undo, which is the price of not making every quote two clicks
+    to send.
+  */
   const updated = await markQuoteSent(
     id,
     { totalPaise: quote.totalPaise, advancePaise: quote.advancePaise },
@@ -288,11 +329,46 @@ router.post("/enquiries/:id/quote", requireAdmin, async (req, res) => {
   // No phone number and no payment handle in this line — it is a log, and
   // logs get shipped, read and kept.
   logger.info(
-    { enquiryId: id, nights: quote.nights, guests: quote.guests },
-    "Enquiry quote sent",
+    { enquiryId: id, nights: quote.nights, guests: quote.guests, delivery: auto ? "api" : "manual_whatsapp" },
+    auto ? "Enquiry quote sent" : "Enquiry quote prepared for manual WhatsApp send",
   );
 
-  res.json({ enquiry: updated, quote, preview: template.preview });
+  res.json({
+    enquiry: updated,
+    quote,
+    preview: template.preview,
+    delivery: auto ? "api" : "manual_whatsapp",
+    // Only on the manual path, and only ever used to open WhatsApp.
+    whatsappUrl: auto
+      ? null
+      : `https://wa.me/${to}?text=${encodeURIComponent(template.preview)}`,
+  });
+});
+
+/**
+ * Undoes a quote that was recorded but never actually sent.
+ *
+ * Only reachable for the manual WhatsApp path in practice, and the reason that
+ * path can be one click instead of two.
+ */
+router.delete("/enquiries/:id/quote", requireAdmin, async (req, res) => {
+  const id = Array.isArray(req.params.id) ? "" : req.params.id;
+
+  if (!isUuid(id)) {
+    res.status(400).json({ error: "Invalid enquiry id." });
+    return;
+  }
+
+  const updated = await clearQuoteSent(id);
+
+  if (!updated) {
+    res.status(404).json({ error: "That enquiry no longer exists." });
+    return;
+  }
+
+  logger.info({ enquiryId: id }, "Enquiry quote withdrawn");
+
+  res.json({ enquiry: updated, hold: holdStateOf(updated, new Date()) });
 });
 
 /**

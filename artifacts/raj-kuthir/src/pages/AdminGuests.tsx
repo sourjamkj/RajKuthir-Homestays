@@ -290,12 +290,48 @@ export default function AdminGuests() {
     onSuccess: refresh,
   });
 
+  /**
+   * Sends the quote.
+   *
+   * With the WhatsApp Business API configured the server delivers it and
+   * there is nothing more to do. Without it the server returns the composed
+   * message as a wa.me link and this opens it, which is how quotes actually
+   * go out today.
+   *
+   * The window is opened synchronously inside the mutation, not in onSuccess,
+   * because Safari and mobile browsers block window.open once the call stack
+   * has left the click that triggered it.
+   */
   const sendQuote = useMutation({
-    mutationFn: (id: string) =>
-      adminFetch(`/api/enquiries/${id}/quote`, {
+    mutationFn: async (id: string) => {
+      const result = await adminFetch<{
+        delivery: 'api' | 'manual_whatsapp';
+        whatsappUrl: string | null;
+      }>(`/api/enquiries/${id}/quote`, {
         method: 'POST',
         body: JSON.stringify({}),
-      }),
+      });
+
+      if (result.delivery === 'manual_whatsapp' && result.whatsappUrl) {
+        window.open(result.whatsappUrl, '_blank', 'noopener,noreferrer');
+      }
+
+      return result;
+    },
+    onSuccess: refresh,
+  });
+
+  /**
+   * Withdraws a quote that was recorded but never actually sent.
+   *
+   * The manual path has to assume the owner pressed send in WhatsApp, because
+   * nothing here can see that. This is the escape hatch that makes the
+   * assumption safe — without it an abandoned send would hold the dates
+   * against nobody for 24 hours.
+   */
+  const withdrawQuote = useMutation({
+    mutationFn: (id: string) =>
+      adminFetch(`/api/enquiries/${id}/quote`, { method: 'DELETE' }),
     onSuccess: refresh,
   });
 
@@ -529,7 +565,7 @@ export default function AdminGuests() {
                           title={
                             quotingReady
                               ? undefined
-                              : 'WhatsApp sending or the UPI details are not configured on the server.'
+                              : 'RAJ_KUTHIR_UPI_ID and RAJ_KUTHIR_UPI_NAME are not set on the server, so there are no payment details to put in the quote.'
                           }
                           className="flex shrink-0 items-center justify-center gap-1.5 rounded-lg bg-primary px-4 py-2.5 text-[11px] font-bold uppercase tracking-[.07em] text-primary-foreground transition-transform hover:-translate-y-0.5 disabled:translate-y-0 disabled:cursor-not-allowed disabled:opacity-40"
                           data-testid={`button-send-quote-${row.id}`}
@@ -556,6 +592,29 @@ export default function AdminGuests() {
                         : 'The quote could not be sent.'}
                     </p>
                   )}
+
+                  {/* Says what actually happened. Opening WhatsApp is not the
+                      same as delivering a message, and the dates are now held
+                      on the assumption that the owner pressed send. */}
+                  {sendQuote.isSuccess &&
+                    sendQuote.variables === row.id &&
+                    sendQuote.data?.delivery === 'manual_whatsapp' && (
+                      <p className="mt-2 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                        <span>
+                          WhatsApp opened with the quote. Send it there — the hold on these
+                          dates started just now, and the countdown is shown above.
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => withdrawQuote.mutate(row.id)}
+                          disabled={withdrawQuote.isPending}
+                          className="underline decoration-accent underline-offset-2 hover:text-primary disabled:opacity-40"
+                          data-testid={`button-withdraw-quote-${row.id}`}
+                        >
+                          Didn&rsquo;t send it? Undo
+                        </button>
+                      </p>
+                    )}
                 </div>
 
                 <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-border pt-4">

@@ -327,3 +327,80 @@ test("arrival pack · the /welcome flow is not touched by any of this", () => {
     );
   }
 });
+
+// ==================================================== QUOTE DELIVERY PATH
+// Until the WhatsApp Business API is approved, a quote goes out as a wa.me
+// link from the owner's own WhatsApp. These pin the behaviour that made that
+// possible, because the previous version answered 502 and recorded nothing.
+
+const ENQUIRY_ROUTES_TS = readFileSync(path.join(here, "../routes/enquiries.ts"), "utf8");
+const ENQUIRIES_REPO_TS = readFileSync(path.join(here, "enquiries-repo.ts"), "utf8");
+
+test("quote · an unconfigured WhatsApp API no longer fails the request", () => {
+  // The send is attempted only when the API is actually configured.
+  assert.match(
+    ENQUIRY_ROUTES_TS,
+    /const auto = isWhatsappEnabled\(\)\s*\?\s*await sendTemplate\(/,
+    "the quote route still calls sendTemplate unconditionally",
+  );
+  // A 502 may only follow a real API failure, never a missing configuration.
+  assert.match(ENQUIRY_ROUTES_TS, /if \(auto && !auto\.ok\)/);
+});
+
+test("quote · the manual path returns an encoded wa.me link and is labelled honestly", () => {
+  assert.match(
+    ENQUIRY_ROUTES_TS,
+    /https:\/\/wa\.me\/\$\{to\}\?text=\$\{encodeURIComponent\(template\.preview\)\}/,
+    "the manual quote link is missing or not URL-encoded",
+  );
+  // "sent" is a claim this server cannot make about a deep link.
+  assert.match(ENQUIRY_ROUTES_TS, /delivery: auto \? "api" : "manual_whatsapp"/);
+  assert.ok(
+    !/delivery: "sent"/.test(ENQUIRY_ROUTES_TS),
+    "the manual path claims delivery it cannot verify",
+  );
+});
+
+test("quote · the hold still starts, and is reversible when it should not have", () => {
+  // Recorded on both paths, or dates go unheld and get double-sold.
+  assert.match(ENQUIRY_ROUTES_TS, /const updated = await markQuoteSent\(/);
+
+  // And the undo exists, which is what makes recording it optimistically safe.
+  assert.match(ENQUIRY_ROUTES_TS, /router\.delete\("\/enquiries\/:id\/quote"/);
+  assert.match(ENQUIRIES_REPO_TS, /export async function clearQuoteSent/);
+
+  // The undo must clear the amounts too, not just the timestamp.
+  const clear = ENQUIRIES_REPO_TS.slice(
+    ENQUIRIES_REPO_TS.indexOf("export async function clearQuoteSent"),
+  ).slice(0, 400);
+  for (const field of ["quotedTotalPaise: null", "quotedAdvancePaise: null", "quoteSentAt: null"]) {
+    assert.ok(clear.includes(field), `clearQuoteSent leaves ${field.split(":")[0]} behind`);
+  }
+});
+
+test("quote · the send button is gated on UPI, not on the WhatsApp API", () => {
+  assert.match(
+    ENQUIRY_ROUTES_TS,
+    /quotingReady: upiDetails\(\) !== null,/,
+    "quotingReady still requires the WhatsApp API, which keeps the button dead",
+  );
+  assert.ok(
+    !/quotingReady: isWhatsappEnabled\(\)/.test(ENQUIRY_ROUTES_TS),
+    "quotingReady is gated on WhatsApp configuration again",
+  );
+});
+
+test("quote · the client opens WhatsApp inside the click, not in onSuccess", () => {
+  const mutation = ADMIN_GUESTS_TSX.slice(
+    ADMIN_GUESTS_TSX.indexOf("const sendQuote = useMutation"),
+    ADMIN_GUESTS_TSX.indexOf("const withdrawQuote = useMutation"),
+  );
+  assert.ok(mutation.length > 0, "sendQuote mutation not found");
+  // Popup blockers kill window.open once the stack has left the click.
+  assert.match(mutation, /mutationFn: async \(id: string\)/);
+  assert.match(mutation, /window\.open\(result\.whatsappUrl/);
+  assert.ok(
+    !/onSuccess:[\s\S]*window\.open/.test(mutation),
+    "WhatsApp is opened from onSuccess, where mobile browsers will block it",
+  );
+});
