@@ -106,6 +106,26 @@ export async function setEnquiryStatus(
 }
 
 /**
+ * Records which booking this enquiry became.
+ *
+ * Written in the same breath as the booking is created — see
+ * convertEnquiryToBooking — so there is no window in which a booking exists
+ * with nothing pointing at it.
+ */
+export async function linkEnquiryToBooking(
+  id: string,
+  bookingId: string,
+): Promise<Enquiry | null> {
+  const [updated] = await db
+    .update(enquiries)
+    .set({ convertedBookingId: bookingId, status: "converted" })
+    .where(eq(enquiries.id, id))
+    .returning();
+
+  return updated ?? null;
+}
+
+/**
  * Undoes markQuoteSent.
  *
  * Needed because a quote can now be "sent" by opening WhatsApp with the

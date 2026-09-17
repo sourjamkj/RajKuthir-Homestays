@@ -6,6 +6,7 @@ import {
   createEnquiry,
   deleteEnquiry,
   getEnquiry,
+  linkEnquiryToBooking,
   listContacts,
   listEnquiries,
   clearQuoteSent,
@@ -15,6 +16,11 @@ import {
   updateContact,
   type EnquiryStatus,
 } from "../lib/enquiries-repo";
+import {
+  CONVERSION_MESSAGES,
+  draftBookingFromEnquiry,
+} from "../lib/enquiry-conversion";
+import { createBooking, findClashes } from "../lib/ledger-repo";
 import { quoteForEnquiry, type QuoteResult } from "../lib/enquiry-quote";
 import { holdExpiryOf, holdStateOf } from "../lib/enquiry-hold";
 import { firstConflict } from "../lib/availability";
@@ -342,6 +348,110 @@ router.post("/enquiries/:id/quote", requireAdmin, async (req, res) => {
     whatsappUrl: auto
       ? null
       : `https://wa.me/${to}?text=${encodeURIComponent(template.preview)}`,
+  });
+});
+
+/**
+ * Turns a won enquiry into a booking — the step that used to be re-typing.
+ *
+ * Everything downstream hangs off the bookings row this creates: the RK-
+ * reference is issued here, and with it the arrival pack at /welcome and the
+ * guest verification flow, both of which key off the booking.
+ *
+ * Deliberately NOT automatic on payment. The owner marks the advance received
+ * by looking at a screenshot, and turning that into a calendar entry is a
+ * second judgement — the dates may have gone in the meantime, or the guest may
+ * have asked to move them in the same message.
+ */
+router.post("/enquiries/:id/convert", requireAdmin, async (req, res) => {
+  const id = Array.isArray(req.params.id) ? "" : req.params.id;
+
+  if (!isUuid(id)) {
+    res.status(400).json({ error: "Invalid enquiry id." });
+    return;
+  }
+
+  const enquiry = await getEnquiry(id);
+
+  if (!enquiry) {
+    res.status(404).json({ error: "That enquiry no longer exists." });
+    return;
+  }
+
+  const drafted = draftBookingFromEnquiry(enquiry);
+
+  if (!drafted.ok) {
+    // 409 for the one that is a state problem rather than a data problem:
+    // the caller asked for something that has already happened.
+    const status = drafted.reason === "already_converted" ? 409 : 422;
+    res.status(status).json({
+      error: CONVERSION_MESSAGES[drafted.reason],
+      reason: drafted.reason,
+      ...(drafted.reason === "already_converted"
+        ? { bookingId: enquiry.convertedBookingId }
+        : {}),
+    });
+    return;
+  }
+
+  /*
+    Re-check the dates NOW, not as they were when the enquiry arrived.
+
+    An enquiry can sit for days between the form and the advance landing, and
+    an OTA booking may have taken the same nights in between. findClashes only
+    counts confirmed bookings, so a pending row does not stand in the way.
+  */
+  const clashes = await findClashes({
+    checkIn: drafted.draft.checkIn,
+    checkOut: drafted.draft.checkOut,
+    guestName: drafted.draft.guestName,
+  });
+
+  if (clashes.length > 0) {
+    const clash = clashes[0]!;
+    logger.warn(
+      { enquiryId: id, kind: clash.kind, bookingId: clash.booking.id },
+      "Refused to convert an enquiry over existing dates",
+    );
+    res.status(409).json({
+      error:
+        clash.kind === "duplicate"
+          ? "There is already a booking for this guest on these exact dates."
+          : `Those dates now clash with an existing booking (${clash.booking.checkIn} to ${clash.booking.checkOut}). Move the dates or cancel the other booking first.`,
+      reason: clash.kind,
+      clashes: clashes.map((item) => ({
+        id: item.booking.id,
+        kind: item.kind,
+        reference: item.booking.reference,
+        checkIn: item.booking.checkIn,
+        checkOut: item.booking.checkOut,
+      })),
+    });
+    return;
+  }
+
+  // createBooking issues the RK- reference, retrying on the astronomically
+  // unlikely collision.
+  const booking = await createBooking(drafted.draft);
+
+  const updated = await linkEnquiryToBooking(id, booking.id);
+
+  // No guest name or phone in this line — it is a log, and logs get shipped,
+  // read and kept.
+  logger.info(
+    { enquiryId: id, bookingId: booking.id, status: booking.status },
+    "Enquiry converted to a booking",
+  );
+
+  res.status(201).json({
+    booking: {
+      id: booking.id,
+      reference: booking.reference,
+      status: booking.status,
+      checkIn: booking.checkIn,
+      checkOut: booking.checkOut,
+    },
+    enquiry: updated,
   });
 });
 

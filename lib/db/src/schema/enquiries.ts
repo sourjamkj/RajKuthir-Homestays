@@ -8,6 +8,7 @@ import {
   timestamp,
   uuid,
 } from "drizzle-orm/pg-core";
+import { bookings } from "./bookings";
 
 /**
  * Guest enquiries from the public form.
@@ -67,6 +68,23 @@ export const enquiries = pgTable(
      * behind by a job that failed to run. See lib/enquiry-hold.ts.
      */
     advancePaidAt: timestamp("advance_paid_at", { withTimezone: true }),
+
+    /**
+     * The booking this enquiry became, once it has become one.
+     *
+     * This is what makes conversion idempotent. Without it a second click
+     * would put the same stay in the calendar twice, under two different
+     * references, and the guest would be sent whichever one the owner happened
+     * to be looking at.
+     *
+     * ON DELETE SET NULL rather than CASCADE: deleting a booking is not a
+     * reason to lose the enquiry that produced it, which is still a real lead
+     * and still part of the demand signal behind peak pricing.
+     */
+    convertedBookingId: uuid("converted_booking_id").references(
+      () => bookings.id,
+      { onDelete: "set null" },
+    ),
 
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()

@@ -5,6 +5,8 @@ import { format, parseISO } from 'date-fns';
 import {
   ArrowUpRight,
   BellOff,
+  CalendarPlus,
+  Check,
   Inbox,
   Loader2,
   LogOut,
@@ -94,6 +96,8 @@ type Enquiry = {
   quoteSentAt: string | null;
   advancePaidAt: string | null;
   hold: HoldState;
+  /** The booking this enquiry became, once it has become one. */
+  convertedBookingId: string | null;
 };
 
 
@@ -319,6 +323,28 @@ export default function AdminGuests() {
       return result;
     },
     onSuccess: refresh,
+  });
+
+  /**
+   * Turns a won enquiry into a booking.
+   *
+   * The server refuses with 409 if the dates have been taken since the enquiry
+   * arrived, or if this enquiry has already been converted — both are shown to
+   * the owner rather than swallowed, because the answer in each case is a
+   * decision only they can make.
+   */
+  const convertEnquiry = useMutation({
+    mutationFn: (id: string) =>
+      adminFetch<{ booking: { reference: string | null; status: string } }>(
+        `/api/enquiries/${id}/convert`,
+        { method: 'POST', body: JSON.stringify({}) },
+      ),
+    onSuccess: () => {
+      refresh();
+      // The new booking has to appear in the readiness panel too — that list
+      // is what the verification links are sent from.
+      queryClient.invalidateQueries({ queryKey: GUEST_STAYS_KEY });
+    },
   });
 
   /**
@@ -556,6 +582,40 @@ export default function AdminGuests() {
                               ? 'Not received after all'
                               : 'Advance received'}
                           </button>
+
+                          {/* The step that used to be re-typing the whole stay
+                              into the ledger. Creating the booking is what
+                              issues the RK- reference, and with it the arrival
+                              pack and the guest verification flow. */}
+                          {row.convertedBookingId ? (
+                            <span
+                              className="inline-flex items-center gap-1.5 rounded-lg border border-[#7A8065]/40 bg-[#7A8065]/10 px-3 py-2 text-[10px] font-bold uppercase tracking-[.07em] text-[#4b5340]"
+                              data-testid={`label-converted-${row.id}`}
+                            >
+                              <Check size={12} /> Booked
+                            </span>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => convertEnquiry.mutate(row.id)}
+                              disabled={convertEnquiry.isPending}
+                              title={
+                                row.hold.state === 'paid'
+                                  ? 'Create the booking, issue the reference and open the calendar entry'
+                                  : 'The advance is not marked received — the booking will be created as pending and will not hold the dates'
+                              }
+                              className="flex shrink-0 items-center justify-center gap-1.5 rounded-lg border border-primary px-3 py-2 text-[10px] font-bold uppercase tracking-[.07em] text-primary transition-colors hover:bg-primary hover:text-primary-foreground disabled:cursor-not-allowed disabled:opacity-40"
+                              data-testid={`button-convert-${row.id}`}
+                            >
+                              {convertEnquiry.isPending &&
+                              convertEnquiry.variables === row.id ? (
+                                <Loader2 size={12} className="animate-spin" />
+                              ) : (
+                                <CalendarPlus size={12} />
+                              )}
+                              Create booking
+                            </button>
+                          )}
                         </div>
                       ) : (
                         <button
@@ -592,6 +652,33 @@ export default function AdminGuests() {
                         : 'The quote could not be sent.'}
                     </p>
                   )}
+
+                  {/* A refused conversion is usually a clash with dates taken
+                      since the enquiry arrived, and the server says which
+                      booking. That is the owner's decision to make, so it is
+                      shown rather than swallowed. */}
+                  {convertEnquiry.isError && convertEnquiry.variables === row.id && (
+                    <p className="mt-2 text-xs text-[#A65E45]" role="alert">
+                      {convertEnquiry.error instanceof Error
+                        ? convertEnquiry.error.message
+                        : 'The booking could not be created.'}
+                    </p>
+                  )}
+
+                  {convertEnquiry.isSuccess &&
+                    convertEnquiry.variables === row.id &&
+                    convertEnquiry.data?.booking && (
+                      <p className="mt-2 text-xs text-muted-foreground">
+                        Booking created
+                        {convertEnquiry.data.booking.reference
+                          ? ` · ${convertEnquiry.data.booking.reference}`
+                          : ''}
+                        {convertEnquiry.data.booking.status === 'pending'
+                          ? ' · pending, so it is not holding the dates yet'
+                          : ''}
+                        . It is now in Guest check-in readiness above, ready for Send info.
+                      </p>
+                    )}
 
                   {/* Says what actually happened. Opening WhatsApp is not the
                       same as delivering a message, and the dates are now held
