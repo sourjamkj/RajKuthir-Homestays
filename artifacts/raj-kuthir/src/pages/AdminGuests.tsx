@@ -629,12 +629,13 @@ export default function AdminGuests() {
                   <th className="px-5 py-3 text-right font-bold">Spent</th>
                   <th className="px-5 py-3 font-bold">Last seen</th>
                   <th className="px-5 py-3 font-bold">Marketing</th>
+                  <th className="px-5 py-3 text-right font-bold">Action</th>
                 </tr>
               </thead>
               <tbody>
                 {contacts.isLoading && (
                   <tr>
-                    <td colSpan={6} className="px-5 py-6 text-muted-foreground">
+                    <td colSpan={7} className="px-5 py-6 text-muted-foreground">
                       Loading…
                     </td>
                   </tr>
@@ -642,7 +643,7 @@ export default function AdminGuests() {
 
                 {!contacts.isLoading && list.length === 0 && (
                   <tr>
-                    <td colSpan={6} className="px-5 py-6 text-muted-foreground">
+                    <td colSpan={7} className="px-5 py-6 text-muted-foreground">
                       No contacts yet. They build up as bookings and enquiries
                       arrive.
                     </td>
@@ -693,6 +694,37 @@ export default function AdminGuests() {
                       >
                         {contact.marketingOptOut ? 'Opted out' : 'Reachable'}
                       </button>
+                    </td>
+                    <td className="px-5 py-3 text-right">
+                      {(() => {
+                        const matchingStays = (guestStays.data?.stays ?? []).filter(
+                          (stay) => stay.guestPhone?.replace(/\D/g, '') === contact.phone.replace(/\D/g, ''),
+                        );
+                        const stay = matchingStays.find((item) => item.status !== 'cancelled') ?? matchingStays[0];
+                        return stay ? (
+                          <button
+                            type="button"
+                            onClick={() => createOnboarding.mutate(stay)}
+                            disabled={createOnboarding.isPending || !stay.guestPhone}
+                            className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-3 py-2 text-[10px] font-bold uppercase tracking-[.07em] text-primary-foreground disabled:opacity-40"
+                            data-testid={`button-whatsapp-contact-${contact.phone}`}
+                            title="Send the booking confirmation and document-verification link on WhatsApp"
+                          >
+                            <MessageCircle size={12} /> WhatsApp
+                          </button>
+                        ) : (
+                          <a
+                            href={waLink(contact.phone, contact.name)}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-2 text-[10px] font-bold uppercase tracking-[.07em] text-primary hover:border-primary"
+                            data-testid={`button-whatsapp-contact-${contact.phone}`}
+                            title="Open WhatsApp"
+                          >
+                            <MessageCircle size={12} /> WhatsApp
+                          </a>
+                        );
+                      })()}
                     </td>
                   </tr>
                 ))}
