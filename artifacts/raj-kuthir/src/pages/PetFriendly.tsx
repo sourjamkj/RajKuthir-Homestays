@@ -26,8 +26,11 @@ import { CONFIG, asset, basePath, phoneHref } from '@/lib/site';
  * WHAT THIS PAGE IS ALLOWED TO SAY
  *
  * Everything here is either already published on this site (the house rules,
- * the neighbourhood distances) or confirmed by the owner. Nothing about pet
- * charges, pet numbers, size or breed limits, fencing, pet amenities or vets
+ * the neighbourhood distances) or confirmed by the owner. The pet charge is
+ * described but never priced here: the figure lives in the rate plan served
+ * by /api/rates, which the rates page and the booking section display, so
+ * typing it into this file would be a second copy to go stale. Nothing about
+ * pet numbers, size or breed limits, fencing, pet amenities or vets
  * is stated, because none of it is confirmed — and inventing reassurance for
  * someone deciding whether their dog can travel is the worst possible place
  * to guess. Where a fact is missing the page says so and points at the
@@ -59,7 +62,7 @@ export const PET_FAQ = [
   },
   {
     q: 'Is there an extra charge for bringing a pet?',
-    a: 'Confirm it with us when you enquire — rates vary by dates and occupancy, so anything quoted here would be out of date. What is already published is the damage side: pet damage or soiling is charged from ₹1,000, and that is on the house rules page along with everything else.',
+    a: 'Yes — a one-off charge per pet for the whole stay, not per night. The amount comes from our current rate plan: it is shown on the rates page and in the booking section of the homepage, and the enquiry form adds it to your estimate when you enter your pets. Separately, pet damage or soiling is charged from ₹1,000, and that is on the house rules page along with everything else.',
   },
   {
     q: 'Can we leave our dog in the villa while we go out?',
@@ -87,7 +90,8 @@ const villaFeatures = [
 export default function PetFriendly() {
   useEffect(() => {
     const previous = document.title;
-    document.title = 'Pet-Friendly Villa in Shantiniketan | Raj Kuthir Homestays';
+    // Must match the server-rendered <title> in api-server/src/lib/seo.ts.
+    document.title = 'Pet-Friendly Homestay in Shantiniketan | Raj Kuthir';
     return () => {
       document.title = previous;
     };
@@ -121,7 +125,7 @@ export default function PetFriendly() {
         <ol className="flex flex-wrap items-center gap-2 font-mono-ui text-[10px] uppercase tracking-[.14em] text-muted-foreground">
           <li><a href={`${basePath}/`} className="hover:text-primary" data-testid="link-pet-crumb-home">Home</a></li>
           <li aria-hidden="true">/</li>
-          <li aria-current="page" className="text-primary">Pet-friendly villa</li>
+          <li aria-current="page" className="text-primary">Staying with a pet</li>
         </ol>
       </nav>
 
@@ -262,6 +266,15 @@ export default function PetFriendly() {
               </div>
             ))}
           </div>
+
+          <p className="mt-8 flex flex-wrap gap-x-6 gap-y-3 text-xs font-bold uppercase tracking-[.1em] text-primary">
+            <a href={`${basePath}/gallery`} className="underline decoration-accent decoration-2 underline-offset-4" data-testid="link-pet-gallery">
+              Every room, in the gallery
+            </a>
+            <a href={`${basePath}/rates`} className="underline decoration-accent decoration-2 underline-offset-4" data-testid="link-pet-rates">
+              Rates and what they cover
+            </a>
+          </p>
         </section>
 
         {/* --------------------------------- the honest bit: quiet hours */}
@@ -422,7 +435,7 @@ export default function PetFriendly() {
               <MapPin size={15} /> Open in Google Maps
             </a>
             <a
-              href={`${basePath}/#experience`}
+              href={`${basePath}/places-to-visit-in-shantiniketan`}
               className="inline-flex items-center gap-2 rounded-full border border-border px-6 py-4 text-xs font-bold uppercase tracking-[.12em] text-primary transition-colors hover:border-primary"
               data-testid="link-pet-neighbourhood"
             >
@@ -509,7 +522,11 @@ export default function PetFriendly() {
           </div>
           <div className="flex flex-col gap-2 text-sm text-[#f5eadb]/70 sm:text-right">
             <a href={`${basePath}/`} className="hover:text-[#e4c9a4]">The stay</a>
+            <a href={`${basePath}/gallery`} className="hover:text-[#e4c9a4]">Photos</a>
+            <a href={`${basePath}/places-to-visit-in-shantiniketan`} className="hover:text-[#e4c9a4]">Places to visit</a>
+            <a href={`${basePath}/our-story`} className="hover:text-[#e4c9a4]">Our story</a>
             <a href={`${basePath}/house-rules`} className="hover:text-[#e4c9a4]">House rules</a>
+            <a href={`${basePath}/rates`} className="hover:text-[#e4c9a4]">Rates</a>
             <a href={`${basePath}/#booking`} className="hover:text-[#e4c9a4]">Check availability</a>
           </div>
         </div>

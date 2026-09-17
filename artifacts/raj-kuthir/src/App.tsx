@@ -10,10 +10,13 @@ import {
   useGetPublicCalendar,
 } from '@workspace/api-client-react';
 import {
+  AirVent,
   AlertCircle,
   ArrowRight,
   ArrowUpRight,
   Baby,
+  Bath,
+  BedDouble,
   CalendarDays,
   Car,
   Check,
@@ -65,6 +68,7 @@ import PetFriendly from '@/pages/PetFriendly';
 import Gallery, { GALLERY_TEASER } from '@/pages/Gallery';
 import OurStory from '@/pages/OurStory';
 import PlacesToVisit from '@/pages/PlacesToVisit';
+import Rates from '@/pages/Rates';
 import Welcome from '@/pages/Welcome';
 import AdminGuestInfo from '@/pages/AdminGuestInfo';
 import {
@@ -120,9 +124,11 @@ const IMG = {
   villaNight: asset('villa-night.jpg'),
   bedroom: asset('Bedroom.jpg'),
   pet: asset('Pet%20View.jpg'),
+  // Two review cards, not three. "Review 3.jpg" repeated Review 1's quote and
+  // reviewer over a photograph of a different house, so it was removed rather
+  // than shown as a review of this one.
   review1: asset('Review%201.jpg'),
   review2: asset('Review%202.jpg'),
-  review3: asset('Review%203.jpg'),
 };
 
 /**
@@ -137,16 +143,23 @@ const posters = [
     title: 'Stay. Relax. Belong.',
     note: 'What the villa gives you, at a glance',
     img: asset('poster-stay-relax-belong.jpg'),
+    // Measured from the file. The three posters are three different shapes.
+    width: 1100,
+    height: 1375,
   },
   {
     title: 'Feels like home',
     note: 'The whole house in one frame',
     img: asset('poster-feels-like-home.jpg'),
+    width: 1200,
+    height: 1067,
   },
   {
     title: 'Cook. Connect. Create memories.',
     note: 'The kitchen, in its own words',
     img: asset('poster-cook-connect.jpg'),
+    width: 1024,
+    height: 1536,
   },
 ];
 /**
@@ -159,8 +172,16 @@ const posters = [
  */
 const NEIGHBOURHOOD_COUNT = NEIGHBOURHOOD.reduce((total, group) => total + group.places.length, 0);
 
+/**
+ * One place, whichever group it is in. NEIGHBOURHOOD is `as const`, so every
+ * group's `places` is a different tuple type and `flatMap` cannot infer a
+ * common element on its own — it gives up and yields `unknown`. Naming the
+ * element type, derived from the data rather than written out, fixes that.
+ */
+type NeighbourhoodPlace = (typeof NEIGHBOURHOOD)[number]['places'][number];
+
 const NEIGHBOURHOOD_TEASER = ['Prantik station', 'Visva-Bharati & Rabindra Bhavan', 'Sonajhuri Khoai Haat', 'Bishnupur']
-  .map((title) => NEIGHBOURHOOD.flatMap((group) => group.places).find((place) => place.title === title))
+  .map((title) => NEIGHBOURHOOD.flatMap<NeighbourhoodPlace>((group) => group.places).find((place) => place.title === title))
   .filter((place): place is NonNullable<typeof place> => Boolean(place));
 
 /**
@@ -173,7 +194,9 @@ const NEIGHBOURHOOD_TEASER = ['Prantik station', 'Visva-Bharati & Rabindra Bhava
  */
 const NAV_ITEMS = [
   { label: 'Our story', href: `${basePath}/our-story` },
-  { label: 'Pet Friendly', href: '#pet-friendly' },
+  // The page, not the section: the homepage's strongest link to the one page
+  // written for people searching for a pet-friendly stay.
+  { label: 'Pet Friendly', href: `${basePath}/pet-friendly-homestay-shantiniketan` },
   { label: 'Availability', href: '#availability' },
   { label: 'Nearby', href: `${basePath}/places-to-visit-in-shantiniketan` },
   { label: 'Food', href: '#food' },
@@ -554,9 +577,16 @@ function Home() {
                 <span className="h-px w-10 bg-secondary/70" aria-hidden="true" />
                 <span className="whitespace-nowrap font-mono-ui text-[9px] uppercase tracking-[.22em] text-secondary sm:text-[10px] sm:tracking-[.3em]">Bolpur &middot; Shantiniketan</span>
               </span>
-              <h1 id="hero-title" className="font-journal text-[clamp(3.1rem,8.4vw,7rem)] leading-[.9] tracking-[-.04em] text-white [text-wrap:balance]">
-                Stay for the<br /><em className="text-secondary">unhurried</em> hours.
+              {/* The h1 says what the place is, in the hero's display type; the
+                  tagline beneath it says what it feels like. Same typeface,
+                  colours and italic accent as before — the words swapped roles.
+                  "2-Bedroom" is kept on one line so the hyphen never breaks. */}
+              <h1 id="hero-title" className="font-journal text-[clamp(2.5rem,6.6vw,5.4rem)] leading-[.95] tracking-[-.035em] text-white [text-wrap:balance]">
+                Private <span className="whitespace-nowrap">2-Bedroom</span> Villa <em className="text-secondary">in Shantiniketan</em>
               </h1>
+              <p className="mt-5 font-journal text-[clamp(1.55rem,3.1vw,2.5rem)] leading-[1.05] tracking-[-.02em] text-white/90">
+                Stay for the <em className="text-secondary">unhurried</em> hours.
+              </p>
               <p className="mt-8 max-w-[520px] text-[15px] leading-7 text-white/75 md:text-[17px]">
                 An entire two-bedroom villa in Bolpur, made for couples, families
                 and the four-legged members of the family. Come to Shantiniketan.
@@ -594,7 +624,13 @@ function Home() {
           <div className="grid gap-12 lg:grid-cols-[.7fr_1.3fr] lg:gap-24">
             <div><p className="eyebrow mb-5 text-accent">Everything useful</p><h2 id="amenities-title" className="font-journal text-5xl leading-[.95] text-primary md:text-6xl">The small<br /><em>comforts.</em></h2><p className="mt-7 max-w-[300px] text-sm leading-6 text-muted-foreground">The things that make a private stay feel easy, without turning it into a checklist.</p></div>
             <div className="grid grid-cols-2 gap-x-5 gap-y-0 sm:grid-cols-3">
+              {/* Each of these is marked up as an amenity by the server
+                  (VERIFIED_AMENITIES in api-server/src/lib/seo.ts), and a test
+                  fails if the markup claims one that is not written here. */}
               {[
+                { icon: BedDouble, label: 'Two bedrooms, two king beds' },
+                { icon: AirVent, label: 'Air conditioning in both bedrooms' },
+                { icon: Bath, label: 'Two bathrooms' },
                 { icon: CookingPot, label: 'Basic cooking utensils' },
                 { icon: Utensils, label: 'Induction setup' },
                 { icon: Refrigerator, label: 'Microwave & refrigerator' },
@@ -612,6 +648,10 @@ function Home() {
               <img
                 src={IMG.pet}
                 alt="A pet relaxing at the door of Raj Kuthir"
+                width={1023}
+                height={1537}
+                loading="lazy"
+                decoding="async"
                 className="min-h-[380px] w-full rounded-[2rem] object-cover shadow-md md:min-h-[490px]"
               />
             </div>
@@ -664,6 +704,10 @@ function Home() {
                     </li>
                   </ul>
                 )}
+                <p className="mt-5 flex flex-wrap gap-x-5 gap-y-2 text-[12px] font-bold uppercase tracking-[.08em] text-primary">
+                  <a href={`${basePath}/rates`} className="underline decoration-accent decoration-2 underline-offset-4" data-testid="link-booking-rates">The full rate card</a>
+                  <a href={`${basePath}/pet-friendly-homestay-shantiniketan`} className="underline decoration-accent decoration-2 underline-offset-4" data-testid="link-booking-pet">Travelling with a pet?</a>
+                </p>
               </div>
               <div className="flex flex-col gap-3 border-t border-primary/15 pt-6 lg:border-0 lg:pt-0 lg:text-right">
                 <a href={phoneHref(CONFIG.hostPhone)} className="flex items-center gap-3 text-sm font-bold text-primary lg:justify-end" data-testid="link-booking-host">
@@ -889,7 +933,10 @@ function Home() {
                   <img
                     src={poster.img}
                     alt={`Raj Kuthir Homestays poster — ${poster.title}`}
+                    width={poster.width}
+                    height={poster.height}
                     loading="lazy"
+                    decoding="async"
                     className="h-[340px] w-full bg-black/25 object-contain transition-transform duration-500 group-hover:scale-[1.03] md:h-[420px]"
                   />
                   <div className="flex items-center justify-between gap-4 px-6 py-5">
@@ -910,13 +957,13 @@ function Home() {
         </section>
 
         <section id="reviews" className="scroll-mt-24 section-shell py-24 md:py-32" aria-labelledby="reviews-title">
-          <div className="grid gap-12 lg:grid-cols-[.7fr_1.3fr] lg:gap-24"><div><p className="eyebrow mb-5 text-accent">From our guests</p><h2 id="reviews-title" className="font-journal text-5xl leading-[.94] text-primary md:text-6xl">Kind<br /><em>words.</em></h2><a href={CONFIG.leaveReviewUrl} target="_blank" rel="noreferrer" className="mt-8 inline-flex items-center gap-2 text-xs font-bold uppercase tracking-[.1em] text-primary underline decoration-accent decoration-2 underline-offset-4" data-testid="link-google-review">Leave a Google review <ExternalLink size={14} /></a></div><div className="grid gap-4 sm:grid-cols-3"><img src={IMG.review1} alt="Guest review for Raj Kuthir" className="w-full rounded-[1.4rem] object-cover shadow-sm" /><img src={IMG.review2} alt="Guest review for Raj Kuthir" className="w-full rounded-[1.4rem] object-cover shadow-sm" /><img src={IMG.review3} alt="Guest review for Raj Kuthir" className="w-full rounded-[1.4rem] object-cover shadow-sm" /></div></div>
+          <div className="grid gap-12 lg:grid-cols-[.7fr_1.3fr] lg:gap-24"><div><p className="eyebrow mb-5 text-accent">From our guests</p><h2 id="reviews-title" className="font-journal text-5xl leading-[.94] text-primary md:text-6xl">Kind<br /><em>words.</em></h2><a href={CONFIG.leaveReviewUrl} target="_blank" rel="noreferrer" className="mt-8 inline-flex items-center gap-2 text-xs font-bold uppercase tracking-[.1em] text-primary underline decoration-accent decoration-2 underline-offset-4" data-testid="link-google-review">Leave a Google review <ExternalLink size={14} /></a></div><div className="grid gap-4 sm:grid-cols-2"><img src={IMG.review1} alt="Guest review card: Sukanta Moule on the space, kitchen and value for families" width={768} height={1376} loading="lazy" decoding="async" className="w-full rounded-[1.4rem] object-cover shadow-sm" /><img src={IMG.review2} alt="Guest review card: Adrija Banerjee on a quiet, pet-friendly stay and a helpful owner" width={656} height={1604} loading="lazy" decoding="async" className="w-full rounded-[1.4rem] object-cover shadow-sm" /></div></div>
         </section>
 
       </main>
 
       <footer className="bg-[#172d25] py-14 pb-28 text-[#f5eadb] md:pb-14" data-testid="site-footer">
-        <div className="section-shell"><div className="grid gap-12 border-b border-[#f5eadb]/15 pb-12 md:grid-cols-[1.2fr_.8fr_.8fr]"><div><div className="flex items-center gap-3"><span className="grid h-10 w-10 place-items-center rounded-full bg-[#e4c9a4] text-[#172d25]"><Leaf size={19} /></span><span><span className="block font-mono-ui text-[10px] tracking-[.18em] text-[#f5eadb]/70">RAJ KUTHIR</span><span className="font-journal text-2xl">Homestays</span></span></div><p className="mt-6 max-w-[300px] text-sm leading-6 text-[#f5eadb]/60">Sobuj Potro — a private home in nature, in Bolpur / Shantiniketan.</p></div><div><p className="eyebrow mb-5 text-[#e4c9a4]">Explore</p><div className="flex flex-col items-start gap-3 text-sm text-[#f5eadb]/70"><a href={`${basePath}/our-story`} className="transition-colors hover:text-[#e4c9a4]" data-testid="link-footer-story">Our story</a><a href={`${basePath}/places-to-visit-in-shantiniketan`} className="transition-colors hover:text-[#e4c9a4]" data-testid="link-footer-places">Places to visit</a><a href={`${basePath}/gallery`} className="transition-colors hover:text-[#e4c9a4]" data-testid="link-footer-gallery">Photos</a><a href={`${basePath}/pet-friendly-homestay-shantiniketan`} className="transition-colors hover:text-[#e4c9a4]" data-testid="link-footer-pet">Staying with a pet</a><a href={`${basePath}/house-rules`} className="transition-colors hover:text-[#e4c9a4]" data-testid="link-footer-house-rules">House rules</a><a href={`${basePath}/welcome`} className="transition-colors hover:text-[#e4c9a4]" data-testid="link-footer-welcome">Arriving guests</a></div></div><div><p className="eyebrow mb-5 text-[#e4c9a4]">Connect</p><div className="flex flex-col items-start gap-3 text-sm text-[#f5eadb]/70"><a href={CONFIG.instagramUrl} target="_blank" rel="noreferrer" className="flex items-center gap-2 hover:text-[#e4c9a4]" data-testid="link-footer-instagram"><Instagram size={15} /> Instagram</a><a href={CONFIG.reviewUrl} target="_blank" rel="noreferrer" className="flex items-center gap-2 hover:text-[#e4c9a4]" data-testid="link-footer-review"><Star size={15} /> Google Reviews</a><a href={phoneHref(CONFIG.hostPhone)} className="flex items-center gap-2 hover:text-[#e4c9a4]" data-testid="link-footer-call"><Phone size={15} /> {CONFIG.hostPhone}</a></div></div></div><div className="flex flex-col justify-between gap-4 pt-6 text-[10px] uppercase tracking-[.13em] text-[#f5eadb]/40 sm:flex-row"><p>© {new Date().getFullYear()} Raj Kuthir Homestays</p><p>Made for slower days</p></div></div>
+        <div className="section-shell"><div className="grid gap-12 border-b border-[#f5eadb]/15 pb-12 md:grid-cols-[1.2fr_.8fr_.8fr]"><div><div className="flex items-center gap-3"><span className="grid h-10 w-10 place-items-center rounded-full bg-[#e4c9a4] text-[#172d25]"><Leaf size={19} /></span><span><span className="block font-mono-ui text-[10px] tracking-[.18em] text-[#f5eadb]/70">RAJ KUTHIR</span><span className="font-journal text-2xl">Homestays</span></span></div><p className="mt-6 max-w-[300px] text-sm leading-6 text-[#f5eadb]/60">Sobuj Potro — a private home in nature, in Bolpur / Shantiniketan.</p></div><div><p className="eyebrow mb-5 text-[#e4c9a4]">Explore</p><div className="flex flex-col items-start gap-3 text-sm text-[#f5eadb]/70"><a href={`${basePath}/our-story`} className="transition-colors hover:text-[#e4c9a4]" data-testid="link-footer-story">Our story</a><a href={`${basePath}/places-to-visit-in-shantiniketan`} className="transition-colors hover:text-[#e4c9a4]" data-testid="link-footer-places">Places to visit</a><a href={`${basePath}/gallery`} className="transition-colors hover:text-[#e4c9a4]" data-testid="link-footer-gallery">Photos</a><a href={`${basePath}/pet-friendly-homestay-shantiniketan`} className="transition-colors hover:text-[#e4c9a4]" data-testid="link-footer-pet">Staying with a pet</a><a href={`${basePath}/rates`} className="transition-colors hover:text-[#e4c9a4]" data-testid="link-footer-rates">Rates</a><a href={`${basePath}/house-rules`} className="transition-colors hover:text-[#e4c9a4]" data-testid="link-footer-house-rules">House rules</a><a href={`${basePath}/welcome`} className="transition-colors hover:text-[#e4c9a4]" data-testid="link-footer-welcome">Arriving guests</a></div></div><div><p className="eyebrow mb-5 text-[#e4c9a4]">Connect</p><div className="flex flex-col items-start gap-3 text-sm text-[#f5eadb]/70"><a href={CONFIG.instagramUrl} target="_blank" rel="noreferrer" className="flex items-center gap-2 hover:text-[#e4c9a4]" data-testid="link-footer-instagram"><Instagram size={15} /> Instagram</a><a href={CONFIG.reviewUrl} target="_blank" rel="noreferrer" className="flex items-center gap-2 hover:text-[#e4c9a4]" data-testid="link-footer-review"><Star size={15} /> Google Reviews</a><a href={phoneHref(CONFIG.hostPhone)} className="flex items-center gap-2 hover:text-[#e4c9a4]" data-testid="link-footer-call"><Phone size={15} /> {CONFIG.hostPhone}</a></div></div></div><div className="flex flex-col justify-between gap-4 pt-6 text-[10px] uppercase tracking-[.13em] text-[#f5eadb]/40 sm:flex-row"><p>© {new Date().getFullYear()} Raj Kuthir Homestays</p><p>Made for slower days</p></div></div>
       </footer>
 
       {/* The two things a guest needs that are not on the page: how to get
@@ -975,6 +1022,8 @@ function Router() {
         <Route path="/gallery" component={Gallery} />
         <Route path="/our-story" component={OurStory} />
         <Route path="/places-to-visit-in-shantiniketan" component={PlacesToVisit} />
+        {/* Public rate card, read live from /api/rates. */}
+        <Route path="/rates" component={Rates} />
         {/* Guest arrival pack, unlocked with a booking reference. */}
         <Route path="/welcome" component={Welcome} />
         <Route path="/admin" component={AdminDashboard} />

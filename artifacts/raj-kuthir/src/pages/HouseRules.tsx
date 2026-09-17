@@ -109,7 +109,8 @@ const charges = [
 export default function HouseRules() {
   useEffect(() => {
     const previous = document.title;
-    document.title = 'House rules | Raj Kuthir Homestays';
+    // Must match the server-rendered <title> in api-server/src/lib/seo.ts.
+    document.title = 'House Rules | Raj Kuthir Homestays, Shantiniketan';
     return () => {
       document.title = previous;
     };
@@ -300,6 +301,8 @@ export default function HouseRules() {
           <div className="flex flex-col gap-2 text-sm text-[#f5eadb]/70 sm:text-right">
             <a href={phoneHref(CONFIG.hostPhone)} className="hover:text-[#e4c9a4]">Host · {CONFIG.hostPhone}</a>
             <a href={phoneHref(CONFIG.caretakerPhone)} className="hover:text-[#e4c9a4]">Caretaker · {CONFIG.caretakerPhone}</a>
+            <a href={`${basePath}/pet-friendly-homestay-shantiniketan`} className="hover:text-[#e4c9a4]">Staying with a pet</a>
+            <a href={`${basePath}/rates`} className="hover:text-[#e4c9a4]">Rates</a>
             <a href={`${basePath}/`} className="hover:text-[#e4c9a4]">Back to the stay</a>
           </div>
         </div>

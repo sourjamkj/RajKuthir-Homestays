@@ -161,7 +161,10 @@ if (clientDist) {
     try {
       res.type("html").send(injectMeta(readBaseHtml(), req.path));
     } catch (error) {
-      // A metadata problem must never take the site down.
+      // A metadata problem must never take the site down. The raw shell is
+      // safe to send for any route: it carries no canonical, og:url or
+      // description, so a failure here cannot hand an inner page the
+      // homepage's identity. seo.test.ts holds index.html to that.
       logger.warn({ error, path: req.path }, "Falling back to raw index.html");
       res.sendFile(indexHtmlPath);
     }

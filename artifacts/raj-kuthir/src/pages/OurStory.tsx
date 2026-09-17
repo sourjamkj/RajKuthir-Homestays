@@ -167,7 +167,11 @@ export default function OurStory() {
                 premises, Wi-Fi, a kitchen you are welcome to use, and Cafe Soi
                 on site for the evenings nobody feels like cooking. Pets are
                 written into the house rules rather than negotiated at the
-                door.
+                door. If you want to{' '}
+                <a href={`${basePath}/pet-friendly-homestay-shantiniketan`} className="text-primary underline decoration-accent decoration-1 underline-offset-2 hover:text-accent" data-testid="link-story-pet-inline">
+                  stay with your pet in Shantiniketan
+                </a>
+                , the details are on a page of their own.
               </p>
               <p>
                 A caretaker looks after arrivals, meals that need arranging,
@@ -184,6 +188,9 @@ export default function OurStory() {
                 </a>
                 <a href={`${basePath}/house-rules`} className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-[.1em] text-primary underline decoration-accent decoration-2 underline-offset-4" data-testid="link-story-rules">
                   Read the house rules <ArrowUpRight size={14} />
+                </a>
+                <a href={`${basePath}/rates`} className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-[.1em] text-primary underline decoration-accent decoration-2 underline-offset-4" data-testid="link-story-rates">
+                  See the rates <ArrowUpRight size={14} />
                 </a>
               </div>
             </div>
@@ -246,9 +253,11 @@ export default function OurStory() {
           </div>
           <div className="flex flex-col gap-2 text-sm text-[#f5eadb]/70 sm:text-right">
             <a href={`${basePath}/`} className="hover:text-[#e4c9a4]">The stay</a>
+            <a href={`${basePath}/pet-friendly-homestay-shantiniketan`} className="hover:text-[#e4c9a4]">Staying with a pet</a>
             <a href={`${basePath}/gallery`} className="hover:text-[#e4c9a4]">Photos</a>
             <a href={`${basePath}/places-to-visit-in-shantiniketan`} className="hover:text-[#e4c9a4]">Places to visit</a>
             <a href={`${basePath}/house-rules`} className="hover:text-[#e4c9a4]">House rules</a>
+            <a href={`${basePath}/rates`} className="hover:text-[#e4c9a4]">Rates</a>
           </div>
         </div>
       </footer>

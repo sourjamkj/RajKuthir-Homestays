@@ -2,22 +2,33 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1" />
-    <title>Pet-Friendly Homestay in Shantiniketan | Raj Kuthir Homestays</title>
-    <meta name="description" content="Stay at Sobuj Potro, a private two-bedroom pet-friendly villa with a garden in Bolpur / Shantiniketan, West Bengal." />
-    <link rel="canonical" href="https://rajkuthirhomestays.casa/" />
-    <meta name="robots" content="index, follow" />
-    <meta property="og:title" content="Pet-Friendly Homestay in Shantiniketan | Raj Kuthir Homestays" />
-    <meta property="og:description" content="A private two-bedroom villa with a garden in Bolpur / Shantiniketan. Come for the slower hours." />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!--
+      A neutral, brand-level head, and deliberately nothing page-specific.
+
+      This one file is the shell for EVERY route. The API server rewrites the
+      head per request (api-server/src/lib/seo.ts) with each page's own title,
+      description, canonical and structured data. If that rewrite is ever
+      skipped — it throws and app.ts falls back to this file as-is, or the
+      shell is served by something other than the API server — whatever is
+      written here goes out on /gallery, /rates and every other URL alike.
+
+      So: no canonical and no og:url, because a canonical pointing at the
+      homepage would tell Google that every inner page is a duplicate of it.
+      No description, because the homepage's would be wrong everywhere else.
+      No image preload, because only the homepage renders that image. The
+      title and share card below are true of any page on the site.
+    -->
+    <title>Raj Kuthir Homestays</title>
     <meta property="og:type" content="website" />
-    <meta property="og:url" content="https://rajkuthirhomestays.casa/" />
+    <meta property="og:site_name" content="Raj Kuthir Homestays" />
+    <meta property="og:title" content="Raj Kuthir Homestays" />
     <meta property="og:image" content="https://rajkuthirhomestays.casa/villa-night.jpg" />
     <meta property="og:image:width" content="1600" />
     <meta property="og:image:height" content="900" />
     <meta property="og:image:alt" content="Raj Kuthir Homestays, Sobuj Potro — the villa lit up after sundown" />
     <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:title" content="Pet-Friendly Homestay in Shantiniketan | Raj Kuthir Homestays" />
-    <meta name="twitter:description" content="A private two-bedroom villa with a garden in Bolpur / Shantiniketan. Come for the slower hours." />
+    <meta name="twitter:title" content="Raj Kuthir Homestays" />
     <meta name="twitter:image" content="https://rajkuthirhomestays.casa/villa-night.jpg" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
   </head>

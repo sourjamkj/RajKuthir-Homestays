@@ -8,6 +8,7 @@ import { MOBILE_PATTERN } from "./phone.ts";
 import {
   PAGES,
   SITE_ORIGIN,
+  VERIFIED_AMENITIES,
   injectMeta,
   isKnownPath,
   isPrivatePath,
@@ -57,11 +58,17 @@ const GALLERY_PAGE_TSX = readFileSync(
 /** app.ts, read so the wiring that serves the homepage can be asserted. */
 const APP_TS = readFileSync(path.join(here, "../app.ts"), "utf8");
 
-const PUBLIC_ROUTES = [
-  "/",
-  "/house-rules",
-  "/pet-friendly-homestay-shantiniketan",
-];
+/**
+ * Every indexable page, derived from the route table rather than typed out.
+ *
+ * This used to be a hand-written list of three while seo.ts had grown to six,
+ * so every test iterating it — unique titles, complete tags, nothing
+ * unverified — silently skipped /gallery, /our-story and the places page.
+ * Deriving it means a new page is covered the moment it is described.
+ */
+const PUBLIC_ROUTES = Object.entries(PAGES)
+  .filter(([route, meta]) => !meta.noindex && !isPrivatePath(route))
+  .map(([route]) => route);
 const PRIVATE_ROUTES = [
   "/welcome",
   "/admin",
@@ -162,22 +169,34 @@ test("point 1 · og and twitter tags mirror the page, not the homepage", () => {
 });
 
 test("point 1 · the build's homepage tags are replaced, never duplicated", () => {
-  // The source index.html ships a homepage title, description, canonical and a
-  // full og/twitter set. A house-rules render must carry none of them.
-  const html = render("/house-rules");
+  // The real shell is neutral now, but a shell that DID carry the homepage's
+  // tags — an older build, a careless edit — must still come out clean.
+  const polluted = BASE_HTML.replace(
+    "</head>",
+    [
+      "<title>Homepage title</title>",
+      '<meta name="description" content="Homepage description" />',
+      `<link rel="canonical" href="${SITE_ORIGIN}/" />`,
+      `<meta property="og:url" content="${SITE_ORIGIN}/" />`,
+      '<link rel="preload" as="image" href="/villa-night.jpg" />',
+      "</head>",
+    ].join("\n"),
+  );
+  const html = injectMeta(polluted, "/house-rules");
 
   assert.equal(titles(html).length, 1);
   assert.equal(metaByName(html, "description").length, 1);
   assert.equal(canonicals(html).length, 1);
+  assert.equal(canonicals(html)[0], `${SITE_ORIGIN}/house-rules`);
+  assert.equal(metaByProp(html, "og:url").length, 1);
   assert.equal(metaByProp(html, "og:image").length, 1);
   assert.equal(metaByProp(html, "og:image:width").length, 1);
   assert.equal(metaByProp(html, "og:image:height").length, 1);
   assert.equal(metaByProp(html, "og:image:alt").length, 1);
 
-  assert.ok(
-    !html.includes("Pet-Friendly Homestay in Shantiniketan"),
-    "the build's homepage title survived into an inner page",
-  );
+  assert.ok(!html.includes("Homepage title"), "a stale title survived");
+  assert.ok(!html.includes("Homepage description"), "a stale description survived");
+  assert.ok(!/rel="preload"/.test(html), "the homepage preload leaked into an inner page");
 });
 
 test("point 1 · canonicals are absolute, https and trailing-slash normalised", () => {
@@ -236,8 +255,34 @@ test("point 2 · the sitemap lists exactly the public, indexable pages", () => {
     `${SITE_ORIGIN}/our-story`,
     `${SITE_ORIGIN}/pet-friendly-homestay-shantiniketan`,
     `${SITE_ORIGIN}/places-to-visit-in-shantiniketan`,
+    `${SITE_ORIGIN}/rates`,
   ]);
   assert.equal(new Set(locs).size, locs.length, "duplicate <loc> in sitemap");
+});
+
+test("point 2 · every sitemap entry is loc and lastmod, and nothing else", () => {
+  const xml = sitemapXml();
+  const urls = xml.match(/<url>[\s\S]*?<\/url>/g) ?? [];
+
+  assert.ok(urls.length > 0);
+  for (const url of urls) {
+    assert.match(url, /<loc>[^<]+<\/loc>/);
+    assert.match(url, /<lastmod>\d{4}-\d{2}-\d{2}<\/lastmod>/);
+    const children = [...url.matchAll(/<(\w+)>/g)].map((m) => m[1]).filter((t) => t !== "url");
+    assert.deepEqual(children, ["loc", "lastmod"], `unexpected sitemap fields: ${url}`);
+  }
+  assert.ok(!xml.includes("<changefreq>"), "the sitemap still emits changefreq");
+  assert.ok(!xml.includes("<priority>"), "the sitemap still emits priority");
+});
+
+test("point 2 · lastmod stays hand-maintained, with the homepage at its content date", () => {
+  assert.equal(PAGES["/"]!.lastmod, "2026-09-14");
+  // Not today's date on every page: if every lastmod were identical the field
+  // would read as generated, which is how Google learns to ignore it.
+  const dates = new Set(
+    PUBLIC_ROUTES.map((route) => PAGES[route]!.lastmod),
+  );
+  assert.ok(dates.size > 1, "every page claims the same lastmod");
 });
 
 test("point 2 · nothing private or noindex can reach the sitemap", () => {
@@ -272,10 +317,6 @@ test("point 2 · the sitemap is well-formed and correctly namespaced", () => {
   );
   for (const lastmod of all(xml, /<lastmod>([^<]*)<\/lastmod>/g)) {
     assert.match(lastmod, /^\d{4}-\d{2}-\d{2}$/, "lastmod is not W3C date form");
-  }
-  for (const priority of all(xml, /<priority>([^<]*)<\/priority>/g)) {
-    const value = Number(priority);
-    assert.ok(value >= 0 && value <= 1, `priority ${priority} out of range`);
   }
 });
 
@@ -340,27 +381,53 @@ test("point 2 · a noindex page carries no lastmod to leak", () => {
 });
 
 // =========================================================== POINT 3
-// robots.txt excludes every private area.
+// robots.txt blocks the API, and lets crawlers read the private pages' noindex.
 
-test("point 3 · robots.txt disallows every private area and the API", () => {
-  for (const rule of ["/admin", "/sign-in", "/welcome", "/api/"]) {
-    assert.match(
-      ROBOTS_TXT,
-      new RegExp(`^Disallow: ${rule.replace("/", "\\/")}\\s*$`, "m"),
-      `robots.txt is missing "Disallow: ${rule}"`,
+/** Every Disallow path in robots.txt, as written. */
+const DISALLOWED = ROBOTS_TXT.split(/\r?\n/)
+  .map((line) => line.trim())
+  .filter((line) => /^disallow:/i.test(line))
+  .map((line) => line.replace(/^disallow:\s*/i, ""));
+
+/** Would robots.txt stop a crawler fetching this path? Prefix match, as crawlers do. */
+const blockedByRobots = (route: string) =>
+  DISALLOWED.some((rule) => rule !== "" && route.startsWith(rule));
+
+test("point 3 · robots.txt keeps the API out", () => {
+  assert.ok(DISALLOWED.includes("/api/"), 'robots.txt is missing "Disallow: /api/"');
+  assert.ok(blockedByRobots("/api/rates"));
+});
+
+test("point 3 · robots.txt does not hide a private page's noindex from the crawler", () => {
+  // A Disallow and a noindex on the same URL cancel each other out: the
+  // crawler is forbidden to fetch the page, so it never reads the noindex, and
+  // a disallowed URL linked from elsewhere can be indexed from the link alone.
+  // The private areas are protected by sign-in and booking references, and
+  // kept out of the index by the noindex below — not by robots.txt.
+  for (const route of PRIVATE_ROUTES) {
+    assert.ok(
+      !blockedByRobots(route),
+      `robots.txt blocks ${route}, so a crawler can never see that it is noindex`,
+    );
+    assert.equal(
+      metaByName(render(route), "robots")[0],
+      "noindex, nofollow",
+      `${route} must still say noindex in the page itself`,
     );
   }
 });
 
-test("point 3 · every private prefix in code has a matching robots rule", () => {
-  // Cross-check, so adding a private area to seo.ts without touching
-  // robots.txt fails here rather than showing up in a search result.
-  for (const route of PRIVATE_ROUTES) {
-    const top = `/${normalisePath(route).split("/")[1]}`;
-    assert.ok(
-      ROBOTS_TXT.includes(`Disallow: ${top}`),
-      `private route ${route} has no robots.txt rule for ${top}`,
-    );
+test("point 3 · private routes also send X-Robots-Tag, for crawlers that skip the HTML", () => {
+  assert.match(
+    APP_TS,
+    /if \(isPrivatePath\(req\.path\)\) \{\s*res\.setHeader\("X-Robots-Tag", "noindex, nofollow"\);/,
+    "app.ts no longer sends X-Robots-Tag: noindex on private routes",
+  );
+});
+
+test("point 3 · no public page is blocked by robots.txt", () => {
+  for (const route of PUBLIC_ROUTES) {
+    assert.ok(!blockedByRobots(route), `robots.txt blocks public page ${route}`);
   }
 });
 
@@ -393,12 +460,93 @@ test("point 4 · LodgingBusiness carries the facts we hold", () => {
   assert.equal(lodging.url, SITE_ORIGIN);
   assert.equal(lodging.telephone, "+916290399165");
   assert.equal(lodging.petsAllowed, true);
-  assert.equal(lodging.address["@type"], "PostalAddress");
-  assert.equal(lodging.address.addressLocality, "Bolpur");
-  assert.equal(lodging.address.addressRegion, "West Bengal");
-  assert.equal(lodging.address.addressCountry, "IN");
   assert.equal(lodging.geo.latitude, 23.7170162);
   assert.equal(lodging.geo.longitude, 87.6656757);
+});
+
+test("point 4 · the address is exactly the one the owner verified", () => {
+  for (const route of PUBLIC_ROUTES) {
+    const lodging = graphFor(route).find(
+      (node: any) => node["@type"] === "LodgingBusiness",
+    );
+    assert.deepEqual(
+      lodging.address,
+      {
+        "@type": "PostalAddress",
+        streetAddress: "Dopati 148, Bolpur, Potro Bunglow, Sobuj, Bandh Nabagram",
+        addressLocality: "Bolpur",
+        addressRegion: "West Bengal",
+        postalCode: "731235",
+        addressCountry: "IN",
+      },
+      `${route}: address drifted from the verified one`,
+    );
+    // The Plus Code is a location code, not part of a street address.
+    assert.ok(
+      !JSON.stringify(lodging.address).includes("PM88"),
+      `${route}: the Plus Code leaked into the postal address`,
+    );
+  }
+});
+
+test("point 4 · an Organization exists, once, and WebSite names it as publisher", () => {
+  for (const route of PUBLIC_ROUTES) {
+    const graph = graphFor(route);
+    const orgs = graph.filter((n: any) => n["@type"] === "Organization");
+    assert.equal(orgs.length, 1, `${route}: expected exactly one Organization`);
+
+    const org = orgs[0];
+    assert.equal(org["@id"], `${SITE_ORIGIN}/#organization`);
+    assert.equal(org.name, "Raj Kuthir Homestays");
+    assert.equal(org.url, `${SITE_ORIGIN}/`);
+
+    const website = graph.find((n: any) => n["@type"] === "WebSite");
+    assert.deepEqual(website.publisher, { "@id": org["@id"] });
+
+    // Everything that points at the Organization points at a node that exists.
+    const raw = JSON.stringify(graph);
+    const ids = new Set(graph.map((n: any) => n["@id"]));
+    for (const [, ref] of raw.matchAll(/\{"@id":"([^"]+)"\}/g)) {
+      assert.ok(ids.has(ref), `${route}: reference to ${ref}, which is not in the graph`);
+    }
+  }
+});
+
+test("point 4 · LodgingBusiness describes the villa with the owner's confirmed figures", () => {
+  const lodging = graphFor("/").find(
+    (n: any) => n["@type"] === "LodgingBusiness",
+  );
+
+  assert.equal(lodging.checkinTime, "12:00:00+05:30");
+  assert.equal(lodging.checkoutTime, "11:00:00+05:30");
+  assert.deepEqual(lodging.parentOrganization, { "@id": `${SITE_ORIGIN}/#organization` });
+
+  const villa = lodging.containsPlace;
+  assert.equal(villa["@type"], "House");
+  assert.equal(villa.numberOfBedrooms, 2);
+  assert.equal(villa.numberOfBathroomsTotal, 2);
+  assert.deepEqual(villa.bed, [
+    { "@type": "BedDetails", numberOfBeds: 2, typeOfBed: "King bed" },
+  ]);
+
+  // The check-in and check-out times are the published ones.
+  const rules = readFileSync(path.join(clientRoot, "src/pages/HouseRules.tsx"), "utf8");
+  assert.ok(rules.includes("Check-in from 12:00 PM, check-out by 11:00 AM."));
+
+  // And every room figure is written on the homepage, where a guest reads it.
+  const copy = APP_TSX.toLowerCase();
+  for (const phrase of ["two bedrooms, two king beds", "two bathrooms", "air conditioning in both bedrooms"]) {
+    assert.ok(copy.includes(phrase), `the homepage no longer says "${phrase}"`);
+  }
+});
+
+test("point 4 · no rating, review or VacationRental markup, anywhere", () => {
+  for (const route of [...PUBLIC_ROUTES, ...PRIVATE_ROUTES, ...UNKNOWN_ROUTES]) {
+    const html = render(route);
+    for (const banned of ["aggregateRating", "VacationRental", '"Review"', "ratingValue"]) {
+      assert.ok(!html.includes(banned), `${route}: emits ${banned}`);
+    }
+  }
 });
 
 test("point 4 · nothing unverified is asserted about the property", () => {
@@ -411,15 +559,15 @@ test("point 4 · nothing unverified is asserted about the property", () => {
     "starRating",
     "openingHours",
     "openingHoursSpecification",
-    "checkinTime",
-    "checkoutTime",
+    // numberOfRooms counts living and dining rooms too; the verified figure is
+    // bedrooms, stated as numberOfBedrooms on the villa.
     "numberOfRooms",
     "occupancy",
     "maximumAttendeeCapacity",
-    "amenityFeature",
+    // amenityFeature is NOT banned outright: it is permitted, but only for
+    // amenities the page publishes — see the dedicated test below, which is
+    // stricter than a blanket ban because it checks each entry is real.
     "floorSize",
-    "streetAddress",
-    "postalCode",
     "makesOffer",
     "offers",
   ];
@@ -481,7 +629,7 @@ test("point 5 · no duplicate or conflicting nodes in the graph", () => {
     const ids = graph.map((n: any) => n["@id"]).filter(Boolean);
     assert.equal(new Set(ids).size, ids.length, `${route}: duplicate @id`);
 
-    for (const type of ["LodgingBusiness", "WebSite"]) {
+    for (const type of ["Organization", "LodgingBusiness", "WebSite"]) {
       assert.equal(
         graph.filter((n: any) => n["@type"] === type).length,
         1,
@@ -716,6 +864,27 @@ test("point 8 · unknown routes are noindex and are not treated as pages", () =>
     assert.equal(ldBlocks(html).length, 0);
     assert.ok(!isKnownPath(route), `${route} is wrongly treated as a route`);
     assert.match(titles(html)[0]!, /Page not found/);
+    // Nothing of the homepage's identity, and no URL offered for indexing.
+    assert.equal(canonicals(html).length, 0, `${route}: a 404 must not declare a canonical`);
+    assert.equal(metaByProp(html, "og:url").length, 0);
+    assert.ok(!html.includes(PAGES["/"]!.title), `${route}: carries the homepage title`);
+    assert.ok(!html.includes(PAGES["/"]!.description), `${route}: carries the homepage description`);
+  }
+});
+
+test("point 8 · unknown routes are answered with a real 404 status", () => {
+  assert.match(
+    APP_TS,
+    /if \(!isKnownPath\(req\.path\)\) \{\s*res\.status\(404\);/,
+    "app.ts no longer sets a 404 status for unknown routes",
+  );
+});
+
+test("point 8 · a noindex page offers no canonical or og:url to index", () => {
+  for (const route of PRIVATE_ROUTES) {
+    const html = render(route);
+    assert.equal(canonicals(html).length, 0, `${route} is noindex but declares a canonical`);
+    assert.equal(metaByProp(html, "og:url").length, 0, `${route} is noindex but declares og:url`);
   }
 });
 
@@ -893,5 +1062,447 @@ test("point 11 · the browser and the server agree on what a phone number is", (
       expected,
       `the server pattern disagrees on "${input}"`,
     );
+  }
+});
+
+// ========================================================== PHASE 1
+// Search intent, verified amenities, headings, images and robots hygiene.
+
+/**
+ * The file that renders each indexable page.
+ *
+ * None of these pages import a shared component that renders its own heading
+ * or image (only the crash fallback in error-boundary.tsx does), so scanning a
+ * page's own source is an accurate picture of what it renders, not an
+ * approximation. A test below fails if a public route is missing from here.
+ */
+const RENDERED_BY: Record<string, string> = {
+  "/": "src/App.tsx",
+  "/gallery": "src/pages/Gallery.tsx",
+  "/our-story": "src/pages/OurStory.tsx",
+  "/places-to-visit-in-shantiniketan": "src/pages/PlacesToVisit.tsx",
+  "/house-rules": "src/pages/HouseRules.tsx",
+  "/pet-friendly-homestay-shantiniketan": "src/pages/PetFriendly.tsx",
+  "/rates": "src/pages/Rates.tsx",
+};
+
+const sourceOf = (route: string) =>
+  readFileSync(path.join(clientRoot, RENDERED_BY[route]!), "utf8");
+
+/**
+ * Every <img ... /> in a source file, whole.
+ *
+ * Scans by hand rather than with one regex, tracking { } depth, so a JSX
+ * expression such as alt={`…`} or width={photo.width} cannot end the tag
+ * early and hide the attributes after it.
+ */
+function imgTags(source: string): string[] {
+  const tags: string[] = [];
+  let start = 0;
+  while ((start = source.indexOf("<img", start)) !== -1) {
+    const next = source[start + 4];
+    if (!next || !/\s/.test(next)) {
+      start += 4;
+      continue;
+    }
+    let depth = 0;
+    let end = start;
+    for (; end < source.length; end++) {
+      const c = source[end];
+      if (c === "{") depth++;
+      else if (c === "}") depth--;
+      else if (depth === 0 && c === "/" && source[end + 1] === ">") break;
+    }
+    tags.push(source.slice(start, end + 2));
+    start = end + 2;
+  }
+  return tags;
+}
+
+const hasAttr = (tag: string, name: string) =>
+  new RegExp(`\\s${name}=`).test(tag);
+const literalAlt = (tag: string) => tag.match(/\salt="([^"]*)"/)?.[1];
+
+test("intent · every indexable page declares one primary search intent", () => {
+  for (const route of PUBLIC_ROUTES) {
+    const primary = PAGES[route]!.intent?.primary;
+    assert.ok(primary?.trim(), `${route}: no primary search intent declared`);
+  }
+});
+
+test("intent · no two pages compete for the same query", () => {
+  // Primary and secondary alike: a page's secondary is still a query it is
+  // trying to rank for, so it must not also be another page's target.
+  const owner = new Map<string, string>();
+  for (const route of PUBLIC_ROUTES) {
+    const { primary, secondary = [] } = PAGES[route]!.intent!;
+    for (const query of [primary, ...secondary]) {
+      const key = query.toLowerCase().trim();
+      assert.ok(
+        !owner.has(key),
+        `"${query}" is targeted by both ${owner.get(key)} and ${route}`,
+      );
+      owner.set(key, route);
+    }
+  }
+});
+
+test("amenities · every amenityFeature is something the homepage publishes", () => {
+  const lodging = graphFor("/").find(
+    (n: any) => n["@type"] === "LodgingBusiness",
+  );
+  const emitted = lodging.amenityFeature.map((f: any) => f.name);
+  assert.deepEqual(emitted, [...VERIFIED_AMENITIES]);
+
+  const copy = APP_TSX.toLowerCase();
+  for (const name of VERIFIED_AMENITIES) {
+    assert.ok(
+      copy.includes(name.toLowerCase()),
+      `"${name}" is marked up but not stated anywhere on the homepage`,
+    );
+  }
+  for (const feature of lodging.amenityFeature) {
+    assert.equal(feature["@type"], "LocationFeatureSpecification");
+    assert.equal(feature.value, true);
+  }
+});
+
+test("amenities · nothing the owner has not confirmed is claimed", () => {
+  // Air conditioning, the bathrooms and the king beds were confirmed by the
+  // owner and are now written on the homepage, so the markup may say them.
+  // Anything below has not been confirmed and must not appear.
+  for (const route of PUBLIC_ROUTES) {
+    const raw = JSON.stringify(graphFor(route)).toLowerCase();
+    for (const term of [
+      "queen bed",
+      "single bed",
+      "sofa bed",
+      "swimming pool",
+      "breakfast",
+      "free cancellation",
+    ]) {
+      assert.ok(
+        !raw.includes(term),
+        `${route}: structured data claims "${term}", which the site does not state`,
+      );
+    }
+  }
+});
+
+test("breadcrumbs · inner pages use a short name of their own, not the title", () => {
+  for (const route of PUBLIC_ROUTES.filter((r) => r !== "/")) {
+    const crumb = graphFor(route).find(
+      (n: any) => n["@type"] === "BreadcrumbList",
+    );
+    assert.ok(crumb, `${route}: no BreadcrumbList`);
+    const name = crumb.itemListElement[1].name;
+    assert.equal(name, PAGES[route]!.breadcrumb, `${route}: breadcrumb name drifted`);
+    assert.ok(
+      !name.includes("|") && name.length <= 30,
+      `${route}: breadcrumb "${name}" reads like a page title`,
+    );
+  }
+});
+
+test("headings · every indexable page is mapped to the file that renders it", () => {
+  for (const route of PUBLIC_ROUTES) {
+    assert.ok(
+      RENDERED_BY[route],
+      `${route}: add it to RENDERED_BY so its headings and images are checked`,
+    );
+  }
+});
+
+test("headings · every indexable page has exactly one h1", () => {
+  for (const route of PUBLIC_ROUTES) {
+    const count = (sourceOf(route).match(/<h1[\s>]/g) ?? []).length;
+    assert.equal(count, 1, `${route}: renders ${count} <h1> elements`);
+  }
+});
+
+test("headings · levels open with h1 and never skip on the way down", () => {
+  for (const route of PUBLIC_ROUTES) {
+    const levels = [...sourceOf(route).matchAll(/<h([1-6])[\s>]/g)].map((m) =>
+      Number(m[1]),
+    );
+    assert.equal(levels[0], 1, `${route}: the first heading is h${levels[0]}`);
+    for (let i = 1; i < levels.length; i++) {
+      assert.ok(
+        levels[i]! <= levels[i - 1]! + 1,
+        `${route}: an h${levels[i - 1]} is followed by an h${levels[i]}`,
+      );
+    }
+  }
+});
+
+test("images · every image on a public page has alt text and real dimensions", () => {
+  for (const route of PUBLIC_ROUTES) {
+    for (const tag of imgTags(sourceOf(route))) {
+      for (const attr of ["alt", "width", "height"]) {
+        assert.ok(
+          hasAttr(tag, attr),
+          `${route}: <img> without ${attr}: ${tag.slice(0, 90)}`,
+        );
+      }
+      const alt = literalAlt(tag);
+      if (alt !== undefined) {
+        assert.ok(alt.trim().length > 0, `${route}: an <img> has empty alt text`);
+        assert.ok(alt.length <= 125, `${route}: alt text is ${alt.length} chars`);
+      }
+    }
+  }
+});
+
+test("images · no two images on a page share the same written alt text", () => {
+  for (const route of PUBLIC_ROUTES) {
+    const alts = imgTags(sourceOf(route))
+      .map(literalAlt)
+      .filter((a): a is string => a !== undefined);
+    const repeated = alts.filter((a, i) => alts.indexOf(a) !== i);
+    assert.deepEqual(
+      repeated,
+      [],
+      `${route}: alt text repeated — each image should say what it shows`,
+    );
+  }
+});
+
+test("images · every image declares a loading strategy and async decoding", () => {
+  for (const route of PUBLIC_ROUTES) {
+    for (const tag of imgTags(sourceOf(route))) {
+      assert.ok(
+        hasAttr(tag, "loading"),
+        `${route}: <img> without loading: ${tag.slice(0, 90)}`,
+      );
+      assert.ok(
+        /\sdecoding="async"/.test(tag),
+        `${route}: <img> without decoding="async": ${tag.slice(0, 90)}`,
+      );
+    }
+  }
+});
+
+test("images · only the LCP image is fetched at high priority", () => {
+  for (const route of PUBLIC_ROUTES) {
+    const high = imgTags(sourceOf(route)).filter((t) =>
+      /fetchPriority="high"/.test(t),
+    ).length;
+    assert.ok(high <= 1, `${route}: ${high} images marked fetchPriority="high"`);
+  }
+  // The homepage hero is its largest contentful paint, so it keeps priority.
+  const hero = imgTags(APP_TSX).find((t) => t.includes("IMG.villaNight"));
+  assert.ok(hero, "the homepage hero image is missing");
+  assert.ok(/fetchPriority="high"/.test(hero!), "the hero lost fetchPriority");
+  assert.ok(/loading="eager"/.test(hero!), "the hero is no longer eager");
+});
+
+test("robots · does not block the CSS, JavaScript or images a crawler renders with", () => {
+  const rules = ROBOTS_TXT.split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter((line) => /^disallow:/i.test(line))
+    .map((line) => line.replace(/^disallow:\s*/i, ""));
+
+  for (const rule of rules) {
+    assert.ok(
+      !/^\/assets|\.(js|css|jpe?g|png|webp|svg)|\*/i.test(rule),
+      `robots.txt blocks "${rule}", which Google needs to render the page`,
+    );
+  }
+});
+
+// ========================================================== PHASE 2
+// Homepage entity, fallback shell, preload, titles, internal links, rates.
+
+test("homepage · exactly one h1, and it says what and where the place is", () => {
+  const h1s = [...APP_TSX.matchAll(/<h1[\s>][^>]*>([\s\S]*?)<\/h1>/g)];
+  assert.equal(h1s.length, 1, `App.tsx renders ${h1s.length} <h1> elements`);
+  // The text a crawler reads: inline tags (the nowrap span, the italic) removed.
+  const text = h1s[0]![1]!.replace(/<[^>]+>/g, "").replace(/\s+/g, " ").trim();
+  assert.equal(text, "Private 2-Bedroom Villa in Shantiniketan");
+
+  // It is the hero's display heading, not a small label.
+  const h1Tag = h1s[0]![0]!;
+  assert.match(h1Tag, /className="font-journal text-\[clamp\(/, "the h1 lost the hero display type");
+  assert.ok(!/font-mono-ui|text-\[9px\]/.test(h1Tag), "the h1 is styled as an eyebrow again");
+
+  // The tagline is kept, directly after the heading, as a paragraph.
+  assert.match(
+    APP_TSX,
+    /<\/h1>\s*<p className="[^"]*font-journal[^"]*">\s*Stay for the <em className="text-secondary">unhurried<\/em> hours\.\s*<\/p>/,
+  );
+  assert.ok(
+    !/<h[1-6][^>]*>\s*Stay for the/.test(APP_TSX),
+    "the tagline is marked up as a heading again",
+  );
+});
+
+test("pet faq · the pet charge is described from the rate plan, never priced on the page", () => {
+  const answer = PAGES["/pet-friendly-homestay-shantiniketan"]!.faq!.find((item) =>
+    item.q === "Is there an extra charge for bringing a pet?",
+  )!.a;
+
+  // No longer tells the guest the charge is unpublished — the rates page and
+  // the booking section both show it.
+  assert.ok(!/anything quoted here would be out of date/.test(answer));
+  assert.match(answer, /current rate plan/);
+  assert.match(answer, /rates page/);
+  assert.match(answer, /not per night/);
+
+  // The only rupee figure is the published damage minimum, not a pet price.
+  const rupees = [...answer.matchAll(/₹\s?\d(?:[\d,]*\d)?/g)].map((m) => m[0]);
+  assert.deepEqual(rupees, ["₹1,000"]);
+  assert.ok(PET_PAGE_TSX.includes(answer), "the visible answer and the markup differ");
+});
+
+test("homepage · title, description and social tags are the approved ones", () => {
+  const html = render("/");
+  const title = "Raj Kuthir Homestays | Private Villa in Shantiniketan";
+  const description =
+    "Stay at Raj Kuthir Homestays, a private 2-bedroom pet-friendly villa with AC, garden and parking in Bolpur, Shantiniketan, West Bengal.";
+
+  assert.deepEqual(titles(html), [title]);
+  assert.deepEqual(metaByName(html, "description"), [description]);
+  assert.deepEqual(canonicals(html), [`${SITE_ORIGIN}/`]);
+  assert.deepEqual(metaByProp(html, "og:title"), [title]);
+  assert.deepEqual(metaByProp(html, "og:description"), [description]);
+  assert.deepEqual(metaByName(html, "twitter:title"), [title]);
+  assert.deepEqual(metaByName(html, "twitter:description"), [description]);
+});
+
+test("routes · titles match the approved wording", () => {
+  assert.equal(PAGES["/pet-friendly-homestay-shantiniketan"]!.title, "Pet-Friendly Homestay in Shantiniketan | Raj Kuthir");
+  assert.equal(PAGES["/places-to-visit-in-shantiniketan"]!.title, "Places to Visit in Shantiniketan | Raj Kuthir Homestays");
+  assert.equal(PAGES["/gallery"]!.title, "Raj Kuthir Homestays Gallery | Shantiniketan Villa");
+  assert.equal(PAGES["/our-story"]!.title, "Our Story | Raj Kuthir Homestays, Shantiniketan");
+});
+
+test("routes · every indexable page has its own self-referencing canonical", () => {
+  for (const route of PUBLIC_ROUTES) {
+    const expected = `${SITE_ORIGIN}${route === "/" ? "/" : route}`;
+    for (const variant of route === "/" ? ["/"] : [route, `${route}/`]) {
+      const html = render(variant);
+      assert.deepEqual(canonicals(html), [expected], `${variant}: wrong canonical`);
+      assert.deepEqual(metaByProp(html, "og:url"), [expected], `${variant}: wrong og:url`);
+    }
+    if (route !== "/") {
+      assert.notEqual(canonicals(render(route))[0], `${SITE_ORIGIN}/`);
+    }
+  }
+});
+
+test("routes · the title a page sets in the browser is the one the server sent", () => {
+  // Google renders JavaScript. A useEffect that swaps in a different title
+  // quietly replaces the server's one in what gets indexed.
+  for (const route of PUBLIC_ROUTES.filter((r) => r !== "/")) {
+    const set = sourceOf(route).match(/document\.title = '([^']+)'/)?.[1];
+    assert.equal(set, PAGES[route]!.title, `${route}: document.title differs from seo.ts`);
+  }
+});
+
+test("fallback · index.html carries nothing a non-homepage route could inherit", () => {
+  // app.ts sends this file untouched if injectMeta throws. Whatever is in it
+  // then goes out on every URL, so it must not name any one page.
+  assert.equal(canonicals(BASE_HTML).length, 0, "index.html declares a canonical");
+  assert.equal(metaByProp(BASE_HTML, "og:url").length, 0, "index.html declares og:url");
+  assert.equal(metaByName(BASE_HTML, "description").length, 0, "index.html carries a description");
+  assert.equal(metaByProp(BASE_HTML, "og:description").length, 0);
+  assert.equal(metaByName(BASE_HTML, "twitter:description").length, 0);
+  assert.ok(!/<link\s+rel="preload"/.test(BASE_HTML), "index.html preloads an image for every route");
+
+  for (const route of PUBLIC_ROUTES) {
+    assert.ok(
+      !titles(BASE_HTML).includes(PAGES[route]!.title),
+      `index.html's title is ${route}'s own title`,
+    );
+  }
+  assert.deepEqual(titles(BASE_HTML), ["Raj Kuthir Homestays"]);
+});
+
+test("fallback · app.ts falls back to that neutral shell, not to a rendered page", () => {
+  assert.match(
+    APP_TS,
+    /catch \(error\) \{[\s\S]*?res\.sendFile\(indexHtmlPath\);/,
+    "the injection fallback changed — re-check what it can leak",
+  );
+});
+
+test("viewport · pinch-zoom is not disabled", () => {
+  const viewport = BASE_HTML.match(/<meta\s+name="viewport"\s+content="([^"]*)"/)?.[1];
+  assert.equal(viewport, "width=device-width, initial-scale=1.0");
+  assert.ok(!/maximum-scale|user-scalable/.test(BASE_HTML));
+});
+
+test("preload · the homepage preloads its LCP image, and only the homepage", () => {
+  const preloads = (html: string) =>
+    [...html.matchAll(/<link rel="preload" as="image" href="([^"]+)"[^>]*>/g)];
+
+  const home = preloads(render("/"));
+  assert.equal(home.length, 1, "the homepage should preload exactly one image");
+  assert.equal(home[0]![1], "/villa-night.jpg");
+  assert.match(home[0]![0], /type="image\/jpeg"/);
+  assert.match(home[0]![0], /fetchpriority="high"/);
+
+  // It is the file the hero actually renders, eagerly and at high priority.
+  assert.match(APP_TSX, /villaNight: asset\('villa-night\.jpg'\)/);
+
+  for (const route of [...PUBLIC_ROUTES.filter((r) => r !== "/"), ...PRIVATE_ROUTES, ...UNKNOWN_ROUTES]) {
+    assert.equal(preloads(render(route)).length, 0, `${route} preloads the homepage hero`);
+  }
+});
+
+test("links · every other public page links to the pet-friendly page", () => {
+  const target = "${basePath}/pet-friendly-homestay-shantiniketan`";
+  for (const route of PUBLIC_ROUTES.filter((r) => r !== "/pet-friendly-homestay-shantiniketan")) {
+    assert.ok(sourceOf(route).includes(target), `${route} has no link to the pet-friendly page`);
+  }
+  // ...and at least as often as they link to the house rules.
+  const count = (needle: string) =>
+    PUBLIC_ROUTES.reduce((n, r) => n + sourceOf(r).split(needle).length - 1, 0);
+  assert.ok(
+    count(target) >= count("${basePath}/house-rules`"),
+    "the pet-friendly page has fewer internal links than the house rules",
+  );
+});
+
+test("links · the homepage header sends 'Pet Friendly' to the page, not an anchor", () => {
+  assert.match(
+    APP_TSX,
+    /\{ label: 'Pet Friendly', href: `\$\{basePath\}\/pet-friendly-homestay-shantiniketan` \}/,
+  );
+});
+
+test("links · the pet page links back to the stay and on to places, photos and rates", () => {
+  const source = sourceOf("/pet-friendly-homestay-shantiniketan");
+  for (const href of [
+    "${basePath}/`",
+    "${basePath}/#booking`",
+    "${basePath}/places-to-visit-in-shantiniketan`",
+    "${basePath}/gallery`",
+    "${basePath}/rates`",
+  ]) {
+    assert.ok(source.includes(href), `the pet page has no link to ${href}`);
+  }
+});
+
+test("rates · the rates page reads the one rate plan and types no prices of its own", () => {
+  const source = sourceOf("/rates");
+  assert.match(source, /import \{[^}]*useRatePlan[^}]*\} from '@\/lib\/rates';/);
+  assert.ok(!/₹\s?\d/.test(source), "Rates.tsx contains a hard-coded rupee amount");
+  assert.ok(!/(?:Rs\.?|INR)\s?\d/.test(source), "Rates.tsx contains a hard-coded price");
+  // The route exists on both sides.
+  assert.ok(APP_TSX.includes('<Route path="/rates" component={Rates} />'));
+  assert.ok(isKnownPath("/rates"));
+  assert.ok(!isPrivatePath("/rates"));
+});
+
+test("places · no unverified travel time, and the core sights stay covered", () => {
+  const source = sourceOf("/places-to-visit-in-shantiniketan");
+  const site = readFileSync(path.join(clientRoot, "src/lib/site.ts"), "utf8");
+  assert.ok(!/five minutes from Prantik/i.test(source), "a travel time contradicts lib/site.ts");
+  // The page renders NEIGHBOURHOOD from lib/site.ts, so that is where the
+  // places themselves are written.
+  assert.match(source, /NEIGHBOURHOOD\.map/);
+  for (const topic of ["Sonajhuri", "Visva-Bharati", "Rabindra Bhavan", "Khoai"]) {
+    assert.ok(site.includes(topic), `the places page no longer covers ${topic}`);
   }
 });

@@ -1,16 +1,16 @@
 # Raj Kuthir Homestays
-# The guest-facing site is open to crawlers; owner and guest-private areas are not.
+# The guest-facing site is open to crawlers.
 
 User-agent: *
 Allow: /
 
-# Owner console — nothing here belongs in a search result.
-Disallow: /admin
-Disallow: /sign-in
-
-# Guest arrival pack. Reachable only with a booking reference, but there is no
-# reason for it to be crawled or indexed either.
-Disallow: /welcome
+# The owner console (/admin, /sign-in) and the guest arrival pack (/welcome)
+# are deliberately NOT disallowed here. Each of them answers with
+# <meta name="robots" content="noindex, nofollow"> and an X-Robots-Tag header,
+# and a crawler can only obey that if it is allowed to fetch the page. A
+# Disallow would stop it reading the noindex, and a blocked URL that is linked
+# from somewhere can still be indexed from the link alone. Access to both is
+# protected by sign-in and a booking reference, not by this file.
 
 # The API serves data, not pages.
 Disallow: /api/

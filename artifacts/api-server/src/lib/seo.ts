@@ -106,9 +106,17 @@ export type PageMeta = {
    * form is right, and that nothing claims a date in the future.
    */
   lastmod?: string;
-  /** Omitted from the sitemap when absent. */
-  changefreq?: string;
-  priority?: string;
+  /**
+   * An image worth fetching before the JavaScript that renders it has run.
+   *
+   * Only for a page whose largest contentful paint is a photograph drawn by
+   * React: without the hint the browser cannot discover the file until the
+   * bundle has downloaded, parsed and rendered. Emitted per page rather than
+   * baked into index.html, because that shell is served for every route and a
+   * preload there would make the gallery and the owner console download the
+   * homepage hero for nothing.
+   */
+  preloadImage?: { href: string; type: string };
   /**
    * Emitted as FAQPage structured data.
    *
@@ -118,6 +126,24 @@ export type PageMeta = {
    * component; do not add an entry without adding it to the page too.
    */
   faq?: { q: string; a: string }[];
+  /**
+   * The search this page exists to answer, and the related searches it may
+   * reasonably also rank for.
+   *
+   * One primary per page, and no primary shared by two pages. When two pages
+   * chase the same query they compete with each other rather than with other
+   * sites, and Google tends to rank neither well — a test enforces the
+   * uniqueness. This is documentation that is checked, not metadata that is
+   * emitted: nothing here reaches the HTML.
+   */
+  intent?: { primary: string; secondary?: string[] };
+  /**
+   * The short name used in BreadcrumbList. Set explicitly rather than cut
+   * from the title, so a title written for the search result ("Raj Kuthir
+   * Homestays Gallery | Shantiniketan Villa") does not become a clumsy
+   * breadcrumb ("Raj Kuthir Homestays Gallery").
+   */
+  breadcrumb?: string;
 };
 
 /**
@@ -136,7 +162,7 @@ const PET_FRIENDLY_FAQ = [
   },
   {
     q: 'Is there an extra charge for bringing a pet?',
-    a: 'Confirm it with us when you enquire — rates vary by dates and occupancy, so anything quoted here would be out of date. What is already published is the damage side: pet damage or soiling is charged from ₹1,000, and that is on the house rules page along with everything else.',
+    a: 'Yes — a one-off charge per pet for the whole stay, not per night. The amount comes from our current rate plan: it is shown on the rates page and in the booking section of the homepage, and the enquiry form adds it to your estimate when you enter your pets. Separately, pet damage or soiling is charged from ₹1,000, and that is on the house rules page along with everything else.',
   },
   {
     q: 'Can we leave our dog in the villa while we go out?',
@@ -185,15 +211,30 @@ const PLACES_FAQ = [
  */
 export const PAGES: Record<string, PageMeta> = {
   "/": {
-    title: "Private 2BHK Villa in Shantiniketan | Raj Kuthir Homestays",
+    title: "Raj Kuthir Homestays | Private Villa in Shantiniketan",
     description:
-      "An entire two-bedroom villa with a private garden in Bolpur, Shantiniketan. Pet-friendly, family-friendly, and bookable direct with the owner.",
-    lastmod: "2026-09-11",
-    changefreq: "weekly",
-    priority: "1.0",
+      "Stay at Raj Kuthir Homestays, a private 2-bedroom pet-friendly villa with AC, garden and parking in Bolpur, Shantiniketan, West Bengal.",
+    lastmod: "2026-09-14",
+    // The hero photograph is the homepage's LCP. Keep in step with IMG.villaNight
+    // in App.tsx — a test asserts the two name the same file.
+    preloadImage: { href: "/villa-night.jpg", type: "image/jpeg" },
+    intent: {
+      primary: "private villa in Shantiniketan",
+      secondary: [
+        "homestay in Shantiniketan",
+        "homestay in Bolpur",
+        "2 bedroom villa Shantiniketan",
+        "private bungalow Shantiniketan",
+        "family homestay Shantiniketan",
+        "villa with garden Shantiniketan",
+        // Accommodation near the market, so it belongs with the house, not
+        // with the page about what to do once you are here.
+        "homestay near Sonajhuri",
+      ],
+    },
   },
   "/pet-friendly-homestay-shantiniketan": {
-    title: "Pet-Friendly Villa in Shantiniketan | Raj Kuthir Homestays",
+    title: "Pet-Friendly Homestay in Shantiniketan | Raj Kuthir",
     description:
       "Bring the dog. A private two-bedroom villa with its own garden in Bolpur, Shantiniketan — the whole house is yours, and pets are in our published house rules.",
     ogImage: {
@@ -202,13 +243,16 @@ export const PAGES: Record<string, PageMeta> = {
       height: 1024,
       alt: "Raj Kuthir Homestays, Sobuj Potro, seen from the garden in daylight",
     },
-    lastmod: "2026-09-10",
-    changefreq: "monthly",
-    priority: "0.9",
+    lastmod: "2026-09-14",
     faq: PET_FRIENDLY_FAQ,
+    breadcrumb: "Staying with a pet",
+    intent: {
+      primary: "pet friendly homestay in Shantiniketan",
+      secondary: ["pet friendly villa Shantiniketan"],
+    },
   },
   "/gallery": {
-    title: "Villa Photos in Shantiniketan | Raj Kuthir Homestays",
+    title: "Raj Kuthir Homestays Gallery | Shantiniketan Villa",
     description:
       "Every room, the garden and the walk outside \u2014 photographs of Sobuj Potro, the two-bedroom villa at Raj Kuthir Homestays in Bolpur, Shantiniketan.",
     ogImage: {
@@ -217,17 +261,19 @@ export const PAGES: Record<string, PageMeta> = {
       height: 1086,
       alt: "Raj Kuthir Homestays, Sobuj Potro, from the garden on a clear morning",
     },
-    lastmod: "2026-09-11",
-    changefreq: "monthly",
-    priority: "0.6",
+    lastmod: "2026-09-14",
+    breadcrumb: "Gallery",
+    intent: { primary: "Raj Kuthir Homestays photos" },
   },
   "/our-story": {
     title: "Our Story | Raj Kuthir Homestays, Shantiniketan",
     description:
       "Why Sobuj Potro exists and what the house actually is \u2014 an entire two-bedroom villa with its own garden in Bolpur, let directly by the owner.",
     lastmod: "2026-09-11",
-    changefreq: "yearly",
-    priority: "0.5",
+    breadcrumb: "Our story",
+    // Navigational: people who already know the name. Deliberately not a
+    // generic query, which would only compete with the homepage.
+    intent: { primary: "Raj Kuthir Homestays story" },
   },
   "/places-to-visit-in-shantiniketan": {
     title: "Places to Visit in Shantiniketan | Raj Kuthir Homestays",
@@ -239,18 +285,37 @@ export const PAGES: Record<string, PageMeta> = {
       height: 1254,
       alt: "A statue of Rabindranath Tagore near Raj Kuthir Homestays, Shantiniketan",
     },
-    lastmod: "2026-09-11",
-    changefreq: "monthly",
-    priority: "0.8",
+    lastmod: "2026-09-14",
     faq: PLACES_FAQ,
+    breadcrumb: "Places to visit",
+    intent: {
+      primary: "places to visit in Shantiniketan",
+      secondary: ["things to do in Shantiniketan"],
+    },
   },
   "/house-rules": {
     title: "House Rules | Raj Kuthir Homestays, Shantiniketan",
     description:
       "Check-in and check-out times, our pet and smoking policy, and what we ask of guests — published in full before you book, so nothing is a surprise.",
-    lastmod: "2026-09-04",
-    changefreq: "yearly",
-    priority: "0.4",
+    lastmod: "2026-09-14",
+    breadcrumb: "House rules",
+    intent: { primary: "Raj Kuthir Homestays house rules" },
+  },
+  /**
+   * The rate card, read live from /api/rates by the page itself. Nothing here
+   * names a figure: a price in a meta description would be a second copy of
+   * the rate plan, and it would be the one nobody remembers to change.
+   */
+  "/rates": {
+    title: "Shantiniketan Homestay Rates | Raj Kuthir Homestays",
+    description:
+      "Nightly rates for Sobuj Potro, a private two-bedroom villa in Bolpur, Shantiniketan: priced by the number of guests, with extra-guest and pet charges in full.",
+    lastmod: "2026-09-17",
+    breadcrumb: "Rates",
+    intent: {
+      primary: "Shantiniketan homestay price",
+      secondary: ["Raj Kuthir Homestays rates"],
+    },
   },
 
   // Guest-only. Nothing here should ever appear in a search result.
@@ -278,6 +343,7 @@ const CLIENT_ROUTES = new Set([
   "/places-to-visit-in-shantiniketan",
   "/house-rules",
   "/pet-friendly-homestay-shantiniketan",
+  "/rates",
   "/welcome",
   "/admin",
   "/admin/login",
@@ -351,13 +417,81 @@ function escapeHtml(value: string): string {
 }
 
 /**
+ * Amenities stated in the visible copy of the homepage, and nothing else.
+ *
+ * Google requires structured data to describe what a visitor can see on the
+ * page. Every name here is checked against App.tsx by a test, so an amenity
+ * cannot be added to the markup without first being published to guests.
+ *
+ * Air conditioning and the kitchen are here because the owner confirmed them
+ * and the homepage now says so in its amenities list. Bathrooms and beds are
+ * not amenities; they are described on the villa itself — see VILLA below.
+ */
+export const VERIFIED_AMENITIES = [
+  "Wi-Fi",
+  "On-premise parking",
+  "Private garden",
+  "Air conditioning",
+  "Kitchen",
+  "Induction setup",
+  "Microwave",
+  "Refrigerator",
+  "Water filter",
+  "Basic cooking utensils",
+] as const;
+
+/**
+ * The postal address, as the owner verified it.
+ *
+ * The Plus Code (PM88+R7 Bandh Nabagram) is deliberately not in here. It is a
+ * location code, not a street address, and pushing it into streetAddress makes
+ * the address itself wrong for every consumer that reads it as one.
+ */
+export const VERIFIED_ADDRESS = {
+  "@type": "PostalAddress",
+  streetAddress: "Dopati 148, Bolpur, Potro Bunglow, Sobuj, Bandh Nabagram",
+  addressLocality: "Bolpur",
+  addressRegion: "West Bengal",
+  postalCode: "731235",
+  addressCountry: "IN",
+} as const;
+
+/**
+ * What is let: the whole villa, described as a place rather than a business.
+ *
+ * Every figure here was confirmed by the owner and is stated in the visible
+ * copy of the homepage. Deliberately a House under LodgingBusiness and not a
+ * VacationRental: VacationRental is a Google rich-result type with its own
+ * required fields (ratings among them) that this site cannot honestly supply.
+ */
+const VILLA = {
+  "@type": "House",
+  "@id": `${SITE_ORIGIN}/#villa`,
+  name: "Sobuj Potro",
+  numberOfBedrooms: 2,
+  numberOfBathroomsTotal: 2,
+  bed: [{ "@type": "BedDetails", numberOfBeds: 2, typeOfBed: "King bed" }],
+} as const;
+
+/**
  * Structured data, using ONLY facts that are already on the site or in the
  * owner's own listings.
  *
  * Deliberately absent: aggregateRating, review counts, priceRange, star
- * rating, room dimensions, occupancy, opening hours and any amenity not
- * already published. Inventing any of those is a structured-data violation and
- * can cost the rich result entirely — and none of them are verified.
+ * rating, room dimensions, occupancy, opening hours, and any amenity not in
+ * VERIFIED_AMENITIES. Inventing any of those is a structured-data violation
+ * and can cost the rich result entirely — and none of them are verified.
+ *
+ * - priceRange: prices live in the database and change from the owner
+ *   console. A range typed here would be a second copy that goes stale.
+ * - openingHoursSpecification: a homestay has check-in and check-out times,
+ *   not opening hours. Those are published (12:00 and 11:00, on the house
+ *   rules page) and are emitted as checkinTime / checkoutTime instead.
+ * - numberOfRooms: schema.org counts every room except bathrooms and
+ *   closets, so the living and dining rooms would count too. The verified
+ *   figure is bedrooms, which is what VILLA states.
+ * - occupancy: the rate card prices one to five guests and charges for heads
+ *   beyond that, so there is no single published figure to assert.
  *
  * The coordinates are the ones Google itself returns for the property's own
  * Maps listing, so they are not a guess. The images are the three largest
@@ -366,6 +500,15 @@ function escapeHtml(value: string): string {
  */
 function jsonLd(pathname: string): string {
   const path = normalisePath(pathname);
+
+  /** The brand that runs the house. One node, referenced by @id everywhere. */
+  const organization = {
+    "@context": "https://schema.org",
+    "@type": "Organization",
+    "@id": `${SITE_ORIGIN}/#organization`,
+    name: "Raj Kuthir Homestays",
+    url: `${SITE_ORIGIN}/`,
+  };
 
   const lodging = {
     "@context": "https://schema.org",
@@ -379,18 +522,22 @@ function jsonLd(pathname: string): string {
       `${SITE_ORIGIN}/villa-day.jpg`,
       `${SITE_ORIGIN}/villa.jpg`,
     ],
-    address: {
-      "@type": "PostalAddress",
-      addressLocality: "Bolpur",
-      addressRegion: "West Bengal",
-      addressCountry: "IN",
-    },
+    address: VERIFIED_ADDRESS,
     geo: {
       "@type": "GeoCoordinates",
       latitude: 23.7170162,
       longitude: 87.6656757,
     },
+    parentOrganization: { "@id": organization["@id"] },
     petsAllowed: true,
+    checkinTime: "12:00:00+05:30",
+    checkoutTime: "11:00:00+05:30",
+    containsPlace: VILLA,
+    amenityFeature: VERIFIED_AMENITIES.map((name) => ({
+      "@type": "LocationFeatureSpecification",
+      name,
+      value: true,
+    })),
     sameAs: [
       "https://www.instagram.com/rajkuthirhomestays/",
       "https://maps.app.goo.gl/D1tUUb3JfpVdcHwu5",
@@ -403,10 +550,10 @@ function jsonLd(pathname: string): string {
     "@id": `${SITE_ORIGIN}/#website`,
     url: SITE_ORIGIN,
     name: "Raj Kuthir Homestays",
-    publisher: { "@id": `${SITE_ORIGIN}/#lodging` },
+    publisher: { "@id": organization["@id"] },
   };
 
-  const graph: unknown[] = [lodging, website];
+  const graph: unknown[] = [organization, lodging, website];
 
   /**
    * FAQPage, only when the page genuinely renders those questions. Marking up
@@ -442,7 +589,9 @@ function jsonLd(pathname: string): string {
         {
           "@type": "ListItem",
           position: 2,
-          name: metaFor(path).title.split("|")[0]!.trim(),
+          name:
+            metaFor(path).breadcrumb ??
+            metaFor(path).title.split("|")[0]!.trim(),
           item: `${SITE_ORIGIN}${path}`,
         },
       ],
@@ -456,9 +605,11 @@ function jsonLd(pathname: string): string {
 /**
  * Rewrites the <head> of the built index.html for one request.
  *
- * The build already emits a title, description, canonical and social tags for
- * the homepage; those are stripped and replaced rather than duplicated, since
- * two titles is worse than one wrong one. The strip pattern deliberately
+ * The build's index.html carries only a neutral, brand-level head with no
+ * canonical and no og:url (see the note in that file), so if this function is
+ * ever bypassed no route can inherit the homepage's URL. Whatever the shell
+ * does carry is stripped and replaced rather than duplicated, since two titles
+ * is worse than one wrong one. The strip pattern deliberately
  * catches og:image:width / og:image:height / og:image:alt as well, so those are
  * re-emitted here rather than being left behind pointing at the old image.
  */
@@ -468,16 +619,26 @@ export function injectMeta(html: string, pathname: string): string {
   const canonical = `${SITE_ORIGIN}${path === "/" ? "/" : path}`;
   const image = meta.ogImage ?? DEFAULT_OG_IMAGE;
 
+  /*
+    A canonical says "this is the URL to index". A noindex page — the owner
+    console, the arrival pack, a 404 — has no URL to index, so it gets no
+    canonical and no og:url. Emitting both sends a crawler two opposite
+    instructions, and an unknown path would be telling Google its own junk
+    URL is the preferred version of itself.
+  */
   const head = [
     `<title>${escapeHtml(meta.title)}</title>`,
     `<meta name="description" content="${escapeHtml(meta.description)}" />`,
-    `<link rel="canonical" href="${canonical}" />`,
+    meta.noindex ? "" : `<link rel="canonical" href="${canonical}" />`,
     meta.noindex
       ? `<meta name="robots" content="noindex, nofollow" />`
       : `<meta name="robots" content="index, follow, max-image-preview:large" />`,
+    meta.preloadImage
+      ? `<link rel="preload" as="image" href="${meta.preloadImage.href}" type="${meta.preloadImage.type}" fetchpriority="high" />`
+      : "",
     `<meta property="og:type" content="website" />`,
     `<meta property="og:site_name" content="Raj Kuthir Homestays" />`,
-    `<meta property="og:url" content="${canonical}" />`,
+    meta.noindex ? "" : `<meta property="og:url" content="${canonical}" />`,
     `<meta property="og:title" content="${escapeHtml(meta.title)}" />`,
     `<meta property="og:description" content="${escapeHtml(meta.description)}" />`,
     `<meta property="og:image" content="${image.url}" />`,
@@ -505,12 +666,14 @@ export function injectMeta(html: string, pathname: string): string {
     .join("\n    ");
 
   return html
-    .replace(/<title>[\s\S]*?<\/title>\s*/i, "")
+    .replace(/<title>[\s\S]*?<\/title>\s*/gi, "")
     .replace(
       /\s*<meta\s+(?:name|property)="(?:description|robots|og:[^"]*|twitter:[^"]*)"[^>]*>/gi,
       "",
     )
     .replace(/\s*<link\s+rel="canonical"[^>]*>/gi, "")
+    // Nor may a preload baked into the shell: it would fire on every route.
+    .replace(/\s*<link\s+rel="preload"\s+as="image"[^>]*>/gi, "")
     // Any JSON-LD baked into the build would compete with the block below.
     .replace(
       /\s*<script\s+type="application\/ld\+json"[^>]*>[\s\S]*?<\/script>/gi,
@@ -533,9 +696,10 @@ export function sitemapXml(): string {
       [
         "  <url>",
         `    <loc>${SITE_ORIGIN}${path === "/" ? "/" : path}</loc>`,
+        // No <changefreq> or <priority>: Google ignores both, and a value
+        // nobody maintains is noise at best. loc and an honest lastmod are the
+        // only two fields that change how the site is crawled.
         meta.lastmod ? `    <lastmod>${meta.lastmod}</lastmod>` : "",
-        meta.changefreq ? `    <changefreq>${meta.changefreq}</changefreq>` : "",
-        meta.priority ? `    <priority>${meta.priority}</priority>` : "",
         "  </url>",
       ]
         .filter(Boolean)

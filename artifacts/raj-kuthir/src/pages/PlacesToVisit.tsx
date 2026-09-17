@@ -134,6 +134,17 @@ export default function PlacesToVisit() {
             Distances are by road from the villa and rounded to the nearest
             useful number. Routes and traffic vary.
           </p>
+          <p className="max-w-[640px] pt-4 text-sm leading-6 text-muted-foreground" data-testid="text-places-pets">
+            Travelling with a dog? Whether a particular market, temple or
+            sanctuary lets pets in changes from season to season, and we have
+            not verified it for any of the places above &mdash; ask the
+            caretaker before you set out. Everything about the house itself is
+            on the page for our{' '}
+            <a href={`${basePath}/pet-friendly-homestay-shantiniketan`} className="text-primary underline decoration-accent decoration-2 underline-offset-4" data-testid="link-places-pet">
+              pet-friendly homestay in Shantiniketan
+            </a>
+            .
+          </p>
         </section>
 
         {/* --------------------------------------------------------- the FAQ
@@ -169,8 +180,16 @@ export default function PlacesToVisit() {
               </h2>
               <p className="mt-7 max-w-[470px] text-lg leading-8 text-primary-foreground/70">
                 Two bedrooms, a private garden and parking on the premises, in
-                Bolpur &mdash; five minutes from Prantik and a short ride from
-                the Tagore campus.
+                Bolpur &mdash; near Prantik station and a short ride from the
+                Tagore campus.
+              </p>
+              <p className="mt-5 flex flex-wrap gap-x-6 gap-y-3 text-xs font-bold uppercase tracking-[.1em]">
+                <a href={`${basePath}/gallery`} className="underline decoration-secondary decoration-2 underline-offset-4 hover:text-secondary" data-testid="link-places-gallery">
+                  See the villa
+                </a>
+                <a href={`${basePath}/rates`} className="underline decoration-secondary decoration-2 underline-offset-4 hover:text-secondary" data-testid="link-places-rates">
+                  Rates
+                </a>
               </p>
             </div>
             <div className="flex flex-wrap gap-3 lg:justify-end">
@@ -216,9 +235,11 @@ export default function PlacesToVisit() {
           </div>
           <div className="flex flex-col gap-2 text-sm text-[#f5eadb]/70 sm:text-right">
             <a href={`${basePath}/`} className="hover:text-[#e4c9a4]">The stay</a>
-            <a href={`${basePath}/our-story`} className="hover:text-[#e4c9a4]">Our story</a>
+            <a href={`${basePath}/pet-friendly-homestay-shantiniketan`} className="hover:text-[#e4c9a4]">Staying with a pet</a>
             <a href={`${basePath}/gallery`} className="hover:text-[#e4c9a4]">Photos</a>
+            <a href={`${basePath}/our-story`} className="hover:text-[#e4c9a4]">Our story</a>
             <a href={`${basePath}/house-rules`} className="hover:text-[#e4c9a4]">House rules</a>
+            <a href={`${basePath}/rates`} className="hover:text-[#e4c9a4]">Rates</a>
           </div>
         </div>
       </footer>

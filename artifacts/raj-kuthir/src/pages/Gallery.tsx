@@ -255,7 +255,8 @@ function PhotoRail({ photos, label, startEager }: { photos: Photo[]; label: stri
 export default function Gallery() {
   useEffect(() => {
     const previous = document.title;
-    document.title = 'Villa Photos in Shantiniketan | Raj Kuthir Homestays';
+    // Must match the server-rendered <title> in api-server/src/lib/seo.ts.
+    document.title = 'Raj Kuthir Homestays Gallery | Shantiniketan Villa';
     return () => {
       document.title = previous;
     };
@@ -304,6 +305,17 @@ export default function Gallery() {
             {GALLERY.length} photographs of Sobuj Potro &mdash; the rooms as they
             are, the garden, and the short walk into Shantiniketan. Swipe each
             row. Nothing here is a stock picture of somewhere else.
+          </p>
+          <p className="mt-3 max-w-[620px] text-sm leading-6 text-muted-foreground">
+            Bringing a dog? Read about{' '}
+            <a href={`${basePath}/pet-friendly-homestay-shantiniketan`} className="text-primary underline decoration-accent decoration-2 underline-offset-4" data-testid="link-gallery-pet">
+              our pet-friendly villa
+            </a>
+            , or see the{' '}
+            <a href={`${basePath}/rates`} className="text-primary underline decoration-accent decoration-2 underline-offset-4" data-testid="link-gallery-rates">
+              current rates
+            </a>
+            .
           </p>
         </section>
 
@@ -377,9 +389,11 @@ export default function Gallery() {
           </div>
           <div className="flex flex-col gap-2 text-sm text-[#f5eadb]/70 sm:text-right">
             <a href={`${basePath}/`} className="hover:text-[#e4c9a4]">The stay</a>
-            <a href={`${basePath}/our-story`} className="hover:text-[#e4c9a4]">Our story</a>
+            <a href={`${basePath}/pet-friendly-homestay-shantiniketan`} className="hover:text-[#e4c9a4]">Staying with a pet</a>
             <a href={`${basePath}/places-to-visit-in-shantiniketan`} className="hover:text-[#e4c9a4]">Places to visit</a>
+            <a href={`${basePath}/our-story`} className="hover:text-[#e4c9a4]">Our story</a>
             <a href={`${basePath}/house-rules`} className="hover:text-[#e4c9a4]">House rules</a>
+            <a href={`${basePath}/rates`} className="hover:text-[#e4c9a4]">Rates</a>
           </div>
         </div>
       </footer>
