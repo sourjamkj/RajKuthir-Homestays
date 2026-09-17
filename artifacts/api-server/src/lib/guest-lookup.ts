@@ -91,11 +91,18 @@ export async function lookupBooking(
 
   // Same normalisation on the stored column: the owner may have typed the
   // reference with spaces or dashes when entering an offline booking.
-  const normalisedColumn = sql`upper(regexp_replace(${bookings.externalRef}, '[^A-Za-z0-9]', '', 'g'))`;
+  //
+  // This must be `reference`, not `externalRef`. externalRef is the
+  // CHANNEL's own reservation number (MakeMyTrip's booking id, etc.) — see
+  // the schema comment in bookings.ts. `reference` is Raj Kuthir's own
+  // RK-17SEP-7K4MQ code, which is the one ever sent to a guest and the one
+  // this form asks for. Querying externalRef here meant no RK- reference
+  // could ever match, for any booking.
+  const normalisedColumn = sql`upper(regexp_replace(${bookings.reference}, '[^A-Za-z0-9]', '', 'g'))`;
 
   const rows = await db
     .select({
-      externalRef: bookings.externalRef,
+      reference: bookings.reference,
       guestName: bookings.guestName,
       guestPhone: bookings.guestPhone,
       checkIn: bookings.checkIn,
@@ -132,7 +139,7 @@ export async function lookupBooking(
   return {
     ok: true,
     booking: {
-      reference,
+      reference: current.reference ?? reference,
       guestName: current.guestName,
       checkIn: current.checkIn,
       checkOut: current.checkOut,

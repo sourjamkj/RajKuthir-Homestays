@@ -71,6 +71,8 @@ import PlacesToVisit from '@/pages/PlacesToVisit';
 import Rates from '@/pages/Rates';
 import Welcome from '@/pages/Welcome';
 import AdminGuestInfo from '@/pages/AdminGuestInfo';
+import PreArrival from '@/pages/PreArrival';
+import ManagementDocuments from '@/pages/ManagementDocuments';
 import {
   useRatePlan,
   rateForNight,
@@ -1026,6 +1028,8 @@ function Router() {
         <Route path="/rates" component={Rates} />
         {/* Guest arrival pack, unlocked with a booking reference. */}
         <Route path="/welcome" component={Welcome} />
+        <Route path="/pre-arrival/:token" component={PreArrival} />
+        <Route path="/management-documents/:token" component={ManagementDocuments} />
         <Route path="/admin" component={AdminDashboard} />
         <Route path="/admin/login" component={AdminLogin} />
         <Route path="/admin/earnings" component={AdminEarnings} />

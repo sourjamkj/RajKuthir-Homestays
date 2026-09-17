@@ -20,6 +20,11 @@ import { formatRupees } from '@/lib/ledger-api';
 
 const ENQUIRIES_KEY = ['/api/enquiries'];
 const CONTACTS_KEY = ['/api/contacts'];
+const GUEST_STAYS_KEY = ['/api/admin/guest-stays'];
+
+// Temporary management WhatsApp recipient for end-to-end testing.
+// Replace with the final management number/config before production use.
+const MANAGEMENT_TEST_WHATSAPP = '916290399165';
 
 type EnquiryStatus = 'new' | 'contacted' | 'converted' | 'closed';
 
@@ -72,6 +77,24 @@ type Enquiry = {
   quoteSentAt: string | null;
   advancePaidAt: string | null;
   hold: HoldState;
+};
+
+
+type GuestStay = {
+  bookingId: string;
+  reference: string | null;
+  guestName: string | null;
+  guestPhone: string | null;
+  checkIn: string;
+  checkOut: string;
+  guests: number | null;
+  pets: number | null;
+  status: 'pending' | 'confirmed' | 'cancelled';
+  grossPaise: number | null;
+  receivedPaise: number | null;
+  onboardingStatus: 'pending' | 'submitted' | 'verified' | 'expired' | 'blocked' | null;
+  verificationDeadline: string | null;
+  documents: { pending: number; submitted: number; verified: number; rejected: number };
 };
 
 type Contact = {
@@ -133,6 +156,71 @@ export default function AdminGuests() {
     queryFn: () => adminFetch<{ contacts: Contact[] }>('/api/contacts'),
     enabled: signedIn,
     retry: false,
+  });
+
+  const guestStays = useQuery({
+    queryKey: GUEST_STAYS_KEY,
+    queryFn: () => adminFetch<{ stays: GuestStay[] }>('/api/admin/guest-stays'),
+    enabled: signedIn,
+    retry: false,
+  });
+
+  const createOnboarding = useMutation({
+    mutationFn: async (stay: GuestStay) => {
+      const result = await adminFetch<{ url: string; verificationDeadline: string }>(
+        `/api/admin/guest-stays/${stay.bookingId}/onboarding`,
+        { method: 'POST', body: JSON.stringify({}) },
+      );
+      const message = buildGuestWhatsAppMessage(stay, result.url);
+      if (!stay.guestPhone) throw new Error('This booking has no guest mobile number.');
+      window.open(
+        `https://wa.me/${stay.guestPhone.replace(/\D/g, '')}?text=${encodeURIComponent(message)}`,
+        '_blank',
+        'noopener,noreferrer',
+      );
+      return result;
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: GUEST_STAYS_KEY }),
+  });
+
+  const prepareManagement = useMutation({
+    mutationFn: async (stay: GuestStay) => {
+      const result = await adminFetch<{ url: string }>(
+        `/api/admin/guest-stays/${stay.bookingId}/management-access`,
+        { method: 'POST', body: JSON.stringify({}) },
+      );
+      return result;
+    },
+  });
+
+  const openManagementWhatsApp = async (stay: GuestStay) => {
+    const result = await prepareManagement.mutateAsync(stay);
+    const message = buildManagementMessage(stay, result.url);
+    window.open(`https://wa.me/${MANAGEMENT_TEST_WHATSAPP}?text=${encodeURIComponent(message)}`, '_blank', 'noopener,noreferrer');
+  };
+
+  const openManagementEmail = async (stay: GuestStay) => {
+    const result = await prepareManagement.mutateAsync(stay);
+    const message = buildManagementMessage(stay, result.url);
+    // No management address is committed: the mail client lets the owner pick
+    // the management recipient while the subject/body are already prepared.
+    window.location.href = `mailto:?subject=${encodeURIComponent(`Sobuj Potro — Guest Arrival / Verification — ${stay.guestName ?? 'Guest'}`)}&body=${encodeURIComponent(message)}`;
+  };
+
+  const openManagementBoth = async (stay: GuestStay) => {
+    const result = await prepareManagement.mutateAsync(stay);
+    const message = buildManagementMessage(stay, result.url);
+    window.open(`https://wa.me/${MANAGEMENT_TEST_WHATSAPP}?text=${encodeURIComponent(message)}`, '_blank', 'noopener,noreferrer');
+    window.location.href = `mailto:?subject=${encodeURIComponent(`Sobuj Potro — Guest Arrival / Verification — ${stay.guestName ?? 'Guest'}`)}&body=${encodeURIComponent(message)}`;
+  };
+
+  const verifyDocuments = useMutation({
+    mutationFn: ({ bookingId, verified }: { bookingId: string; verified: boolean }) =>
+      adminFetch(`/api/admin/guest-stays/${bookingId}/verify`, {
+        method: 'POST',
+        body: JSON.stringify({ verified }),
+      }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: GUEST_STAYS_KEY }),
   });
 
   const refresh = () => {
@@ -441,6 +529,79 @@ export default function AdminGuests() {
           </div>
         </section>
 
+        <section className="mt-10" aria-label="Upcoming guest stays">
+          <Heading
+            icon={<Users size={15} />}
+            title="Guest check-in readiness"
+            description="Pre-arrival verification, document status, guest confirmation and management handoff. Management messages never contain pricing or payment information."
+          />
+          <div className="mt-4 overflow-x-auto rounded-2xl border border-border bg-card">
+            <table className="w-full min-w-[980px] border-collapse text-sm">
+              <thead>
+                <tr className="border-b border-border text-left text-[10px] uppercase tracking-[.08em] text-muted-foreground">
+                  <th className="px-5 py-3 font-bold">Guest / stay</th>
+                  <th className="px-5 py-3 font-bold">Verification</th>
+                  <th className="px-5 py-3 font-bold">Documents</th>
+                  <th className="px-5 py-3 font-bold text-right">Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                {(guestStays.data?.stays ?? []).map((stay) => {
+                  const verified = stay.onboardingStatus === 'verified';
+                  const submitted = stay.onboardingStatus === 'submitted';
+                  const deadline = stay.verificationDeadline ? new Date(stay.verificationDeadline) : null;
+                  const deadlinePassed = Boolean(deadline && deadline.getTime() <= Date.now() && !verified);
+                  return (
+                    <tr key={stay.bookingId} className="border-b border-border last:border-0" data-testid={`row-guest-stay-${stay.bookingId}`}>
+                      <td className="px-5 py-4">
+                        <p className="font-medium text-foreground">{stay.guestName ?? 'Unnamed guest'}</p>
+                        <p className="mt-1 text-xs text-muted-foreground">
+                          {format(parseISO(stay.checkIn), 'd MMM yyyy')} → {format(parseISO(stay.checkOut), 'd MMM yyyy')} · {stay.guests ?? '—'} guests
+                          {stay.pets ? ` · ${stay.pets} pet${stay.pets === 1 ? '' : 's'}` : ''}
+                        </p>
+                        <p className="mt-1 font-mono-ui text-[10px] text-muted-foreground">{stay.reference ?? 'No Raj Kuthir reference'}</p>
+                      </td>
+                      <td className="px-5 py-4">
+                        <span className={`rounded-full border px-2.5 py-1 text-[10px] font-bold uppercase tracking-[.07em] ${verified ? 'border-[#7A8065]/40 bg-[#7A8065]/10 text-[#4b5340]' : deadlinePassed ? 'border-[#A65E45]/40 bg-[#A65E45]/10 text-[#A65E45]' : submitted ? 'border-[#d8a24a]/40 bg-[#d8a24a]/10 text-[#8a6320]' : 'border-border text-muted-foreground'}`}>
+                          {verified ? 'Check-in ready' : deadlinePassed ? 'Deadline passed' : submitted ? 'Awaiting verification' : 'Not submitted'}
+                        </span>
+                        {deadline && !verified && (
+                          <p className="mt-2 text-[10px] text-muted-foreground">Deadline {format(deadline, 'd MMM, h:mm a')}</p>
+                        )}
+                      </td>
+                      <td className="px-5 py-4 text-xs text-muted-foreground">
+                        {stay.documents.verified} verified · {stay.documents.submitted} submitted · {stay.documents.rejected} rejected
+                      </td>
+                      <td className="px-5 py-4 text-right">
+                        <div className="flex justify-end gap-2">
+                          {submitted && !verified && (
+                            <button type="button" onClick={() => verifyDocuments.mutate({ bookingId: stay.bookingId, verified: true })} className="rounded-lg border border-border px-3 py-2 text-[10px] font-bold uppercase tracking-[.07em] text-primary hover:border-primary">Verify</button>
+                          )}
+                          <button type="button" onClick={() => createOnboarding.mutate(stay)} disabled={createOnboarding.isPending || !stay.guestPhone} className="flex items-center gap-1.5 rounded-lg bg-primary px-3 py-2 text-[10px] font-bold uppercase tracking-[.07em] text-primary-foreground disabled:opacity-40" data-testid={`button-whatsapp-guest-${stay.bookingId}`}>
+                            {createOnboarding.isPending ? <Loader2 size={12} className="animate-spin" /> : <MessageCircle size={12} />} Guest WhatsApp
+                          </button>
+                          <button type="button" onClick={() => openManagementWhatsApp(stay).catch((e) => window.alert(e instanceof Error ? e.message : 'Could not prepare management WhatsApp.'))} disabled={prepareManagement.isPending} className="flex items-center gap-1.5 rounded-lg border border-border px-3 py-2 text-[10px] font-bold uppercase tracking-[.07em] text-primary hover:border-primary disabled:opacity-40" data-testid={`button-whatsapp-management-${stay.bookingId}`}>
+                            <MessageCircle size={12} /> Mgmt WA
+                          </button>
+                          <button type="button" onClick={() => openManagementEmail(stay).catch((e) => window.alert(e instanceof Error ? e.message : 'Could not prepare management email.'))} disabled={prepareManagement.isPending} className="flex items-center gap-1.5 rounded-lg border border-border px-3 py-2 text-[10px] font-bold uppercase tracking-[.07em] text-primary hover:border-primary disabled:opacity-40" data-testid={`button-email-management-${stay.bookingId}`}>
+                            <Send size={12} /> Mgmt Email
+                          </button>
+                          <button type="button" onClick={() => openManagementBoth(stay).catch((e) => window.alert(e instanceof Error ? e.message : 'Could not prepare management message.'))} disabled={prepareManagement.isPending} className="rounded-lg border border-border px-3 py-2 text-[10px] font-bold uppercase tracking-[.07em] text-primary hover:border-primary disabled:opacity-40" data-testid={`button-both-management-${stay.bookingId}`}>
+                            Both
+                          </button>
+                        </div>
+                        {createOnboarding.isError && createOnboarding.variables?.bookingId === stay.bookingId && <p className="mt-2 text-xs text-[#A65E45]">{createOnboarding.error instanceof Error ? createOnboarding.error.message : 'Could not prepare WhatsApp.'}</p>}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+            {guestStays.isLoading && <p className="p-5 text-sm text-muted-foreground">Loading guest stays…</p>}
+            {!guestStays.isLoading && (guestStays.data?.stays ?? []).length === 0 && <p className="p-5 text-sm text-muted-foreground">No bookings yet.</p>}
+          </div>
+        </section>
+
         <section className="mt-10 pb-6" aria-label="Guest contacts">
           <Heading
             icon={<Users size={15} />}
@@ -542,6 +703,39 @@ export default function AdminGuests() {
       </main>
     </div>
   );
+}
+
+function prettyGuestDate(value: string): string {
+  return format(parseISO(value), 'd MMMM yyyy (EEEE)');
+}
+
+function nightsBetween(checkIn: string, checkOut: string): number {
+  return Math.max(0, Math.round((Date.parse(`${checkOut}T00:00:00Z`) - Date.parse(`${checkIn}T00:00:00Z`)) / 86400000));
+}
+
+function money(paise: number | null): string {
+  if (paise == null) return 'To be confirmed';
+  return new Intl.NumberFormat('en-IN', { maximumFractionDigits: 0 }).format(paise / 100);
+}
+
+function buildGuestWhatsAppMessage(stay: GuestStay, verificationUrl: string): string {
+  const nights = nightsBetween(stay.checkIn, stay.checkOut);
+  const total = money(stay.grossPaise);
+  const advance = money(stay.receivedPaise);
+  const balance = stay.grossPaise != null && stay.receivedPaise != null
+    ? money(Math.max(0, stay.grossPaise - stay.receivedPaise))
+    : 'To be confirmed';
+  return `Greetings from Raj Kuthir Homestays – Sobuj Potro, Shantiniketan! 🌿\n\nDear ${stay.guestName ?? 'Guest'},\n\nThank you for choosing Raj Kuthir Homestays – Sobuj Potro. We are pleased to confirm your booking.\n\n🔴 IMPORTANT – ACTION REQUIRED BEFORE ARRIVAL\n\n📄 Document Verification / Pre-Arrival Check-in:\n${verificationUrl}\n\nPlease complete the mandatory guest information and ID document verification at least 48 hours before your scheduled check-in time.\n\n⚠️ Failure to complete the mandatory verification within this timeframe may result in check-in being denied without refund, in accordance with the booking terms.\n\n📅 Check-in: ${prettyGuestDate(stay.checkIn)} – 11:00 AM onwards\n📅 Check-out: ${prettyGuestDate(stay.checkOut)} – 10:00 AM\n👥 Guests: ${stay.guests ?? 'As booked'}\n🏡 Accommodation: Entire Two-Bedroom Villa${nights ? ` (${nights} Nights)` : ''}${stay.pets ? `\n🐾 Pets: ${stay.pets}` : ''}\n\n💰 Booking Details\n\n- Total Booking Amount: ₹${total}\n- Advance Received: ₹${advance} ✅\n- Balance Amount Due: ₹${balance} (Payable at the property during check-in)\n\n📍 Google Maps: https://maps.app.goo.gl/aEdaJaaeEy1DZ8Ps8?g_st=ac\n\n📞 Contact Numbers\n- Host: +91 62903 99165\n- Designated Caretaker: +91 78726 85558\n\nAdditional Information\n\n- High-speed Wi-Fi is available and suitable for work/staycations.\n- Cafe Soi, located within the premises, serves snacks and beverages.\n- Home-cooked meals can also be arranged after discussing the menu and charges directly with the caretaker.\n- Zomato is available in the area with multiple restaurant options. Delivery availability and timings may vary depending on weather and local conditions.\n- Basic cooking utensils are available for simple meals. Additional utensils for elaborate cooking can be arranged subject to availability. Guests are also welcome to bring their own induction/microwave-compatible cookware if required.\n\nWe look forward to hosting you and wish you a wonderful stay at Raj Kuthir Homestays – Sobuj Potro.\n\nWarm regards,\nTeam Raj Kuthir Homestays – Sobuj Potro`;
+}
+
+function buildManagementMessage(stay: GuestStay, managementUrl: string): string {
+  const docs = [
+    ...(stay.documents.verified ? [`${stay.documents.verified} ID document${stay.documents.verified === 1 ? '' : 's'} — Verified`] : []),
+    ...(stay.documents.submitted ? [`${stay.documents.submitted} ID document${stay.documents.submitted === 1 ? '' : 's'} — Uploaded / Pending Verification`] : []),
+    ...(stay.documents.rejected ? [`${stay.documents.rejected} ID document${stay.documents.rejected === 1 ? '' : 's'} — Rejected`] : []),
+  ];
+  const deadlinePassed = Boolean(stay.verificationDeadline && new Date(stay.verificationDeadline).getTime() <= Date.now() && stay.onboardingStatus !== 'verified');
+  return `SOBUJ POTRO — GUEST ARRIVAL / VERIFICATION\n\nGuest: ${stay.guestName ?? 'Not provided'}\nNumber: ${stay.guestPhone ?? 'Not provided'}\nCheck-in: ${prettyGuestDate(stay.checkIn)}\nCheck-out: ${prettyGuestDate(stay.checkOut)}\n\nGuest ID Documents:\n${docs.length ? docs.map((doc, i) => `${i + 1}. ${doc}`).join('\n') : '1. No documents uploaded yet'}\n\nSecure document access:\n${managementUrl}`;
 }
 
 function Heading({
