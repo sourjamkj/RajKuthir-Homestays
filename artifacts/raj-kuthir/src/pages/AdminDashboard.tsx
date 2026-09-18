@@ -3,7 +3,6 @@ import { useLocation } from 'wouter';
 import { format, isAfter, parseISO, startOfToday } from 'date-fns';
 import {
   AlertCircle,
-  ArrowUpRight,
   CalendarDays,
   Check,
   CircleAlert,
@@ -14,7 +13,6 @@ import {
   Link as LinkIcon,
   Loader2,
   Mail,
-  LogOut,
   RefreshCw,
 } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
@@ -34,6 +32,7 @@ import {
   type FeedSource,
   type SyncSourceStatus,
 } from '@/lib/admin-api';
+import { AdminHeader } from '@/components/AdminHeader';
 
 type CalendarEventDto = {
   id: string;
@@ -111,69 +110,7 @@ export default function AdminDashboard() {
 
   return (
     <div className="min-h-[100dvh] bg-background text-foreground">
-      <header className="border-b border-border bg-card">
-        <div className="mx-auto flex max-w-[1180px] flex-wrap items-center justify-between gap-4 px-5 py-5 md:px-8">
-          <div>
-            <p className="text-[10px] font-bold uppercase tracking-[.14em] text-accent">
-              Owner console
-            </p>
-            <h1 className="mt-1 font-journal text-2xl text-primary md:text-3xl">
-              Raj Kuthir — Sobuj Potro
-            </h1>
-          </div>
-
-          <div className="flex items-center gap-3">
-            <a
-              href="/admin/guest-info"
-              className="rounded-full border border-border px-4 py-2 text-[11px] font-bold uppercase tracking-[.09em] text-primary transition-colors hover:border-primary"
-              data-testid="link-admin-guest-info"
-            >
-              Arrival pack
-            </a>
-            <a
-              href="/admin/guests"
-              className="rounded-full border border-border px-4 py-2 text-[11px] font-bold uppercase tracking-[.09em] text-primary transition-colors hover:border-primary"
-              data-testid="link-admin-guests"
-            >
-              Guests
-            </a>
-            <a
-              href="/admin/earnings"
-              className="rounded-full border border-border px-4 py-2 text-[11px] font-bold uppercase tracking-[.09em] text-primary transition-colors hover:border-primary"
-              data-testid="link-admin-earnings"
-            >
-              Earnings
-            </a>
-            <a
-              href="/admin/rates"
-              className="rounded-full border border-border px-4 py-2 text-[11px] font-bold uppercase tracking-[.09em] text-primary transition-colors hover:border-primary"
-              data-testid="link-admin-rates"
-            >
-              Rates
-            </a>
-            <a
-              href="/"
-              className="flex items-center gap-1.5 rounded-full border border-border px-4 py-2 text-[11px] font-bold uppercase tracking-[.09em] text-primary transition-colors hover:border-primary"
-              data-testid="link-view-site"
-            >
-              View site <ArrowUpRight size={13} />
-            </a>
-            <button
-              type="button"
-              onClick={() =>
-                logout.mutate(undefined, {
-                  onSuccess: () => navigate('/admin/login', { replace: true }),
-                })
-              }
-              disabled={logout.isPending}
-              className="flex items-center gap-1.5 rounded-full bg-primary px-4 py-2 text-[11px] font-bold uppercase tracking-[.09em] text-primary-foreground transition-transform hover:-translate-y-0.5 disabled:opacity-60"
-              data-testid="button-admin-sign-out"
-            >
-              <LogOut size={13} /> Sign out
-            </button>
-          </div>
-        </div>
-      </header>
+      <AdminHeader eyebrow="Owner console" title="Raj Kuthir — Sobuj Potro" />
 
       <main className="mx-auto max-w-[1180px] px-5 py-8 md:px-8 md:py-10">
         <section

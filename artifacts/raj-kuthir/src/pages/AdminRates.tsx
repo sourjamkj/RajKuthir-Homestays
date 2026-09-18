@@ -3,11 +3,9 @@ import { useLocation } from 'wouter';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { format, parseISO } from 'date-fns';
 import {
-  ArrowUpRight,
   CalendarRange,
   IndianRupee,
   Loader2,
-  LogOut,
   Pencil,
   Plus,
   Trash2,
@@ -22,6 +20,7 @@ import {
   type RateMode,
   type RateOverride,
 } from '@/lib/rates';
+import { AdminHeader } from '@/components/AdminHeader';
 
 const GUEST_COUNTS = [1, 2, 3, 4, 5];
 
@@ -229,38 +228,7 @@ export default function AdminRates() {
 
   return (
     <div className="min-h-[100dvh] bg-background text-foreground">
-      <header className="border-b border-border bg-card">
-        <div className="mx-auto flex max-w-[1180px] flex-wrap items-center justify-between gap-4 px-5 py-5 md:px-8">
-          <div>
-            <p className="text-[10px] font-bold uppercase tracking-[.14em] text-accent">
-              Pricing
-            </p>
-            <h1 className="mt-1 font-journal text-2xl text-primary md:text-3xl">
-              Nightly rates
-            </h1>
-          </div>
-
-          <div className="flex items-center gap-3">
-            <a
-              href="/admin"
-              className="flex items-center gap-1.5 rounded-full border border-border px-4 py-2 text-[11px] font-bold uppercase tracking-[.09em] text-primary transition-colors hover:border-primary"
-            >
-              Calendar <ArrowUpRight size={13} />
-            </a>
-            <button
-              type="button"
-              onClick={() =>
-                logout.mutate(undefined, {
-                  onSuccess: () => navigate('/admin/login', { replace: true }),
-                })
-              }
-              className="flex items-center gap-1.5 rounded-full bg-primary px-4 py-2 text-[11px] font-bold uppercase tracking-[.09em] text-primary-foreground transition-transform hover:-translate-y-0.5"
-            >
-              <LogOut size={13} /> Sign out
-            </button>
-          </div>
-        </div>
-      </header>
+      <AdminHeader eyebrow="Pricing" title="Nightly rates" />
 
       <main className="mx-auto max-w-[1180px] px-5 py-8 md:px-8 md:py-10">
         <section aria-label="Standing rates">

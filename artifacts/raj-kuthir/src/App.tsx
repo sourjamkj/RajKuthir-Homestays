@@ -133,37 +133,15 @@ const IMG = {
   review2: asset('Review%202.jpg'),
 };
 
-/**
- * Finished marketing posters: the text, branding and contact details are baked
- * into the artwork. They are shown whole (`object-contain`) rather than cropped
- * to fill a tile — a cropped poster loses the words that are its point — and
- * they stay out of the photo gallery because they are a different kind of thing
- * from a photograph of a room.
+/*
+ * The marketing posters used to have a homepage section of their own
+ * ("Little posters, the whole story."). It was removed: the artwork repeats
+ * what the page above it already says in better words, and it sat between the
+ * photo gallery and the FAQ, where a guest is looking for answers rather than
+ * something to share. The image files stay in the asset folder for use on
+ * Instagram and in WhatsApp.
  */
-const posters = [
-  {
-    title: 'Stay. Relax. Belong.',
-    note: 'What the villa gives you, at a glance',
-    img: asset('poster-stay-relax-belong.jpg'),
-    // Measured from the file. The three posters are three different shapes.
-    width: 1100,
-    height: 1375,
-  },
-  {
-    title: 'Feels like home',
-    note: 'The whole house in one frame',
-    img: asset('poster-feels-like-home.jpg'),
-    width: 1200,
-    height: 1067,
-  },
-  {
-    title: 'Cook. Connect. Create memories.',
-    note: 'The kitchen, in its own words',
-    img: asset('poster-cook-connect.jpg'),
-    width: 1024,
-    height: 1536,
-  },
-];
+
 /**
  * Four places for the homepage, and the true total for the link beneath them.
  *
@@ -911,51 +889,65 @@ function Home() {
           </div>
         </section>
 
-        <section id="posters" className="scroll-mt-24 bg-primary py-24 text-primary-foreground md:py-32" aria-labelledby="posters-title">
-          <div className="section-shell">
-            <div className="flex flex-col justify-between gap-8 md:flex-row md:items-end">
-              <div>
-                <p className="eyebrow mb-5 text-secondary">Take us with you</p>
-                <h2 id="posters-title" className="font-journal text-5xl leading-[.94] md:text-7xl">Little posters,<br /><em>the whole story.</em></h2>
-              </div>
-              <p className="max-w-[300px] text-sm leading-6 text-primary-foreground/70">Tap any one to open it full size — handy for sharing the stay with the people you are travelling with.</p>
+        <section className="border-t border-border bg-card py-24 md:py-32" aria-labelledby="faq-title">
+          {/* One centred column, not the wide two-column split this section
+              used to be. Five short answers spread across a 1180px page read
+              as a list of loose ends; held to a single readable measure they
+              read as a set. Each question is its own card, so an open answer
+              belongs visibly to the question above it. */}
+          <div className="mx-auto w-full max-w-[780px] px-5 md:px-8">
+            <div className="text-center">
+              <p className="eyebrow mb-4 text-accent">Before you arrive</p>
+              <h2 id="faq-title" className="font-journal text-4xl leading-[.96] text-primary md:text-5xl">
+                The useful <em>answers.</em>
+              </h2>
             </div>
-            <div className="mt-14 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-              {posters.map((poster) => (
-                <a
-                  key={poster.title}
-                  href={poster.img}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="lift group flex flex-col overflow-hidden rounded-[1.4rem] border border-primary-foreground/15 bg-primary-foreground/[.07] transition-colors hover:border-secondary"
-                  data-testid={`poster-${poster.title.toLowerCase().replace(/[^a-z]+/g, '-').replace(/^-|-$/g, '')}`}
-                >
-                  {/* object-contain, not cover: these are artwork with text in
-                      them, and a crop would cut the words off. */}
-                  <img
-                    src={poster.img}
-                    alt={`Raj Kuthir Homestays poster — ${poster.title}`}
-                    width={poster.width}
-                    height={poster.height}
-                    loading="lazy"
-                    decoding="async"
-                    className="h-[340px] w-full bg-black/25 object-contain transition-transform duration-500 group-hover:scale-[1.03] md:h-[420px]"
-                  />
-                  <div className="flex items-center justify-between gap-4 px-6 py-5">
-                    <div>
-                      <p className="font-journal text-2xl leading-tight">{poster.title}</p>
-                      <p className="mt-1 text-xs leading-5 text-primary-foreground/60">{poster.note}</p>
+
+            <div className="mt-12 flex flex-col gap-3">
+              {faqs.map((faq, index) => {
+                const isOpen = openFaq === index;
+                return (
+                  <div
+                    key={faq.question}
+                    className={`overflow-hidden rounded-2xl border bg-background transition-colors ${isOpen ? 'border-accent' : 'border-border'}`}
+                  >
+                    <button
+                      onClick={() => setOpenFaq(isOpen ? null : index)}
+                      className="flex w-full items-center justify-between gap-4 px-5 py-4 text-left md:px-6 md:py-5"
+                      aria-expanded={isOpen}
+                      data-testid={`button-faq-${index}`}
+                    >
+                      <span className="font-journal text-lg text-primary md:text-xl">{faq.question}</span>
+                      <span
+                        className={`grid h-8 w-8 shrink-0 place-items-center rounded-full border border-border text-primary transition-transform ${isOpen ? 'rotate-180' : ''}`}
+                      >
+                        {isOpen ? <X size={15} /> : <ChevronDown size={15} />}
+                      </span>
+                    </button>
+                    <div
+                      className={`grid transition-[grid-template-rows,opacity] duration-300 ${isOpen ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'}`}
+                    >
+                      <div className="overflow-hidden">
+                        <p className="px-5 pb-5 text-sm leading-6 text-muted-foreground md:px-6 md:pb-6">
+                          {faq.answer}
+                        </p>
+                      </div>
                     </div>
-                    <ArrowUpRight size={18} className="shrink-0 text-secondary transition-transform group-hover:-translate-y-1 group-hover:translate-x-1" />
                   </div>
-                </a>
-              ))}
+                );
+              })}
+            </div>
+
+            <div className="mt-10 text-center">
+              <a
+                href={`${basePath}/house-rules`}
+                className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-[.1em] text-primary underline decoration-accent decoration-2 underline-offset-4"
+                data-testid="link-faq-house-rules"
+              >
+                Read the full house rules <ArrowUpRight size={14} />
+              </a>
             </div>
           </div>
-        </section>
-
-        <section className="border-t border-border bg-card py-24 md:py-32" aria-labelledby="faq-title">
-          <div className="section-shell grid gap-12 lg:grid-cols-[.7fr_1.3fr] lg:gap-24"><div><p className="eyebrow mb-5 text-accent">Before you arrive</p><h2 id="faq-title" className="font-journal text-5xl leading-[.94] text-primary md:text-6xl">The useful<br /><em>answers.</em></h2></div><div>{faqs.map((faq, index) => { const isOpen = openFaq === index; return <div key={faq.question} className="border-t border-border"><button onClick={() => setOpenFaq(isOpen ? null : index)} className="flex w-full items-center justify-between gap-5 py-5 text-left" aria-expanded={isOpen} data-testid={`button-faq-${index}`}><span className="font-journal text-xl text-primary md:text-2xl">{faq.question}</span><span className={`grid h-8 w-8 shrink-0 place-items-center rounded-full border border-border text-primary transition-transform ${isOpen ? 'rotate-180' : ''}`}>{isOpen ? <X size={15} /> : <ChevronDown size={15} />}</span></button><div className={`grid transition-[grid-template-rows,opacity] duration-300 ${isOpen ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'}`}><div className="overflow-hidden"><p className="max-w-[570px] pb-5 pr-12 text-sm leading-6 text-muted-foreground">{faq.answer}</p></div></div></div>; })}<a href={`${basePath}/house-rules`} className="mt-8 inline-flex items-center gap-2 text-xs font-bold uppercase tracking-[.1em] text-primary underline decoration-accent decoration-2 underline-offset-4" data-testid="link-faq-house-rules">Read the full house rules <ArrowUpRight size={14} /></a></div></div>
         </section>
 
         <section id="reviews" className="scroll-mt-24 section-shell py-24 md:py-32" aria-labelledby="reviews-title">

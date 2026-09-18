@@ -3,13 +3,11 @@ import { useLocation } from 'wouter';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { format, parseISO } from 'date-fns';
 import {
-  ArrowUpRight,
   BellOff,
   CalendarPlus,
   Check,
   Inbox,
   Loader2,
-  LogOut,
   MessageCircle,
   Phone,
   Send,
@@ -20,6 +18,7 @@ import {
 import { adminFetch, useAdminSession, useLogout } from '@/lib/admin-api';
 import { formatRupees } from '@/lib/ledger-api';
 import { CONFIG } from '@/lib/site';
+import { AdminHeader } from '@/components/AdminHeader';
 
 const ENQUIRIES_KEY = ['/api/enquiries'];
 const CONTACTS_KEY = ['/api/contacts'];
@@ -316,11 +315,24 @@ export default function AdminGuests() {
         body: JSON.stringify({}),
       });
 
+      /*
+        window.open returns null when a popup blocker stops it — and desktop
+        Chrome stops it routinely. The server has ALREADY recorded the quote as
+        sent by this point, so failing to notice left the owner stranded: no
+        WhatsApp, and no Send quote button either, because the button hides
+        itself the moment quoteSentAt is set.
+
+        So the result is checked, and a blocked popup is reported rather than
+        swallowed. The link is handed back to the caller either way, and the
+        row offers it as an ordinary anchor — a click on a real link is never
+        popup-blocked.
+      */
+      let opened = true;
       if (result.delivery === 'manual_whatsapp' && result.whatsappUrl) {
-        window.open(result.whatsappUrl, '_blank', 'noopener,noreferrer');
+        opened = window.open(result.whatsappUrl, '_blank', 'noopener,noreferrer') !== null;
       }
 
-      return result;
+      return { ...result, opened };
     },
     onSuccess: refresh,
   });
@@ -401,38 +413,7 @@ export default function AdminGuests() {
 
   return (
     <div className="min-h-[100dvh] bg-background text-foreground">
-      <header className="border-b border-border bg-card">
-        <div className="mx-auto flex max-w-[1180px] flex-wrap items-center justify-between gap-4 px-5 py-5 md:px-8">
-          <div>
-            <p className="text-[10px] font-bold uppercase tracking-[.14em] text-accent">
-              Guests
-            </p>
-            <h1 className="mt-1 font-journal text-2xl text-primary md:text-3xl">
-              Enquiries &amp; contacts
-            </h1>
-          </div>
-
-          <div className="flex items-center gap-3">
-            <a
-              href="/admin"
-              className="flex items-center gap-1.5 rounded-full border border-border px-4 py-2 text-[11px] font-bold uppercase tracking-[.09em] text-primary transition-colors hover:border-primary"
-            >
-              Calendar <ArrowUpRight size={13} />
-            </a>
-            <button
-              type="button"
-              onClick={() =>
-                logout.mutate(undefined, {
-                  onSuccess: () => navigate('/admin/login', { replace: true }),
-                })
-              }
-              className="flex items-center gap-1.5 rounded-full bg-primary px-4 py-2 text-[11px] font-bold uppercase tracking-[.09em] text-primary-foreground transition-transform hover:-translate-y-0.5"
-            >
-              <LogOut size={13} /> Sign out
-            </button>
-          </div>
-        </div>
-      </header>
+      <AdminHeader eyebrow="Guests" title="Enquiries & contacts" />
 
       <main className="mx-auto max-w-[1180px] px-5 py-8 md:px-8 md:py-10">
         <section aria-label="Enquiries">
@@ -559,6 +540,26 @@ export default function AdminGuests() {
                       {row.quoteSentAt ? (
                         <div className="flex flex-wrap items-center gap-3">
                           <HoldBadge hold={row.hold} />
+
+                          {/* A quote you can only ever send once is wrong:
+                              guests lose messages, holds lapse, phones change,
+                              and a blocked popup means it never arrived at all.
+                              The button used to vanish the moment quoteSentAt
+                              was set, with no way back. */}
+                          <button
+                            type="button"
+                            onClick={() => sendQuote.mutate(row.id)}
+                            disabled={sendQuote.isPending || !quotingReady}
+                            className="flex shrink-0 items-center justify-center gap-1.5 rounded-lg border border-border px-3 py-2 text-[10px] font-bold uppercase tracking-[.07em] text-primary transition-colors hover:border-primary disabled:cursor-not-allowed disabled:opacity-40"
+                            data-testid={`button-resend-quote-${row.id}`}
+                          >
+                            {sendQuote.isPending && sendQuote.variables === row.id ? (
+                              <Loader2 size={12} className="animate-spin" />
+                            ) : (
+                              <Send size={12} />
+                            )}
+                            Re-send quote
+                          </button>
                           <button
                             type="button"
                             onClick={() =>
@@ -685,7 +686,30 @@ export default function AdminGuests() {
                       on the assumption that the owner pressed send. */}
                   {sendQuote.isSuccess &&
                     sendQuote.variables === row.id &&
-                    sendQuote.data?.delivery === 'manual_whatsapp' && (
+                    sendQuote.data?.delivery === 'manual_whatsapp' &&
+                    !sendQuote.data?.opened && (
+                      <p className="mt-2 flex flex-wrap items-center gap-2 text-xs text-[#A65E45]" role="alert">
+                        <span>
+                          Your browser blocked the WhatsApp window, so nothing was sent.
+                        </span>
+                        {sendQuote.data?.whatsappUrl && (
+                          <a
+                            href={sendQuote.data.whatsappUrl}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="font-bold underline decoration-accent underline-offset-2 hover:text-primary"
+                            data-testid={`link-quote-whatsapp-${row.id}`}
+                          >
+                            Open WhatsApp with the quote
+                          </a>
+                        )}
+                      </p>
+                    )}
+
+                  {sendQuote.isSuccess &&
+                    sendQuote.variables === row.id &&
+                    sendQuote.data?.delivery === 'manual_whatsapp' &&
+                    sendQuote.data?.opened && (
                       <p className="mt-2 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
                         <span>
                           WhatsApp opened with the quote. Send it there — the hold on these

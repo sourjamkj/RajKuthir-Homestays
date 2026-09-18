@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
-  ArrowLeft,
   Check,
   Eye,
   EyeOff,
@@ -11,6 +10,7 @@ import {
 } from 'lucide-react';
 
 import { adminFetch } from '@/lib/admin-api';
+import { AdminHeader } from '@/components/AdminHeader';
 
 /**
  * Owner-side editor for the arrival pack served at /welcome.
@@ -97,21 +97,7 @@ export default function AdminGuestInfo() {
 
   return (
     <div className="min-h-[100dvh] bg-background text-foreground">
-      <header className="border-b border-border bg-card">
-        <div className="section-shell flex h-[74px] items-center justify-between gap-6">
-          <div>
-            <p className="font-mono-ui text-[10px] uppercase tracking-[.16em] text-muted-foreground">Owner console</p>
-            <h1 className="mt-1 font-journal text-2xl text-primary">Guest arrival pack</h1>
-          </div>
-          <a
-            href="/admin"
-            className="flex items-center gap-2 rounded-full border border-border px-4 py-2 text-[11px] font-bold uppercase tracking-[.09em] text-primary transition-colors hover:border-primary"
-            data-testid="link-back-dashboard"
-          >
-            <ArrowLeft size={13} /> Dashboard
-          </a>
-        </div>
-      </header>
+      <AdminHeader eyebrow="Owner console" title="Guest arrival pack" />
 
       <main className="section-shell py-12 md:py-16">
         <p className="max-w-[640px] text-sm leading-6 text-muted-foreground">

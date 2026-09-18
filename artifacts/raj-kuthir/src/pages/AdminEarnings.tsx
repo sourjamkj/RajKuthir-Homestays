@@ -2,17 +2,15 @@ import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useLocation } from 'wouter';
 import { format, parseISO } from 'date-fns';
 import {
-  ArrowUpRight,
   CalendarDays,
   Loader2,
-  LogOut,
   Plus,
   Receipt,
   Trash2,
   TriangleAlert,
   Wallet,
 } from 'lucide-react';
-import { useAdminSession, useLogout } from '@/lib/admin-api';
+import { useAdminSession } from '@/lib/admin-api';
 import { BookingImport } from '@/components/BookingImport';
 import {
   formatMonth,
@@ -26,18 +24,17 @@ import {
   useLedgerSummary,
   CATEGORY_LABELS,
   SOURCE_LABELS,
-  type Booking,
   type BookingDraft,
   type BookingSource,
   type ExpenseCategory,
 } from '@/lib/ledger-api';
+import { AdminHeader } from '@/components/AdminHeader';
 
 const today = () => new Date().toISOString().slice(0, 10);
 
 export default function AdminEarnings() {
   const [, navigate] = useLocation();
   const session = useAdminSession();
-  const logout = useLogout();
   const signedIn = session.data?.signedIn === true;
 
   useEffect(() => {
@@ -62,40 +59,7 @@ export default function AdminEarnings() {
 
   return (
     <div className="min-h-[100dvh] bg-background text-foreground">
-      <header className="border-b border-border bg-card">
-        <div className="mx-auto flex max-w-[1180px] flex-wrap items-center justify-between gap-4 px-5 py-5 md:px-8">
-          <div>
-            <p className="text-[10px] font-bold uppercase tracking-[.14em] text-accent">
-              Earnings &amp; expenses
-            </p>
-            <h1 className="mt-1 font-journal text-2xl text-primary md:text-3xl">
-              Raj Kuthir — the books
-            </h1>
-          </div>
-
-          <div className="flex items-center gap-3">
-            <a
-              href="/admin"
-              className="flex items-center gap-1.5 rounded-full border border-border px-4 py-2 text-[11px] font-bold uppercase tracking-[.09em] text-primary transition-colors hover:border-primary"
-              data-testid="link-admin-calendar"
-            >
-              Calendar <ArrowUpRight size={13} />
-            </a>
-            <button
-              type="button"
-              onClick={() =>
-                logout.mutate(undefined, {
-                  onSuccess: () => navigate('/admin/login', { replace: true }),
-                })
-              }
-              className="flex items-center gap-1.5 rounded-full bg-primary px-4 py-2 text-[11px] font-bold uppercase tracking-[.09em] text-primary-foreground transition-transform hover:-translate-y-0.5"
-              data-testid="button-earnings-sign-out"
-            >
-              <LogOut size={13} /> Sign out
-            </button>
-          </div>
-        </div>
-      </header>
+      <AdminHeader eyebrow="Earnings & expenses" title="Raj Kuthir — the books" />
 
       <main className="mx-auto max-w-[1180px] px-5 py-8 md:px-8 md:py-10">
         <section
@@ -412,9 +376,16 @@ function BookingsSection({
   bookings,
   loading,
 }: {
-  // Use the shared Booking type rather than restating its shape here: the
-  // local copy silently went stale when reference and guestPhone were added.
-  bookings: Booking[];
+  bookings: Array<{
+    id: string;
+    source: BookingSource;
+    guestName: string | null;
+    checkIn: string;
+    checkOut: string;
+    status: string;
+    grossPaise: number | null;
+    externalRef: string | null;
+  }>;
   loading: boolean;
 }) {
   const [open, setOpen] = useState(false);
@@ -578,7 +549,6 @@ function BookingsSection({
         <table className="w-full min-w-[640px] border-collapse text-sm">
           <thead>
             <tr className="border-b border-border text-left text-[10px] uppercase tracking-[.08em] text-muted-foreground">
-              <th className="px-5 py-3 font-bold">Reference</th>
               <th className="px-5 py-3 font-bold">Dates</th>
               <th className="px-5 py-3 font-bold">Guest</th>
               <th className="px-5 py-3 font-bold">Channel</th>
@@ -589,7 +559,7 @@ function BookingsSection({
           <tbody>
             {loading && (
               <tr>
-                <td colSpan={6} className="px-5 py-6 text-muted-foreground">
+                <td colSpan={5} className="px-5 py-6 text-muted-foreground">
                   Loading…
                 </td>
               </tr>
@@ -597,7 +567,7 @@ function BookingsSection({
 
             {!loading && bookings.length === 0 && (
               <tr>
-                <td colSpan={6} className="px-5 py-6 text-muted-foreground">
+                <td colSpan={5} className="px-5 py-6 text-muted-foreground">
                   No bookings recorded yet.
                 </td>
               </tr>
@@ -609,18 +579,6 @@ function BookingsSection({
                 className="border-b border-border last:border-0"
                 data-testid={`row-booking-${booking.id}`}
               >
-                <td className="px-5 py-3">
-                  {booking.reference ? (
-                    <BookingReference
-                      reference={booking.reference}
-                      phone={booking.guestPhone}
-                      guestName={booking.guestName}
-                      checkIn={booking.checkIn}
-                    />
-                  ) : (
-                    <span className="text-[11px] text-muted-foreground">—</span>
-                  )}
-                </td>
                 <td className="px-5 py-3">
                   <span className="text-foreground">
                     {format(parseISO(booking.checkIn), 'd MMM')} →{' '}
@@ -902,73 +860,5 @@ function TextInput({
       className="w-full rounded-lg border border-border bg-background px-3 py-2.5 text-sm text-foreground outline-none transition-colors focus:border-primary"
       data-testid={testId}
     />
-  );
-}
-
-/**
- * The guest's key to /welcome, with the two things you actually do with it:
- * copy it, or send it to the guest on WhatsApp.
- *
- * The WhatsApp link only appears when a phone number is on file, and it opens
- * a pre-filled draft rather than sending anything — you still press send.
- */
-function BookingReference({
-  reference,
-  phone,
-  guestName,
-  checkIn,
-}: {
-  reference: string;
-  phone: string | null;
-  guestName: string | null;
-  checkIn: string;
-}) {
-  const [copied, setCopied] = useState(false);
-
-  const copy = async () => {
-    try {
-      await navigator.clipboard.writeText(reference);
-      setCopied(true);
-      window.setTimeout(() => setCopied(false), 2000);
-    } catch {
-      // Clipboard is blocked in some browsers; the reference is on screen anyway.
-    }
-  };
-
-  const digits = (phone ?? '').replace(/\D/g, '');
-  const waNumber = digits.length === 10 ? `91${digits}` : digits;
-
-  const message = encodeURIComponent(
-    `Hello${guestName ? ` ${guestName}` : ''}, your stay at Raj Kuthir Homestays is confirmed for ` +
-      `${format(parseISO(checkIn), 'd MMM yyyy')}.\n\n` +
-      `Your booking reference is ${reference}\n\n` +
-      `Enter it at https://rajkuthirhomestays.casa/welcome for directions, Wi-Fi and our contact numbers.`,
-  );
-
-  return (
-    <div className="flex items-center gap-2">
-      <button
-        type="button"
-        onClick={copy}
-        title="Copy reference"
-        className="font-mono-ui text-[11px] tracking-[.04em] text-primary underline decoration-dotted underline-offset-2 hover:decoration-solid"
-        data-testid={`button-copy-reference-${reference}`}
-      >
-        {copied ? 'Copied' : reference}
-      </button>
-
-      {waNumber.length >= 10 && (
-        <a
-          href={`https://wa.me/${waNumber}?text=${message}`}
-          target="_blank"
-          rel="noreferrer"
-          title="Send the reference on WhatsApp"
-          className="text-[10px] font-bold uppercase tracking-[.06em] text-muted-foreground transition-colors hover:text-primary"
-          data-testid={`link-whatsapp-reference-${reference}`}
-        >
-          Send
-        </a>
-      )}
-    </div>
   );
 }

@@ -404,3 +404,102 @@ test("quote · the client opens WhatsApp inside the click, not in onSuccess", ()
     "WhatsApp is opened from onSuccess, where mobile browsers will block it",
   );
 });
+
+// ================================================== ADMIN CONSOLE HEADER
+// Five hand-rolled headers had drifted: only the dashboard carried the full
+// navigation, and the arrival-pack page had no sign-out at all.
+
+const ADMIN_PAGES = [
+  "AdminDashboard.tsx",
+  "AdminEarnings.tsx",
+  "AdminRates.tsx",
+  "AdminGuests.tsx",
+  "AdminGuestInfo.tsx",
+] as const;
+
+const ADMIN_HEADER_TSX = readFileSync(
+  path.join(clientRoot, "src/components/AdminHeader.tsx"),
+  "utf8",
+);
+
+test("admin header · every console page uses the shared header", () => {
+  for (const page of ADMIN_PAGES) {
+    const source = readFileSync(path.join(clientRoot, "src/pages", page), "utf8");
+    assert.match(source, /<AdminHeader\s/, `${page} does not render AdminHeader`);
+    assert.ok(
+      source.includes("from '@/components/AdminHeader'"),
+      `${page} does not import AdminHeader`,
+    );
+    // No page may keep a hand-rolled one, or the drift starts again.
+    assert.ok(!/<header[\s>]/.test(source), `${page} still has its own <header>`);
+  }
+});
+
+test("admin header · carries every destination and a way out", () => {
+  for (const href of [
+    "/admin",
+    "/admin/guest-info",
+    "/admin/guests",
+    "/admin/earnings",
+    "/admin/rates",
+  ]) {
+    assert.ok(
+      ADMIN_HEADER_TSX.includes(`href: '${href}'`),
+      `the console header cannot reach ${href}`,
+    );
+  }
+  assert.match(ADMIN_HEADER_TSX, /Sign out/, "the header has no sign-out");
+  assert.match(ADMIN_HEADER_TSX, /useLogout/);
+  // The page you are on is shown but not a link to itself.
+  assert.match(ADMIN_HEADER_TSX, /aria-current="page"/);
+});
+
+// ============================================ THE QUOTE POPUP TRAP
+// A blocked popup left the quote recorded as sent with no WhatsApp and no
+// button to retry, because the button hides once quoteSentAt is set.
+
+test("quote · a blocked popup is detected rather than silently swallowed", () => {
+  const mutation = ADMIN_GUESTS_TSX.slice(
+    ADMIN_GUESTS_TSX.indexOf("const sendQuote = useMutation"),
+    ADMIN_GUESTS_TSX.indexOf("const withdrawQuote = useMutation"),
+  );
+  assert.ok(mutation.length > 0, "sendQuote mutation not found");
+
+  // window.open returns null when blocked; that has to be checked.
+  assert.match(
+    mutation,
+    /window\.open\([^)]*\) !== null/,
+    "the return value of window.open is not checked, so a blocked popup passes as sent",
+  );
+  assert.match(mutation, /opened/, "the mutation does not report whether it opened");
+});
+
+test("quote · a blocked popup offers a real link, which cannot be blocked", () => {
+  assert.match(
+    ADMIN_GUESTS_TSX,
+    /!sendQuote\.data\?\.opened/,
+    "nothing branches on the popup having been blocked",
+  );
+  assert.match(
+    ADMIN_GUESTS_TSX,
+    /href=\{sendQuote\.data\.whatsappUrl\}/,
+    "a blocked popup gives the owner no way to reach WhatsApp",
+  );
+});
+
+test("quote · can always be re-sent, not only once", () => {
+  assert.match(
+    ADMIN_GUESTS_TSX,
+    /button-resend-quote-/,
+    "there is no way to re-send a quote once quoteSentAt is set",
+  );
+  // And it must be inside the branch that renders when a quote HAS been sent.
+  const sentBranch = ADMIN_GUESTS_TSX.slice(
+    ADMIN_GUESTS_TSX.indexOf("{row.quoteSentAt ? ("),
+    ADMIN_GUESTS_TSX.indexOf("Send quote"),
+  );
+  assert.ok(
+    sentBranch.includes("button-resend-quote-"),
+    "the re-send button is not shown on an enquiry whose quote was already sent",
+  );
+});
