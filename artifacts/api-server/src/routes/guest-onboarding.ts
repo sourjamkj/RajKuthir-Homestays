@@ -5,9 +5,12 @@ import {
   createOrRefreshManagementAccess,
   createOrRefreshOnboarding,
   findOnboarding,
+  getAdminDocument,
   getManagementDocument,
+  listAdminDocuments,
   listManagementDocuments,
   listAdminGuestStays,
+  rejectGuestDocuments,
   submitGuestOnboarding,
   verifyGuestDocuments,
 } from "../lib/guest-onboarding-repo";
@@ -19,6 +22,12 @@ function clean(value: unknown, max = MAX_TEXT): string | null {
   if (typeof value !== "string") return null;
   const v = value.trim();
   return v ? v.slice(0, max) : null;
+}
+
+/** A route param that must be a uuid, or null. */
+function bookingIdOf(value: unknown): string | null {
+  if (typeof value !== "string" || !/^[0-9a-f-]{36}$/i.test(value)) return null;
+  return value;
 }
 
 function cleanToken(value: unknown): string {
@@ -114,7 +123,7 @@ router.post("/guest/onboarding/submit", async (req, res) => {
     res.status(status).json({ error: result.reason.replaceAll("_", " ") });
     return;
   }
-  res.json({ saved: true, status: "submitted" });
+  res.json({ saved: true, status: "verified" });
 });
 
 router.post("/admin/guest-stays/:bookingId/management-access", requireAdmin, async (req, res) => {
@@ -176,6 +185,73 @@ router.post("/management/documents/file", async (req, res) => {
   res.type(mimeType);
   res.setHeader("Content-Disposition", `inline; filename="${(result.document.originalFilename || "guest-document").replace(/[^a-zA-Z0-9._ -]/g, "_")}"`);
   res.send(result.document.fileData);
+});
+
+/**
+ * The owner's document list for one stay.
+ *
+ * This is the "I can view the documents" half of the veto: without it the only
+ * way to actually look at a guest's ID was to mint a management link and open
+ * it, which is a bearer token for someone else's eyes.
+ */
+router.get("/admin/guest-stays/:bookingId/documents", requireAdmin, async (req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  const bookingId = bookingIdOf(req.params.bookingId);
+  if (!bookingId) {
+    res.status(400).json({ error: "Invalid booking id." });
+    return;
+  }
+  res.json({ documents: await listAdminDocuments(bookingId) });
+});
+
+/**
+ * One document's bytes.
+ *
+ * no-store matters more here than anywhere else in this file: the response is
+ * a scan of somebody's government ID, and a cached copy on a shared machine is
+ * exactly the leak the whole token design exists to prevent. The booking id is
+ * part of the lookup, so a document id on its own opens nothing.
+ */
+router.get("/admin/guest-stays/:bookingId/documents/:documentId/file", requireAdmin, async (req, res) => {
+  res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, private");
+  const bookingId = bookingIdOf(req.params.bookingId);
+  const documentId = bookingIdOf(req.params.documentId);
+  if (!bookingId || !documentId) {
+    res.status(400).json({ error: "Invalid id." });
+    return;
+  }
+  const document = await getAdminDocument(bookingId, documentId);
+  if (!document) {
+    res.status(404).json({ error: "Document not found." });
+    return;
+  }
+  res.type(document.mimeType || "application/octet-stream");
+  res.setHeader(
+    "Content-Disposition",
+    `inline; filename="${(document.originalFilename || "guest-document").replace(/[^a-zA-Z0-9._ -]/g, "_")}"`,
+  );
+  res.send(document.fileData);
+});
+
+/**
+ * Reject what was filed, and say so.
+ *
+ * Deliberately does not send the new link. The console calls this, then calls
+ * the onboarding route, so the owner watches the WhatsApp message being
+ * composed rather than being told one went out.
+ */
+router.post("/admin/guest-stays/:bookingId/reject", requireAdmin, async (req, res) => {
+  const bookingId = bookingIdOf(req.params.bookingId);
+  if (!bookingId) {
+    res.status(400).json({ error: "Invalid booking id." });
+    return;
+  }
+  const result = await rejectGuestDocuments(bookingId, clean(req.body?.reason, 300), "admin");
+  if (result.rejected === 0) {
+    res.status(409).json({ error: "There are no documents on this booking to reject." });
+    return;
+  }
+  res.json(result);
 });
 
 router.post("/admin/guest-stays/:bookingId/verify", requireAdmin, async (req, res) => {

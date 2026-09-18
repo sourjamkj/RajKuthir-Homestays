@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from 'react';
+import { Fragment, useEffect, useState, type ReactNode } from 'react';
 import { useLocation } from 'wouter';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { format, parseISO } from 'date-fns';
@@ -6,6 +6,8 @@ import {
   BellOff,
   CalendarPlus,
   Check,
+  ExternalLink,
+  FileText,
   Inbox,
   Loader2,
   MessageCircle,
@@ -14,6 +16,7 @@ import {
   Timer,
   Trash2,
   Users,
+  XCircle,
 } from 'lucide-react';
 import { adminFetch, useAdminSession, useLogout } from '@/lib/admin-api';
 import { formatRupees } from '@/lib/ledger-api';
@@ -118,6 +121,30 @@ type ManagementGuestVerification = {
   readiness: 'ready' | 'documents_submitted' | 'awaiting_documents' | 'deadline_passed' | 'blocked';
   verificationDeadline: string | null;
 };
+
+/**
+ * One filed identity document, as the owner sees it.
+ *
+ * `verifiedBy` matters: 'auto:on-upload' means the document was accepted
+ * because the upload completed, not because anybody looked at it. The panel
+ * says so, because "Verified" meaning two different things without saying
+ * which is how a caretaker ends up trusting a blank photograph.
+ */
+type GuestDocument = {
+  id: string;
+  documentType: string;
+  documentNumber: string | null;
+  originalFilename: string | null;
+  mimeType: string | null;
+  sizeBytes: number | null;
+  status: 'pending' | 'submitted' | 'verified' | 'rejected';
+  rejectionReason: string | null;
+  uploadedAt: string | null;
+  verifiedAt: string | null;
+  verifiedBy: string | null;
+};
+
+const VERIFIED_ON_UPLOAD = 'auto:on-upload';
 
 type GuestStay = {
   bookingId: string;
@@ -268,6 +295,54 @@ export default function AdminGuests() {
     const message = buildManagementMessage(result.management, result.url);
     window.open(`https://wa.me/${MANAGEMENT_WHATSAPP}?text=${encodeURIComponent(message)}`, '_blank', 'noopener,noreferrer');
     window.location.href = `mailto:?subject=${encodeURIComponent(managementSubject(result.management))}&body=${encodeURIComponent(message)}`;
+  };
+
+  /**
+   * Which stay's documents are open beneath its row, and why the owner is
+   * about to reject them.
+   *
+   * The reason is per-stay rather than one shared box: opening a second stay
+   * while half a sentence is typed into the first must not carry that sentence
+   * across and reject the wrong guest's papers with the wrong explanation.
+   */
+  const [openDocuments, setOpenDocuments] = useState<string | null>(null);
+  const [rejectReason, setRejectReason] = useState<Record<string, string>>({});
+
+  const documents = useQuery({
+    queryKey: [...GUEST_STAYS_KEY, openDocuments, 'documents'],
+    queryFn: () =>
+      adminFetch<{ documents: GuestDocument[] }>(
+        `/api/admin/guest-stays/${openDocuments}/documents`,
+      ),
+    enabled: signedIn && Boolean(openDocuments),
+    retry: false,
+  });
+
+  const rejectDocuments = useMutation({
+    mutationFn: ({ bookingId, reason }: { bookingId: string; reason: string }) =>
+      adminFetch<{ rejected: number }>(`/api/admin/guest-stays/${bookingId}/reject`, {
+        method: 'POST',
+        body: JSON.stringify({ reason }),
+      }),
+  });
+
+  /**
+   * Reject, then re-send — in that order, and only sending if the rejection
+   * actually landed.
+   *
+   * Doing it the other way round would send the guest a link while their old
+   * documents still read as verified, so a caretaker checking the stay in that
+   * gap would be told everything was in order.
+   */
+  const rejectAndResend = async (stay: GuestStay) => {
+    const reason = (rejectReason[stay.bookingId] ?? '').trim();
+    await rejectDocuments.mutateAsync({ bookingId: stay.bookingId, reason });
+    setRejectReason((current) => ({ ...current, [stay.bookingId]: '' }));
+    // Mints a fresh token, moves the deadline if it had passed, and opens
+    // WhatsApp with the message already written.
+    await createOnboarding.mutateAsync(stay);
+    await queryClient.invalidateQueries({ queryKey: GUEST_STAYS_KEY });
+    await documents.refetch();
   };
 
   const verifyDocuments = useMutation({
@@ -774,8 +849,15 @@ export default function AdminGuests() {
                   const submitted = stay.onboardingStatus === 'submitted';
                   const deadline = stay.verificationDeadline ? new Date(stay.verificationDeadline) : null;
                   const deadlinePassed = Boolean(deadline && deadline.getTime() <= Date.now() && !verified);
+                  const filed =
+                    stay.documents.verified +
+                    stay.documents.submitted +
+                    stay.documents.rejected +
+                    stay.documents.pending;
+                  const isOpen = openDocuments === stay.bookingId;
                   return (
-                    <tr key={stay.bookingId} className="border-b border-border last:border-0" data-testid={`row-guest-stay-${stay.bookingId}`}>
+                    <Fragment key={stay.bookingId}>
+                    <tr className="border-b border-border last:border-0" data-testid={`row-guest-stay-${stay.bookingId}`}>
                       <td className="px-5 py-4">
                         <p className="font-medium text-foreground">{stay.guestName ?? 'Unnamed guest'}</p>
                         <p className="mt-1 text-xs text-muted-foreground">
@@ -786,14 +868,25 @@ export default function AdminGuests() {
                       </td>
                       <td className="px-5 py-4">
                         <span className={`rounded-full border px-2.5 py-1 text-[10px] font-bold uppercase tracking-[.07em] ${verified ? 'border-[#7A8065]/40 bg-[#7A8065]/10 text-[#4b5340]' : deadlinePassed ? 'border-[#A65E45]/40 bg-[#A65E45]/10 text-[#A65E45]' : submitted ? 'border-[#d8a24a]/40 bg-[#d8a24a]/10 text-[#8a6320]' : 'border-border text-muted-foreground'}`}>
-                          {verified ? 'Check-in ready' : deadlinePassed ? 'Deadline passed' : submitted ? 'Awaiting verification' : 'Not submitted'}
+                          {verified ? 'Verified' : deadlinePassed ? 'Deadline passed' : submitted ? 'Awaiting verification' : 'Not submitted'}
                         </span>
                         {deadline && !verified && (
                           <p className="mt-2 text-[10px] text-muted-foreground">Deadline {format(deadline, 'd MMM, h:mm a')}</p>
                         )}
                       </td>
                       <td className="px-5 py-4 text-xs text-muted-foreground">
-                        {stay.documents.verified} verified · {stay.documents.submitted} submitted · {stay.documents.rejected} rejected
+                        <p>{stay.documents.verified} verified · {stay.documents.submitted} submitted · {stay.documents.rejected} rejected</p>
+                        {filed > 0 && (
+                          <button
+                            type="button"
+                            onClick={() => setOpenDocuments(isOpen ? null : stay.bookingId)}
+                            className="mt-2 flex items-center gap-1.5 rounded-lg border border-border px-2.5 py-1.5 text-[10px] font-bold uppercase tracking-[.07em] text-primary transition-colors hover:border-primary"
+                            aria-expanded={isOpen}
+                            data-testid={`button-view-documents-${stay.bookingId}`}
+                          >
+                            <FileText size={12} /> {isOpen ? 'Hide' : 'View'} {filed} file{filed === 1 ? '' : 's'}
+                          </button>
+                        )}
                       </td>
                       <td className="px-5 py-4 text-right">
                         <div className="flex justify-end gap-2">
@@ -816,6 +909,123 @@ export default function AdminGuests() {
                         {createOnboarding.isError && createOnboarding.variables?.bookingId === stay.bookingId && <p className="mt-2 text-xs text-[#A65E45]">{createOnboarding.error instanceof Error ? createOnboarding.error.message : 'Could not prepare WhatsApp.'}</p>}
                       </td>
                     </tr>
+
+                    {/* The documents themselves, opened in place rather than
+                        behind a management link. Each file is fetched from an
+                        admin-only route with the session cookie and shown in a
+                        new tab; nothing is written to disk and nothing is
+                        cached. */}
+                    {isOpen && (
+                      <tr className="border-b border-border bg-background/60" data-testid={`row-documents-${stay.bookingId}`}>
+                        <td colSpan={4} className="px-5 py-5">
+                          {documents.isLoading && <p className="text-sm text-muted-foreground">Opening documents…</p>}
+
+                          {documents.isError && (
+                            <p className="text-sm text-[#A65E45]">
+                              {documents.error instanceof Error ? documents.error.message : 'Could not load the documents.'}
+                            </p>
+                          )}
+
+                          {!documents.isLoading && !documents.isError && (
+                            <>
+                              <ul className="space-y-2">
+                                {(documents.data?.documents ?? []).map((doc) => (
+                                  <li
+                                    key={doc.id}
+                                    className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border bg-card px-4 py-3"
+                                    data-testid={`document-${doc.id}`}
+                                  >
+                                    <div className="min-w-0">
+                                      <p className="text-sm font-medium text-foreground">
+                                        {doc.documentType}
+                                        {doc.documentNumber ? ` · ${doc.documentNumber}` : ''}
+                                      </p>
+                                      <p className="mt-0.5 truncate text-xs text-muted-foreground">
+                                        {doc.originalFilename ?? 'Unnamed file'}
+                                        {doc.sizeBytes ? ` · ${Math.round(doc.sizeBytes / 1024)} KB` : ''}
+                                        {doc.uploadedAt ? ` · ${format(parseISO(doc.uploadedAt), 'd MMM, h:mm a')}` : ''}
+                                      </p>
+                                      {doc.status === 'rejected' && (
+                                        <p className="mt-1 text-xs text-[#A65E45]">
+                                          Rejected{doc.rejectionReason ? ` — ${doc.rejectionReason}` : ''}
+                                        </p>
+                                      )}
+                                      {doc.status === 'verified' && doc.verifiedBy === VERIFIED_ON_UPLOAD && (
+                                        <p className="mt-1 text-xs text-muted-foreground">
+                                          Marked verified on upload — not yet opened by anyone.
+                                        </p>
+                                      )}
+                                    </div>
+                                    <a
+                                      href={`/api/admin/guest-stays/${stay.bookingId}/documents/${doc.id}/file`}
+                                      target="_blank"
+                                      rel="noreferrer"
+                                      className="flex shrink-0 items-center gap-1.5 rounded-lg border border-border px-3 py-2 text-[10px] font-bold uppercase tracking-[.07em] text-primary transition-colors hover:border-primary"
+                                      data-testid={`link-open-document-${doc.id}`}
+                                    >
+                                      <ExternalLink size={12} /> Open
+                                    </a>
+                                  </li>
+                                ))}
+                              </ul>
+
+                              {(documents.data?.documents ?? []).length === 0 && (
+                                <p className="text-sm text-muted-foreground">Nothing filed for this stay.</p>
+                              )}
+
+                              {/* The veto. One click both un-verifies what was
+                                  filed and opens WhatsApp with a fresh link,
+                                  because a rejection the guest is never told
+                                  about is just a stay that quietly stops being
+                                  ready. */}
+                              {(documents.data?.documents ?? []).length > 0 && (
+                                <div className="mt-4 flex flex-wrap items-end gap-3 border-t border-border pt-4">
+                                  <label className="min-w-[240px] flex-1">
+                                    <span className="eyebrow text-muted-foreground">Why are these being rejected? (optional)</span>
+                                    <input
+                                      value={rejectReason[stay.bookingId] ?? ''}
+                                      onChange={(event) =>
+                                        setRejectReason((current) => ({
+                                          ...current,
+                                          [stay.bookingId]: event.target.value,
+                                        }))
+                                      }
+                                      placeholder="The photo is too blurred to read the number"
+                                      className="mt-2 w-full border-b border-border bg-transparent px-0 py-2 text-sm text-primary outline-none placeholder:text-muted-foreground/50 focus:border-primary"
+                                      data-testid={`input-reject-reason-${stay.bookingId}`}
+                                    />
+                                  </label>
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      rejectAndResend(stay).catch((error) =>
+                                        window.alert(error instanceof Error ? error.message : 'Could not reject and re-send.'),
+                                      )
+                                    }
+                                    disabled={rejectDocuments.isPending || createOnboarding.isPending || !stay.guestPhone}
+                                    className="flex items-center gap-1.5 rounded-lg border border-[#A65E45]/40 bg-[#A65E45]/5 px-3 py-2.5 text-[10px] font-bold uppercase tracking-[.07em] text-[#A65E45] transition-colors hover:border-[#A65E45] disabled:opacity-40"
+                                    data-testid={`button-reject-resend-${stay.bookingId}`}
+                                  >
+                                    {rejectDocuments.isPending || createOnboarding.isPending ? (
+                                      <Loader2 size={12} className="animate-spin" />
+                                    ) : (
+                                      <XCircle size={12} />
+                                    )}
+                                    Reject &amp; re-send link
+                                  </button>
+                                  {!stay.guestPhone && (
+                                    <p className="text-xs text-muted-foreground">
+                                      No mobile number on this booking, so a new link cannot be sent.
+                                    </p>
+                                  )}
+                                </div>
+                              )}
+                            </>
+                          )}
+                        </td>
+                      </tr>
+                    )}
+                    </Fragment>
                   );
                 })}
               </tbody>

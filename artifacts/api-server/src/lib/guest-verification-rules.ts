@@ -54,6 +54,40 @@ export function linkExpiry(checkOut: string, now = new Date()): Date {
     : new Date(now.getTime() + LINK_TTL_DAYS * 86400000);
 }
 
+/**
+ * How long a guest gets when the owner re-issues a link late in the day.
+ *
+ * The normal deadline is 48 hours before check-in and it is computed from the
+ * booking, not from when the link was sent — so a link issued (or re-issued)
+ * inside that window would arrive already expired. That is the right answer
+ * for a guest who simply left it too late, and the wrong answer when the OWNER
+ * is the one asking again: rejecting a blurred Aadhaar card two days before
+ * arrival must not lock the guest out of replacing it.
+ *
+ * So a re-issued link is valid for at least this long, and never past
+ * check-out — the owner asking again is itself the authority to ask.
+ */
+export const RESEND_GRACE_HOURS = 12;
+
+/**
+ * The deadline to stamp on a link being issued now.
+ *
+ * Normally the 48-hours-before-check-in rule. If that moment has already
+ * passed, the guest gets the grace window instead, capped at check-out.
+ */
+export function deadlineForIssue(
+  checkIn: string,
+  checkOut: string,
+  now = new Date(),
+): Date {
+  const standard = verificationDeadline(checkIn);
+  if (standard.getTime() > now.getTime()) return standard;
+
+  const grace = new Date(now.getTime() + RESEND_GRACE_HOURS * 60 * 60 * 1000);
+  const checkOutAt = new Date(`${checkOut}T${CHECK_OUT_LOCAL}`);
+  return grace.getTime() < checkOutAt.getTime() ? grace : checkOutAt;
+}
+
 /** True once the guest may no longer submit. */
 export function deadlinePassed(deadline: Date, now = new Date()): boolean {
   return now.getTime() >= deadline.getTime();
@@ -98,6 +132,11 @@ export function readinessOf(input: {
 
   if (input.onboardingStatus === "blocked") return "blocked";
 
+  // Every live document verified means ready. Since documents are marked
+  // verified the moment a guest completes an upload, this is normally reached
+  // without the owner doing anything — the owner's part is the veto, not the
+  // gate. A rejection un-verifies the documents and puts the stay back to
+  // awaiting_documents, which is the truthful state: new ones are wanted.
   if (input.documents.count > 0 && input.documents.verified === input.documents.count) {
     return "ready";
   }

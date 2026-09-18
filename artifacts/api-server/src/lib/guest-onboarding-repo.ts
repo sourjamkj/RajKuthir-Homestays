@@ -13,13 +13,25 @@ import {
 
 import {
   MANAGEMENT_FORBIDDEN_KEYS as FORBIDDEN_KEYS,
+  deadlineForIssue,
   linkExpiry,
   readinessOf,
-  verificationDeadline,
   type Readiness,
 } from "./guest-verification-rules.ts";
 
 const TOKEN_BYTES = 32;
+
+/**
+ * Recorded in guest_documents.verified_by when a document was accepted simply
+ * because it arrived, rather than because a person looked at it.
+ *
+ * Worth keeping distinct. "verified" now means two different things depending
+ * on this column — the upload completed, or the owner opened the file and was
+ * satisfied — and only one of those is a human judgement. Anything that ever
+ * needs to know the difference (an audit, a dispute at the door) can read it
+ * here instead of having to guess.
+ */
+export const VERIFIED_ON_UPLOAD = "auto:on-upload";
 const MAX_DOCUMENT_BYTES = 8 * 1024 * 1024;
 
 export type GuestDocumentInput = {
@@ -45,16 +57,26 @@ export async function createOrRefreshOnboarding(bookingId: string) {
 
   const token = makeGuestOnboardingToken();
   const tokenHash = hashToken(token);
-  const verification = verificationDeadline(booking.checkIn);
+  // deadlineForIssue, not verificationDeadline: re-sending a link after
+  // rejecting a document must not hand the guest a deadline that has already
+  // gone. See RESEND_GRACE_HOURS.
+  const verification = deadlineForIssue(booking.checkIn, booking.checkOut);
   const expires = linkExpiry(booking.checkOut);
 
   const existing = (await db.select().from(guestOnboarding).where(eq(guestOnboarding.bookingId, bookingId)).limit(1))[0];
 
   if (existing) {
+    // "blocked" is set when a guest tried to submit after the deadline. Since
+    // this call moves the deadline forward, leaving the row blocked would hand
+    // the guest a link that the submit route still refuses. Any other status
+    // is left alone: re-sending a link to a guest who already filed good
+    // documents must not quietly un-verify them — only an explicit rejection
+    // does that.
     await db.update(guestOnboarding).set({
       tokenHash,
       expiresAt: expires,
       verificationDeadline: verification,
+      ...(existing.status === "blocked" ? { status: "pending" as const, completedAt: null } : {}),
       lastSentAt: new Date(),
     }).where(eq(guestOnboarding.id, existing.id));
   } else {
@@ -307,6 +329,24 @@ export async function submitGuestOnboarding(input: {
       await tx.insert(bookingGuests).values({ bookingId: found.booking.id, guestId: guest.id, isPrimary: true });
     }
 
+    // Documents the owner already rejected are superseded by this upload.
+    // Without this they would sit alongside the new ones and hold the stay
+    // out of "ready" for ever, because readiness asks that EVERY live document
+    // be verified. They are soft-deleted, not removed: the row, the file and
+    // the rejection reason all survive for the record.
+    await tx
+      .update(guestDocuments)
+      .set({ deletedAt: new Date() })
+      .where(
+        and(
+          eq(guestDocuments.bookingId, found.booking.id),
+          eq(guestDocuments.status, "rejected"),
+          isNull(guestDocuments.deletedAt),
+        ),
+      );
+
+    const uploadedAt = new Date();
+
     for (const doc of input.documents) {
       const bytes = Buffer.from(doc.dataBase64, "base64");
       await tx.insert(guestDocuments).values({
@@ -319,13 +359,21 @@ export async function submitGuestOnboarding(input: {
         mimeType: doc.mimeType?.trim() || "application/octet-stream",
         sizeBytes: bytes.length,
         fileData: bytes,
-        status: "submitted",
+        // A completed upload lands as verified rather than waiting for the
+        // owner to click Verify on every stay. The owner's role here is the
+        // veto: they open the documents and reject the ones that will not do,
+        // which un-verifies them and asks the guest again. VERIFIED_ON_UPLOAD
+        // is recorded as the verifier so a row that nobody actually looked at
+        // is never mistaken for one an owner signed off by hand.
+        status: "verified",
+        verifiedAt: uploadedAt,
+        verifiedBy: VERIFIED_ON_UPLOAD,
       });
     }
 
     await tx.update(guestOnboarding).set({
-      status: "submitted",
-      completedAt: new Date(),
+      status: "verified",
+      completedAt: uploadedAt,
     }).where(eq(guestOnboarding.id, found.onboarding.id));
 
     return guest;
@@ -368,6 +416,98 @@ export async function listAdminGuestStays() {
     counts.set(d.bookingId, c);
   }
   return rows.map((row) => ({ ...row, documents: counts.get(row.bookingId) ?? { pending: 0, submitted: 0, verified: 0, rejected: 0 } }));
+}
+
+/**
+ * The owner's own view of the documents filed for one stay.
+ *
+ * Separate from listManagementDocuments even though the shape is close: that
+ * one is reached with a bearer token that management holds, this one with the
+ * admin session. Sharing a function between them would mean one edit could
+ * widen management's access by accident, and what management may see is the
+ * whole point of the management path.
+ *
+ * `fileData` is deliberately not selected — a list of six scans would be
+ * megabytes of base64 in a JSON response nobody reads. The bytes come one at
+ * a time from getAdminDocument.
+ */
+export async function listAdminDocuments(bookingId: string) {
+  return db
+    .select({
+      id: guestDocuments.id,
+      documentType: guestDocuments.documentType,
+      documentNumber: guestDocuments.documentNumber,
+      originalFilename: guestDocuments.originalFilename,
+      mimeType: guestDocuments.mimeType,
+      sizeBytes: guestDocuments.sizeBytes,
+      status: guestDocuments.status,
+      rejectionReason: guestDocuments.rejectionReason,
+      uploadedAt: guestDocuments.uploadedAt,
+      verifiedAt: guestDocuments.verifiedAt,
+      verifiedBy: guestDocuments.verifiedBy,
+    })
+    .from(guestDocuments)
+    .where(and(eq(guestDocuments.bookingId, bookingId), isNull(guestDocuments.deletedAt)))
+    .orderBy(desc(guestDocuments.uploadedAt));
+}
+
+/** One document's bytes, scoped to its booking so an id alone is not enough. */
+export async function getAdminDocument(bookingId: string, documentId: string) {
+  return (
+    (await db
+      .select()
+      .from(guestDocuments)
+      .where(
+        and(
+          eq(guestDocuments.id, documentId),
+          eq(guestDocuments.bookingId, bookingId),
+          isNull(guestDocuments.deletedAt),
+        ),
+      )
+      .limit(1))[0] ?? null
+  );
+}
+
+/**
+ * The owner's veto: these documents will not do, ask again.
+ *
+ * Un-verifies every live document for the stay, records why, and puts the
+ * onboarding row back to pending so the stay stops reading as settled. It does
+ * NOT send anything — issuing the new link is createOrRefreshOnboarding's job,
+ * and keeping them apart means a rejection is never silently accompanied by a
+ * message the owner did not see go out.
+ *
+ * Returns how many documents were rejected, so a caller can tell the owner
+ * that something actually happened rather than reporting success on a no-op.
+ */
+export async function rejectGuestDocuments(
+  bookingId: string,
+  reason: string | null,
+  admin: string,
+) {
+  const live = await db
+    .select({ id: guestDocuments.id })
+    .from(guestDocuments)
+    .where(and(eq(guestDocuments.bookingId, bookingId), isNull(guestDocuments.deletedAt)));
+
+  if (live.length === 0) return { rejected: 0 };
+
+  await db
+    .update(guestDocuments)
+    .set({
+      status: "rejected",
+      rejectionReason: reason?.trim() || null,
+      verifiedAt: new Date(),
+      verifiedBy: admin,
+    })
+    .where(and(eq(guestDocuments.bookingId, bookingId), isNull(guestDocuments.deletedAt)));
+
+  await db
+    .update(guestOnboarding)
+    .set({ status: "pending", completedAt: null })
+    .where(eq(guestOnboarding.bookingId, bookingId));
+
+  return { rejected: live.length };
 }
 
 export async function verifyGuestDocuments(bookingId: string, verified: boolean, admin: string) {

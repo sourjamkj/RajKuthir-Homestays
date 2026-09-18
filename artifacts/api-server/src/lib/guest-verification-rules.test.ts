@@ -9,6 +9,8 @@ import {
   CHECK_OUT_LOCAL,
   MANAGEMENT_FORBIDDEN_KEYS,
   VERIFICATION_LEAD_HOURS,
+  RESEND_GRACE_HOURS,
+  deadlineForIssue,
   deadlinePassed,
   financialLeaks,
   linkExpiry,
@@ -494,12 +496,185 @@ test("quote · can always be re-sent, not only once", () => {
     "there is no way to re-send a quote once quoteSentAt is set",
   );
   // And it must be inside the branch that renders when a quote HAS been sent.
+  // Sliced forward from the conditional to its else arm — an earlier version
+  // of this test sliced to the first occurrence of "Send quote", which sits
+  // ABOVE this branch in the file, so the slice ran backwards and silently
+  // compared an empty string.
+  const branchStart = ADMIN_GUESTS_TSX.indexOf("{row.quoteSentAt ? (");
+  assert.ok(branchStart > -1, "the quoteSentAt branch is gone");
+  const elseArm = ADMIN_GUESTS_TSX.indexOf(") : (", branchStart);
   const sentBranch = ADMIN_GUESTS_TSX.slice(
-    ADMIN_GUESTS_TSX.indexOf("{row.quoteSentAt ? ("),
-    ADMIN_GUESTS_TSX.indexOf("Send quote"),
+    branchStart,
+    elseArm > -1 ? elseArm : branchStart + 4000,
   );
   assert.ok(
     sentBranch.includes("button-resend-quote-"),
     "the re-send button is not shown on an enquiry whose quote was already sent",
+  );
+});
+
+
+// ============================================== VERIFIED ON UPLOAD, VETO AFTER
+
+test("issue · a link sent in good time keeps the normal 48-hour deadline", () => {
+  // Issued a fortnight out: nothing special happens, the rule is the rule.
+  const now = new Date("2026-10-01T09:00:00Z");
+  assert.equal(
+    deadlineForIssue("2026-10-15", "2026-10-18", now).toISOString(),
+    verificationDeadline("2026-10-15").toISOString(),
+  );
+});
+
+test("issue · a link re-sent after the deadline is not born expired", () => {
+  // The owner rejects a blurred ID the evening before arrival. The standard
+  // deadline went by yesterday, so reusing it would hand the guest a link the
+  // submit route refuses on sight — the guest would be locked out of fixing
+  // the very thing they were just asked to fix.
+  const now = new Date("2026-10-14T12:00:00Z");
+  const issued = deadlineForIssue("2026-10-15", "2026-10-18", now);
+
+  assert.ok(issued.getTime() > now.getTime(), "the re-issued deadline is already past");
+  assert.equal(
+    issued.getTime(),
+    now.getTime() + RESEND_GRACE_HOURS * 3600_000,
+    "the grace window is not the one the constant declares",
+  );
+});
+
+test("issue · the grace window never runs past check-out", () => {
+  // A stay that ends in three hours does not get a twelve-hour window: there
+  // is nothing left to verify a guest for once they have gone.
+  const now = new Date("2026-10-18T02:30:00Z"); // 08:00 IST on the 18th
+  const issued = deadlineForIssue("2026-10-15", "2026-10-18", now);
+  assert.equal(issued.toISOString(), new Date(`2026-10-18T${CHECK_OUT_LOCAL}`).toISOString());
+});
+
+test("submit · a completed upload is recorded as verified, and says who by", () => {
+  // The owner asked for the status to read verified as soon as the guest has
+  // uploaded, rather than waiting on a click. That is a real change in what
+  // the word means, so the row records that nobody looked.
+  const submit = ONBOARDING_REPO_TS.slice(
+    ONBOARDING_REPO_TS.indexOf("export async function submitGuestOnboarding"),
+  );
+
+  assert.match(submit, /status: "verified"/, "a completed upload is not marked verified");
+  assert.match(
+    submit,
+    /verifiedBy: VERIFIED_ON_UPLOAD/,
+    "an automatic verification is indistinguishable from one an owner made",
+  );
+  assert.match(
+    ONBOARDING_REPO_TS,
+    /export const VERIFIED_ON_UPLOAD = "auto:on-upload"/,
+    "the automatic verifier has no stable name to check against",
+  );
+});
+
+test("submit · a resubmission supersedes the documents that were rejected", () => {
+  // Readiness asks that EVERY live document be verified. Leaving the rejected
+  // ones live would mean a guest who did exactly as asked could never reach
+  // ready, no matter how many times they uploaded.
+  const submit = ONBOARDING_REPO_TS.slice(
+    ONBOARDING_REPO_TS.indexOf("export async function submitGuestOnboarding"),
+  );
+  const softDelete = submit.indexOf('eq(guestDocuments.status, "rejected")');
+  const insert = submit.indexOf("tx.insert(guestDocuments)");
+
+  assert.ok(softDelete > -1, "rejected documents are not superseded on resubmission");
+  assert.ok(insert > -1, "the new documents are not inserted");
+  assert.ok(softDelete < insert, "the old documents are cleared after the new ones are added");
+  assert.match(submit, /deletedAt: new Date\(\)/, "rejected documents are hard-deleted, not soft");
+});
+
+test("reject · un-verifies, records the reason, and reopens the stay", () => {
+  const reject = ONBOARDING_REPO_TS.slice(
+    ONBOARDING_REPO_TS.indexOf("export async function rejectGuestDocuments"),
+    ONBOARDING_REPO_TS.indexOf("export async function verifyGuestDocuments"),
+  );
+
+  assert.match(reject, /status: "rejected"/);
+  assert.match(reject, /rejectionReason/, "a rejection with no reason tells the guest nothing");
+  assert.match(reject, /status: "pending"/, "the onboarding row still reads as settled");
+  assert.match(reject, /return \{ rejected: 0 \}/, "rejecting nothing reports success");
+});
+
+test("reject · the route refuses a booking with nothing to reject", () => {
+  const route = ONBOARDING_ROUTES_TS.slice(
+    ONBOARDING_ROUTES_TS.indexOf('router.post("/admin/guest-stays/:bookingId/reject"'),
+  ).slice(0, 1500);
+
+  assert.match(route, /requireAdmin/, "the reject route is not behind the admin session");
+  assert.match(route, /res\.status\(409\)/, "rejecting nothing is reported as a success");
+});
+
+test("documents · the owner can read them without minting a management link", () => {
+  // Before this, the only way to look at a guest's ID was to issue a bearer
+  // token meant for someone else and open it yourself.
+  assert.match(
+    ONBOARDING_ROUTES_TS,
+    /router\.get\("\/admin\/guest-stays\/:bookingId\/documents", requireAdmin/,
+    "there is no admin-side document list",
+  );
+
+  const file = ONBOARDING_ROUTES_TS.slice(
+    ONBOARDING_ROUTES_TS.indexOf('/documents/:documentId/file"'),
+  ).slice(0, 1600);
+
+  assert.match(file, /requireAdmin/, "the document bytes are not behind the admin session");
+  assert.match(file, /no-store/, "a government ID is served cacheable");
+  assert.match(
+    file,
+    /eq\(guestDocuments\.bookingId, bookingId\)|getAdminDocument\(bookingId, documentId\)/,
+    "a document id alone opens a document, without its booking",
+  );
+});
+
+test("documents · the list does not ship the file bytes", () => {
+  const list = ONBOARDING_REPO_TS.slice(
+    ONBOARDING_REPO_TS.indexOf("export async function listAdminDocuments"),
+    ONBOARDING_REPO_TS.indexOf("export async function getAdminDocument"),
+  );
+  assert.ok(list.length > 0, "listAdminDocuments is gone");
+  assert.ok(!list.includes("fileData"), "the document list carries every scan as base64");
+});
+
+test("console · the owner can open each document and reject in place", () => {
+  assert.match(ADMIN_GUESTS_TSX, /button-view-documents-/, "no way to view the documents");
+  assert.match(ADMIN_GUESTS_TSX, /link-open-document-/, "no way to open a single document");
+  assert.match(ADMIN_GUESTS_TSX, /button-reject-resend-/, "no way to reject and ask again");
+  assert.match(
+    ADMIN_GUESTS_TSX,
+    /input-reject-reason-/,
+    "a rejection cannot be explained to the guest",
+  );
+});
+
+test("console · rejection happens before the new link is sent", () => {
+  const flow = ADMIN_GUESTS_TSX.slice(
+    ADMIN_GUESTS_TSX.indexOf("const rejectAndResend"),
+  ).slice(0, 1200);
+
+  const reject = flow.indexOf("rejectDocuments.mutateAsync");
+  const resend = flow.indexOf("createOnboarding.mutateAsync");
+
+  assert.ok(reject > -1 && resend > -1, "the reject-and-resend flow is gone");
+  assert.ok(
+    reject < resend,
+    "the link goes out while the old documents still read as verified",
+  );
+});
+
+test("console · an automatic verification is labelled as one", () => {
+  // A caretaker reading "Verified" on a document nobody opened is exactly the
+  // wrong thing to be confident about at the front door.
+  assert.match(
+    ADMIN_GUESTS_TSX,
+    /VERIFIED_ON_UPLOAD = 'auto:on-upload'/,
+    "the console cannot tell an automatic verification from a human one",
+  );
+  assert.match(
+    ADMIN_GUESTS_TSX,
+    /not yet opened by anyone/,
+    "an unopened document is presented as though someone had checked it",
   );
 });
