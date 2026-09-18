@@ -381,15 +381,61 @@ function Home() {
 
   const daysInView = useMemo(() => calendarDays(calendarMonth), [calendarMonth]);
   const calendarMonthLabel = new Intl.DateTimeFormat('en-IN', { month: 'long', year: 'numeric' }).format(calendarMonth);
-  const whatsappCopy = encodeURIComponent(
-    `Hello Raj Kuthir, I would like to enquire about Sobuj Potro.\nName: ${form.name || 'To be shared'}\nDates: ${form.checkIn || 'To be confirmed'} to ${form.checkOut || 'To be confirmed'}${nights ? ` (${nights} night${nights === 1 ? '' : 's'})` : ''}\nGuests: ${form.adults} adults, ${form.children} children, ${form.pets} pets\nPhone: ${form.phone || 'To be shared'}`
-  );
-  const whatsappUrl = `https://wa.me/916290399165?text=${whatsappCopy}`;
+  /*
+   * The WhatsApp message, written from what the guest has actually typed.
+   *
+   * It used to fill every blank with "To be shared" / "To be confirmed", so
+   * tapping the sticky WhatsApp bar without touching the form sent the host a
+   * message with a name of "To be shared" and no dates — an enquiry that could
+   * not be answered and, because that button never talks to the server, was
+   * never recorded either. The first real enquiry this site received arrived
+   * that way.
+   *
+   * Now a field that is empty is left out. A message sent from a blank form is
+   * a plain hello, which is at least honestly a plain hello; once the guest has
+   * given a name or dates, the details ride along.
+   */
+  const hasEnquiryDetail = Boolean(form.name.trim() || (form.checkIn && form.checkOut));
 
-  const scrollToBooking = () => {
-    document.getElementById('booking')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  const whatsappMessage = (() => {
+    const lines = ['Hello Raj Kuthir, I would like to enquire about Sobuj Potro.'];
+    if (!hasEnquiryDetail) return lines.join('\n');
+
+    if (form.name.trim()) lines.push(`Name: ${form.name.trim()}`);
+    if (form.checkIn && form.checkOut) {
+      lines.push(
+        `Dates: ${form.checkIn} to ${form.checkOut}${nights ? ` (${nights} night${nights === 1 ? '' : 's'})` : ''}`,
+      );
+    }
+    lines.push(`Guests: ${form.adults} adults, ${form.children} children, ${form.pets} pets`);
+    if (form.phone.trim()) lines.push(`Phone: ${form.phone.trim()}`);
+    return lines.join('\n');
+  })();
+
+  const whatsappUrl = `https://wa.me/916290399165?text=${encodeURIComponent(whatsappMessage)}`;
+
+  /*
+   * "Check availability" means the calendar, not the section it sits in.
+   * This used to scroll to #booking — the banner headline — leaving the grid
+   * itself below the fold, so the button named after the calendar stopped
+   * short of it. Every "Check availability" on the site now lands on the same
+   * element: the calendar and the enquiry form, side by side.
+   */
+  const scrollToAvailability = () => {
+    document.getElementById('availability')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     setMenuOpen(false);
   };
+
+  /**
+   * Which button in the form was pressed.
+   *
+   * Both of them submit. The WhatsApp one used to be a bare link that opened
+   * wa.me straight from an empty form, so an enquiry made that way never
+   * reached /api/enquiries and never existed as far as the owner's console was
+   * concerned. It is a submit button now: the enquiry is recorded first, and
+   * WhatsApp is offered afterwards.
+   */
+  const [handOffToWhatsApp, setHandOffToWhatsApp] = useState(false);
 
   const submitEnquiry = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -440,6 +486,14 @@ function Home() {
     }
 
     setSubmitted(true);
+
+    // The enquiry is stored either way. WhatsApp is a convenience on top of
+    // it, so a blocked popup costs nothing — the success panel that just
+    // appeared carries the same link, one real click away.
+    if (handOffToWhatsApp) {
+      window.open(whatsappUrl, '_blank', 'noopener,noreferrer');
+      setHandOffToWhatsApp(false);
+    }
   };
 
   const shiftCalendarMonth = (amount: number) => {
@@ -487,7 +541,7 @@ function Home() {
             >
               <LockKeyhole size={14} />
             </a>
-            <button onClick={scrollToBooking} className="ml-1 rounded-full bg-primary px-5 py-3 text-xs font-bold uppercase tracking-[.12em] text-primary-foreground transition-transform hover:-translate-y-0.5 active:scale-95" data-testid="button-header-book">
+            <button onClick={scrollToAvailability} className="ml-1 rounded-full bg-primary px-5 py-3 text-xs font-bold uppercase tracking-[.12em] text-primary-foreground transition-transform hover:-translate-y-0.5 active:scale-95" data-testid="button-header-book">
               Check availability
             </button>
           </div>
@@ -510,7 +564,7 @@ function Home() {
                   {item.label}
                 </a>
               ))}
-              <button onClick={scrollToBooking} className="mt-2 rounded-full bg-primary px-5 py-3 text-xs font-bold uppercase tracking-[.12em] text-primary-foreground" data-testid="button-mobile-book">
+              <button onClick={scrollToAvailability} className="mt-2 rounded-full bg-primary px-5 py-3 text-xs font-bold uppercase tracking-[.12em] text-primary-foreground" data-testid="button-mobile-book">
                 Check availability
               </button>
               <div className="mt-3 border-t border-border pt-4">
@@ -783,7 +837,7 @@ function Home() {
            </div>
 
             <div className="rounded-[1.5rem] bg-background p-6 shadow-lg md:p-8">
-              {submitted ? <div className="flex min-h-[530px] flex-col items-center justify-center text-center" data-testid="status-enquiry-success"><span className="grid h-16 w-16 place-items-center rounded-full bg-primary text-secondary"><Check size={28} /></span><p className="eyebrow mt-7 text-accent">Enquiry received</p><h3 className="mt-3 font-journal text-4xl text-primary">Thank you, {form.name || 'friend'}.</h3><p className="mt-4 max-w-[390px] text-sm leading-6 text-muted-foreground">Your enquiry is ready to share with the host. For the quickest reply, you can also send the selected details on WhatsApp.</p><div className="mt-8 flex flex-wrap justify-center gap-3"><a href={whatsappUrl} target="_blank" rel="noreferrer" className="flex items-center gap-2 rounded-full bg-primary px-5 py-3 text-xs font-bold uppercase tracking-[.1em] text-primary-foreground" data-testid="link-success-whatsapp"><MessageCircle size={15} /> Send on WhatsApp</a><button onClick={() => setSubmitted(false)} className="rounded-full border border-border px-5 py-3 text-xs font-bold uppercase tracking-[.1em] text-primary" data-testid="button-new-enquiry">New enquiry</button></div></div> : <form onSubmit={submitEnquiry} className="space-y-6" data-testid="form-booking-enquiry"><div className="flex items-center justify-between border-b border-border pb-5"><div><p className="font-journal text-3xl text-primary">Enquire to stay</p><p className="mt-1 text-xs text-muted-foreground">A clear estimate, before a conversation.</p></div><Send size={20} className="text-accent" /></div><div className="grid gap-5 sm:grid-cols-2"><label className="block sm:col-span-2"><span className="eyebrow text-muted-foreground">Your name *</span><input required minLength={2} maxLength={80} autoComplete="name" value={form.name} onChange={(event) => updateForm('name', event.target.value)} className="mt-2 w-full border-b border-border bg-transparent px-0 py-3 text-sm text-primary outline-none placeholder:text-muted-foreground/60 focus:border-primary" placeholder="Name" data-testid="input-guest-name" /></label><label className="block"><span className="eyebrow text-muted-foreground">Phone *</span><input required type="tel" inputMode="tel" autoComplete="tel" maxLength={20} pattern="(\+?91[- ]?|0)?[6-9][0-9]{9}" title="A 10-digit Indian mobile number, with or without +91" value={form.phone} onChange={(event) => updateForm('phone', event.target.value)} className="mt-2 w-full border-b border-border bg-transparent px-0 py-3 text-sm text-primary outline-none placeholder:text-muted-foreground/60 focus:border-primary" placeholder="+91 98765 43210" data-testid="input-guest-phone" /></label><label className="block"><span className="eyebrow text-muted-foreground">Email</span><input type="email" autoComplete="email" maxLength={200} value={form.email} onChange={(event) => updateForm('email', event.target.value)} className="mt-2 w-full border-b border-border bg-transparent px-0 py-3 text-sm text-primary outline-none placeholder:text-muted-foreground/60 focus:border-primary" placeholder="you@example.com" data-testid="input-guest-email" /></label><label className="block"><span className="eyebrow text-muted-foreground">Check-in *</span><input required type="date" min={new Date().toISOString().split('T')[0]} value={form.checkIn} onChange={(event) => updateForm('checkIn', event.target.value)} className="mt-2 w-full border-b border-border bg-transparent px-0 py-3 text-sm text-primary outline-none focus:border-primary" data-testid="input-check-in" /></label><label className="block"><span className="eyebrow text-muted-foreground">Check-out *</span><input required type="date" min={form.checkIn || new Date().toISOString().split('T')[0]} value={form.checkOut} onChange={(event) => updateForm('checkOut', event.target.value)} className="mt-2 w-full border-b border-border bg-transparent px-0 py-3 text-sm text-primary outline-none focus:border-primary" data-testid="input-check-out" /></label></div>{dateConflict && <p className="flex items-start gap-2 rounded-xl border border-[#A65E45]/40 bg-[#A65E45]/5 px-4 py-3 text-[13px] leading-6 text-[#A65E45]" role="alert" data-testid="text-date-conflict"><CircleAlert size={15} className="mt-0.5 shrink-0" /><span>Those nights are already taken &mdash; {shortDate(eventDateKey(dateConflict.startDate))} to {shortDate(eventDateKey(dateConflict.endDate))} is booked. Pick other dates and the estimate will update.</span></p>}<div className="grid grid-cols-3 gap-3"><label className="block rounded-xl border border-border p-3"><span className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[.08em] text-muted-foreground"><Users size={13} /> Adults</span><input required type="number" min="1" value={form.adults} onChange={(event) => updateForm('adults', event.target.value)} className="mt-2 w-full bg-transparent text-lg font-bold text-primary outline-none" data-testid="input-adults" /></label><label className="block rounded-xl border border-border p-3"><span className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[.08em] text-muted-foreground"><Baby size={13} /> Children</span><input type="number" min="0" value={form.children} onChange={(event) => updateForm('children', event.target.value)} className="mt-2 w-full bg-transparent text-lg font-bold text-primary outline-none" data-testid="input-children" /></label><label className="block rounded-xl border border-border p-3"><span className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[.08em] text-muted-foreground"><PawPrint size={13} /> Pets</span><input type="number" min="0" value={form.pets} onChange={(event) => updateForm('pets', event.target.value)} className="mt-2 w-full bg-transparent text-lg font-bold text-primary outline-none" data-testid="input-pets" /></label></div><label className="block"><span className="eyebrow text-muted-foreground">Special requests</span><textarea rows={3} value={form.requests} onChange={(event) => updateForm('requests', event.target.value)} className="mt-2 w-full resize-none border-b border-border bg-transparent px-0 py-3 text-sm text-primary outline-none placeholder:text-muted-foreground/60 focus:border-primary" placeholder="Arrival notes, pet details, meal preferences..." data-testid="input-special-requests" /></label><div className="rounded-xl bg-card p-4"><div className="flex items-center justify-between"><p className="text-sm font-bold text-primary">Planning estimate</p><p className="font-mono-ui text-[10px] text-muted-foreground">{nights ? `${nights} night${nights === 1 ? '' : 's'}` : 'Select dates'}</p></div><div className="mt-3 flex items-end justify-between"><div><p className="font-mono-ui text-[10px] uppercase tracking-[.08em] text-muted-foreground">{fromRate === null ? 'Check availability & current rate' : `From ${currency(fromRate)} / night`}</p><p className="mt-1 text-xs text-muted-foreground">Advance {Math.round(CONFIG.advanceShare * 100)}% · balance after confirmation</p></div><p className="font-journal text-3xl text-primary">{nights > 0 && fromRate !== null ? currency(total) : '—'}</p></div>{nights > 0 && extrasPaise > 0 && <p className="mt-3 border-t border-border pt-3 text-[11px] leading-5 text-muted-foreground" data-testid="text-estimate-extras">Includes {currency(Math.round(extrasPaise / 100))} for {[breakdown.extraChildren + breakdown.extraAdults > 0 ? `${breakdown.extraChildren + breakdown.extraAdults} guest${breakdown.extraChildren + breakdown.extraAdults === 1 ? '' : 's'} above ${ratePlan.data?.maxGuests ?? 5}` : null, breakdown.pets > 0 ? `${breakdown.pets} pet${breakdown.pets === 1 ? '' : 's'}` : null].filter(Boolean).join(' and ')}.</p>}{nights > 0 && <div className="mt-3 flex justify-between border-t border-border pt-3 text-xs text-muted-foreground"><span>Advance estimate: {currency(advance)}</span><span>Balance: {currency(balance)}</span></div>}</div>{submitError && <p className="flex items-start gap-2 rounded-xl border border-[#A65E45]/40 bg-[#A65E45]/5 px-4 py-3 text-[13px] leading-6 text-[#A65E45]" role="alert" data-testid="text-submit-error"><CircleAlert size={15} className="mt-0.5 shrink-0" /><span>{submitError}</span></p>}<div className="flex flex-col gap-3 sm:flex-row"><button type="submit" disabled={Boolean(dateConflict)} className="flex flex-1 items-center justify-center gap-2 rounded-full bg-primary px-5 py-4 text-xs font-bold uppercase tracking-[.11em] text-primary-foreground transition-transform hover:-translate-y-0.5 active:scale-95 disabled:translate-y-0 disabled:cursor-not-allowed disabled:opacity-40" data-testid="button-submit-enquiry">Send enquiry <ArrowRight size={15} /></button><a href={whatsappUrl} target="_blank" rel="noreferrer" className="flex items-center justify-center gap-2 rounded-full border border-primary/25 px-5 py-4 text-xs font-bold uppercase tracking-[.11em] text-primary transition-colors hover:bg-primary/5" data-testid="link-booking-whatsapp"><MessageCircle size={16} /> WhatsApp</a></div><p className="text-center text-[10px] leading-4 text-muted-foreground">Availability and final pricing are confirmed by the host. By sending an enquiry you agree to our <a href={`${basePath}/house-rules`} className="underline decoration-accent decoration-1 underline-offset-2 hover:text-primary" data-testid="link-form-house-rules">house rules</a>.</p></form>}
+              {submitted ? <div className="flex min-h-[530px] flex-col items-center justify-center text-center" data-testid="status-enquiry-success"><span className="grid h-16 w-16 place-items-center rounded-full bg-primary text-secondary"><Check size={28} /></span><p className="eyebrow mt-7 text-accent">Enquiry received</p><h3 className="mt-3 font-journal text-4xl text-primary">Thank you, {form.name || 'friend'}.</h3><p className="mt-4 max-w-[390px] text-sm leading-6 text-muted-foreground">Your enquiry is ready to share with the host. For the quickest reply, you can also send the selected details on WhatsApp.</p><div className="mt-8 flex flex-wrap justify-center gap-3"><a href={whatsappUrl} target="_blank" rel="noreferrer" className="flex items-center gap-2 rounded-full bg-primary px-5 py-3 text-xs font-bold uppercase tracking-[.1em] text-primary-foreground" data-testid="link-success-whatsapp"><MessageCircle size={15} /> Send on WhatsApp</a><button onClick={() => setSubmitted(false)} className="rounded-full border border-border px-5 py-3 text-xs font-bold uppercase tracking-[.1em] text-primary" data-testid="button-new-enquiry">New enquiry</button></div></div> : <form onSubmit={submitEnquiry} className="space-y-6" data-testid="form-booking-enquiry"><div className="flex items-center justify-between border-b border-border pb-5"><div><p className="font-journal text-3xl text-primary">Enquire to stay</p><p className="mt-1 text-xs text-muted-foreground">A clear estimate, before a conversation.</p></div><Send size={20} className="text-accent" /></div><div className="grid gap-5 sm:grid-cols-2"><label className="block sm:col-span-2"><span className="eyebrow text-muted-foreground">Your name *</span><input required minLength={2} maxLength={80} autoComplete="name" value={form.name} onChange={(event) => updateForm('name', event.target.value)} className="mt-2 w-full border-b border-border bg-transparent px-0 py-3 text-sm text-primary outline-none placeholder:text-muted-foreground/60 focus:border-primary" placeholder="Name" data-testid="input-guest-name" /></label><label className="block"><span className="eyebrow text-muted-foreground">Phone *</span><input required type="tel" inputMode="tel" autoComplete="tel" maxLength={20} pattern="(\+?91[- ]?|0)?[6-9][0-9]{9}" title="A 10-digit Indian mobile number, with or without +91" value={form.phone} onChange={(event) => updateForm('phone', event.target.value)} className="mt-2 w-full border-b border-border bg-transparent px-0 py-3 text-sm text-primary outline-none placeholder:text-muted-foreground/60 focus:border-primary" placeholder="+91 98765 43210" data-testid="input-guest-phone" /></label><label className="block"><span className="eyebrow text-muted-foreground">Email</span><input type="email" autoComplete="email" maxLength={200} value={form.email} onChange={(event) => updateForm('email', event.target.value)} className="mt-2 w-full border-b border-border bg-transparent px-0 py-3 text-sm text-primary outline-none placeholder:text-muted-foreground/60 focus:border-primary" placeholder="you@example.com" data-testid="input-guest-email" /></label><label className="block"><span className="eyebrow text-muted-foreground">Check-in *</span><input required type="date" min={new Date().toISOString().split('T')[0]} value={form.checkIn} onChange={(event) => updateForm('checkIn', event.target.value)} className="mt-2 w-full border-b border-border bg-transparent px-0 py-3 text-sm text-primary outline-none focus:border-primary" data-testid="input-check-in" /></label><label className="block"><span className="eyebrow text-muted-foreground">Check-out *</span><input required type="date" min={form.checkIn || new Date().toISOString().split('T')[0]} value={form.checkOut} onChange={(event) => updateForm('checkOut', event.target.value)} className="mt-2 w-full border-b border-border bg-transparent px-0 py-3 text-sm text-primary outline-none focus:border-primary" data-testid="input-check-out" /></label></div>{dateConflict && <p className="flex items-start gap-2 rounded-xl border border-[#A65E45]/40 bg-[#A65E45]/5 px-4 py-3 text-[13px] leading-6 text-[#A65E45]" role="alert" data-testid="text-date-conflict"><CircleAlert size={15} className="mt-0.5 shrink-0" /><span>Those nights are already taken &mdash; {shortDate(eventDateKey(dateConflict.startDate))} to {shortDate(eventDateKey(dateConflict.endDate))} is booked. Pick other dates and the estimate will update.</span></p>}<div className="grid grid-cols-3 gap-3"><label className="block rounded-xl border border-border p-3"><span className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[.08em] text-muted-foreground"><Users size={13} /> Adults</span><input required type="number" min="1" value={form.adults} onChange={(event) => updateForm('adults', event.target.value)} className="mt-2 w-full bg-transparent text-lg font-bold text-primary outline-none" data-testid="input-adults" /></label><label className="block rounded-xl border border-border p-3"><span className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[.08em] text-muted-foreground"><Baby size={13} /> Children</span><input type="number" min="0" value={form.children} onChange={(event) => updateForm('children', event.target.value)} className="mt-2 w-full bg-transparent text-lg font-bold text-primary outline-none" data-testid="input-children" /></label><label className="block rounded-xl border border-border p-3"><span className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[.08em] text-muted-foreground"><PawPrint size={13} /> Pets</span><input type="number" min="0" value={form.pets} onChange={(event) => updateForm('pets', event.target.value)} className="mt-2 w-full bg-transparent text-lg font-bold text-primary outline-none" data-testid="input-pets" /></label></div><label className="block"><span className="eyebrow text-muted-foreground">Special requests</span><textarea rows={3} value={form.requests} onChange={(event) => updateForm('requests', event.target.value)} className="mt-2 w-full resize-none border-b border-border bg-transparent px-0 py-3 text-sm text-primary outline-none placeholder:text-muted-foreground/60 focus:border-primary" placeholder="Arrival notes, pet details, meal preferences..." data-testid="input-special-requests" /></label><div className="rounded-xl bg-card p-4"><div className="flex items-center justify-between"><p className="text-sm font-bold text-primary">Planning estimate</p><p className="font-mono-ui text-[10px] text-muted-foreground">{nights ? `${nights} night${nights === 1 ? '' : 's'}` : 'Select dates'}</p></div><div className="mt-3 flex items-end justify-between"><div><p className="font-mono-ui text-[10px] uppercase tracking-[.08em] text-muted-foreground">{fromRate === null ? 'Check availability & current rate' : `From ${currency(fromRate)} / night`}</p><p className="mt-1 text-xs text-muted-foreground">Advance {Math.round(CONFIG.advanceShare * 100)}% · balance after confirmation</p></div><p className="font-journal text-3xl text-primary">{nights > 0 && fromRate !== null ? currency(total) : '—'}</p></div>{nights > 0 && extrasPaise > 0 && <p className="mt-3 border-t border-border pt-3 text-[11px] leading-5 text-muted-foreground" data-testid="text-estimate-extras">Includes {currency(Math.round(extrasPaise / 100))} for {[breakdown.extraChildren + breakdown.extraAdults > 0 ? `${breakdown.extraChildren + breakdown.extraAdults} guest${breakdown.extraChildren + breakdown.extraAdults === 1 ? '' : 's'} above ${ratePlan.data?.maxGuests ?? 5}` : null, breakdown.pets > 0 ? `${breakdown.pets} pet${breakdown.pets === 1 ? '' : 's'}` : null].filter(Boolean).join(' and ')}.</p>}{nights > 0 && <div className="mt-3 flex justify-between border-t border-border pt-3 text-xs text-muted-foreground"><span>Advance estimate: {currency(advance)}</span><span>Balance: {currency(balance)}</span></div>}</div>{submitError && <p className="flex items-start gap-2 rounded-xl border border-[#A65E45]/40 bg-[#A65E45]/5 px-4 py-3 text-[13px] leading-6 text-[#A65E45]" role="alert" data-testid="text-submit-error"><CircleAlert size={15} className="mt-0.5 shrink-0" /><span>{submitError}</span></p>}<div className="flex flex-col gap-3 sm:flex-row"><button type="submit" disabled={Boolean(dateConflict)} className="flex flex-1 items-center justify-center gap-2 rounded-full bg-primary px-5 py-4 text-xs font-bold uppercase tracking-[.11em] text-primary-foreground transition-transform hover:-translate-y-0.5 active:scale-95 disabled:translate-y-0 disabled:cursor-not-allowed disabled:opacity-40" data-testid="button-submit-enquiry">Send enquiry <ArrowRight size={15} /></button><button type="submit" onClick={() => setHandOffToWhatsApp(true)} disabled={Boolean(dateConflict)} className="flex items-center justify-center gap-2 rounded-full border border-primary/25 px-5 py-4 text-xs font-bold uppercase tracking-[.11em] text-primary transition-colors hover:bg-primary/5 disabled:cursor-not-allowed disabled:opacity-40" data-testid="link-booking-whatsapp"><MessageCircle size={16} /> WhatsApp</button></div><p className="text-center text-[10px] leading-4 text-muted-foreground">Availability and final pricing are confirmed by the host. By sending an enquiry you agree to our <a href={`${basePath}/house-rules`} className="underline decoration-accent decoration-1 underline-offset-2 hover:text-primary" data-testid="link-form-house-rules">house rules</a>.</p></form>}
             </div>
             </div>
           </div>
@@ -956,8 +1010,48 @@ function Home() {
 
       </main>
 
-      <footer className="bg-[#172d25] py-14 pb-28 text-[#f5eadb] md:pb-14" data-testid="site-footer">
-        <div className="section-shell"><div className="grid gap-12 border-b border-[#f5eadb]/15 pb-12 md:grid-cols-[1.2fr_.8fr_.8fr]"><div><div className="flex items-center gap-3"><span className="grid h-10 w-10 place-items-center rounded-full bg-[#e4c9a4] text-[#172d25]"><Leaf size={19} /></span><span><span className="block font-mono-ui text-[10px] tracking-[.18em] text-[#f5eadb]/70">RAJ KUTHIR</span><span className="font-journal text-2xl">Homestays</span></span></div><p className="mt-6 max-w-[300px] text-sm leading-6 text-[#f5eadb]/60">Sobuj Potro — a private home in nature, in Bolpur / Shantiniketan.</p></div><div><p className="eyebrow mb-5 text-[#e4c9a4]">Explore</p><div className="flex flex-col items-start gap-3 text-sm text-[#f5eadb]/70"><a href={`${basePath}/our-story`} className="transition-colors hover:text-[#e4c9a4]" data-testid="link-footer-story">Our story</a><a href={`${basePath}/places-to-visit-in-shantiniketan`} className="transition-colors hover:text-[#e4c9a4]" data-testid="link-footer-places">Places to visit</a><a href={`${basePath}/gallery`} className="transition-colors hover:text-[#e4c9a4]" data-testid="link-footer-gallery">Photos</a><a href={`${basePath}/pet-friendly-homestay-shantiniketan`} className="transition-colors hover:text-[#e4c9a4]" data-testid="link-footer-pet">Staying with a pet</a><a href={`${basePath}/rates`} className="transition-colors hover:text-[#e4c9a4]" data-testid="link-footer-rates">Rates</a><a href={`${basePath}/house-rules`} className="transition-colors hover:text-[#e4c9a4]" data-testid="link-footer-house-rules">House rules</a><a href={`${basePath}/welcome`} className="transition-colors hover:text-[#e4c9a4]" data-testid="link-footer-welcome">Arriving guests</a></div></div><div><p className="eyebrow mb-5 text-[#e4c9a4]">Connect</p><div className="flex flex-col items-start gap-3 text-sm text-[#f5eadb]/70"><a href={CONFIG.instagramUrl} target="_blank" rel="noreferrer" className="flex items-center gap-2 hover:text-[#e4c9a4]" data-testid="link-footer-instagram"><Instagram size={15} /> Instagram</a><a href={CONFIG.reviewUrl} target="_blank" rel="noreferrer" className="flex items-center gap-2 hover:text-[#e4c9a4]" data-testid="link-footer-review"><Star size={15} /> Google Reviews</a><a href={phoneHref(CONFIG.hostPhone)} className="flex items-center gap-2 hover:text-[#e4c9a4]" data-testid="link-footer-call"><Phone size={15} /> {CONFIG.hostPhone}</a></div></div></div><div className="flex flex-col justify-between gap-4 pt-6 text-[10px] uppercase tracking-[.13em] text-[#f5eadb]/40 sm:flex-row"><p>© {new Date().getFullYear()} Raj Kuthir Homestays</p><p>Made for slower days</p></div></div>
+      {/* A slim band, laid out like the header rather than the four-column
+          block this used to be: brand and contacts on one row, every page on
+          the next, the small print on a third. The tall empty column under
+          the tagline is gone. It scrolls with the page — only the header is
+          pinned. */}
+      <footer className="bg-[#172d25] py-8 pb-28 text-[#f5eadb] md:pb-8" data-testid="site-footer">
+        <div className="section-shell">
+          {/* Row one — who this is, and how to reach them. */}
+          <div className="flex flex-col justify-between gap-5 sm:flex-row sm:items-center">
+            <div className="flex items-center gap-3">
+              <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-[#e4c9a4] text-[#172d25]"><Leaf size={17} /></span>
+              <span>
+                <span className="block font-mono-ui text-[10px] tracking-[.18em] text-[#f5eadb]/70">RAJ KUTHIR</span>
+                <span className="font-journal text-xl leading-tight">Homestays</span>
+              </span>
+              <span className="hidden border-l border-[#f5eadb]/15 pl-4 text-xs leading-5 text-[#f5eadb]/55 lg:block">Sobuj Potro — a private home in nature,<br />in Bolpur / Shantiniketan.</span>
+            </div>
+            <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-sm text-[#f5eadb]/70">
+              <a href={CONFIG.instagramUrl} target="_blank" rel="noreferrer" className="flex items-center gap-2 transition-colors hover:text-[#e4c9a4]" data-testid="link-footer-instagram"><Instagram size={15} /> Instagram</a>
+              <a href={CONFIG.reviewUrl} target="_blank" rel="noreferrer" className="flex items-center gap-2 transition-colors hover:text-[#e4c9a4]" data-testid="link-footer-review"><Star size={15} /> Google Reviews</a>
+              <a href={phoneHref(CONFIG.hostPhone)} className="flex items-center gap-2 transition-colors hover:text-[#e4c9a4]" data-testid="link-footer-call"><Phone size={15} /> {CONFIG.hostPhone}</a>
+            </div>
+          </div>
+
+          {/* Row two — every page, inline. The same seven links, one line of
+              height instead of seven. */}
+          <nav className="mt-6 flex flex-wrap items-center gap-x-5 gap-y-2 border-t border-[#f5eadb]/15 pt-5 text-sm text-[#f5eadb]/70" aria-label="Footer navigation">
+            <a href={`${basePath}/our-story`} className="transition-colors hover:text-[#e4c9a4]" data-testid="link-footer-story">Our story</a>
+            <a href={`${basePath}/places-to-visit-in-shantiniketan`} className="transition-colors hover:text-[#e4c9a4]" data-testid="link-footer-places">Places to visit</a>
+            <a href={`${basePath}/gallery`} className="transition-colors hover:text-[#e4c9a4]" data-testid="link-footer-gallery">Photos</a>
+            <a href={`${basePath}/pet-friendly-homestay-shantiniketan`} className="transition-colors hover:text-[#e4c9a4]" data-testid="link-footer-pet">Staying with a pet</a>
+            <a href={`${basePath}/rates`} className="transition-colors hover:text-[#e4c9a4]" data-testid="link-footer-rates">Rates</a>
+            <a href={`${basePath}/house-rules`} className="transition-colors hover:text-[#e4c9a4]" data-testid="link-footer-house-rules">House rules</a>
+            <a href={`${basePath}/welcome`} className="transition-colors hover:text-[#e4c9a4]" data-testid="link-footer-welcome">Arriving guests</a>
+          </nav>
+
+          {/* Row three — the small print. */}
+          <div className="mt-5 flex flex-col justify-between gap-2 border-t border-[#f5eadb]/15 pt-4 text-[10px] uppercase tracking-[.13em] text-[#f5eadb]/40 sm:flex-row">
+            <p>© {new Date().getFullYear()} Raj Kuthir Homestays</p>
+            <p>Made for slower days</p>
+          </div>
+        </div>
       </footer>
 
       {/* The two things a guest needs that are not on the page: how to get
@@ -990,7 +1084,7 @@ function Home() {
         </a>
       </div>
 
-      <div className="fixed inset-x-3 bottom-3 z-40 flex items-center gap-2 rounded-full border border-border bg-background/95 p-2 shadow-lg backdrop-blur-md md:hidden" data-testid="mobile-contact-bar"><a href={phoneHref(CONFIG.hostPhone)} className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-secondary text-primary" aria-label="Call host" data-testid="button-sticky-call"><Phone size={18} /></a><a href={whatsappUrl} target="_blank" rel="noreferrer" className="flex flex-1 items-center justify-center gap-2 rounded-full bg-primary py-3 text-xs font-bold uppercase tracking-[.1em] text-primary-foreground" data-testid="button-sticky-whatsapp"><MessageCircle size={16} /> Enquire on WhatsApp</a><button onClick={scrollToBooking} className="grid h-11 w-11 shrink-0 place-items-center rounded-full border border-border text-primary" aria-label="Book now" data-testid="button-sticky-book"><CalendarDays size={18} /></button></div>
+      <div className="fixed inset-x-3 bottom-3 z-40 flex items-center gap-2 rounded-full border border-border bg-background/95 p-2 shadow-lg backdrop-blur-md md:hidden" data-testid="mobile-contact-bar"><a href={phoneHref(CONFIG.hostPhone)} className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-secondary text-primary" aria-label="Call host" data-testid="button-sticky-call"><Phone size={18} /></a><a href={whatsappUrl} target="_blank" rel="noreferrer" className="flex flex-1 items-center justify-center gap-2 rounded-full bg-primary py-3 text-xs font-bold uppercase tracking-[.1em] text-primary-foreground" data-testid="button-sticky-whatsapp"><MessageCircle size={16} /> Enquire on WhatsApp</a><button onClick={scrollToAvailability} className="grid h-11 w-11 shrink-0 place-items-center rounded-full border border-border text-primary" aria-label="Book now" data-testid="button-sticky-book"><CalendarDays size={18} /></button></div>
     </div>
   );
 }
