@@ -56,7 +56,7 @@ export default function Rates() {
   useEffect(() => {
     const previous = document.title;
     // Must match the server-rendered <title> in api-server/src/lib/seo.ts.
-    document.title = 'Shantiniketan Homestay Rates | Raj Kuthir Homestays';
+    document.title = 'Shantiniketan Homestay Rates & Tariff | Raj Kuthir';
     return () => {
       document.title = previous;
     };
@@ -117,13 +117,33 @@ export default function Rates() {
             Homestay rates<br /><em>in Shantiniketan.</em>
           </h1>
           <p className="mt-8 max-w-[620px] text-lg leading-8 text-primary/75">
-            What a night at Sobuj Potro costs &mdash; for the whole two-bedroom
-            villa in Bolpur, not a room in it. The price depends on how many of
-            you are staying and on your dates; the house you get is the same.
+            The full tariff for a night at Sobuj Potro &mdash; the price of the
+            whole two-bedroom villa in Bolpur, not a room in it. What you pay
+            depends on how many of you are staying and on your dates; the house
+            you get is the same.
           </p>
           <p className="mt-4 max-w-[620px] text-sm leading-6 text-muted-foreground">
             These are read live from the same rate card as the availability
             calendar and the enquiry estimate, so the three always agree.
+          </p>
+          <p className="mt-4 max-w-[620px] text-sm leading-6 text-muted-foreground">
+            Working out how many nights you need first? There is a{' '}
+            <a
+              href={`${basePath}/shantiniketan-2-day-itinerary`}
+              className="text-primary underline decoration-accent decoration-2 underline-offset-4"
+              data-testid="link-rates-itinerary"
+            >
+              two-day plan for Shantiniketan
+            </a>{' '}
+            and a page on{' '}
+            <a
+              href={`${basePath}/shantiniketan-weekend-trip-from-kolkata`}
+              className="text-primary underline decoration-accent decoration-2 underline-offset-4"
+              data-testid="link-rates-weekend"
+            >
+              getting here from Kolkata
+            </a>
+            .
           </p>
         </section>
 

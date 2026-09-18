@@ -251,11 +251,15 @@ test("point 2 · the sitemap lists exactly the public, indexable pages", () => {
   assert.deepEqual(locs.sort(), [
     `${SITE_ORIGIN}/`,
     `${SITE_ORIGIN}/gallery`,
+    `${SITE_ORIGIN}/homestay-near-sonajhuri-haat`,
+    `${SITE_ORIGIN}/homestay-near-visva-bharati`,
     `${SITE_ORIGIN}/house-rules`,
     `${SITE_ORIGIN}/our-story`,
     `${SITE_ORIGIN}/pet-friendly-homestay-shantiniketan`,
     `${SITE_ORIGIN}/places-to-visit-in-shantiniketan`,
     `${SITE_ORIGIN}/rates`,
+    `${SITE_ORIGIN}/shantiniketan-2-day-itinerary`,
+    `${SITE_ORIGIN}/shantiniketan-weekend-trip-from-kolkata`,
   ]);
   assert.equal(new Set(locs).size, locs.length, "duplicate <loc> in sitemap");
 });
@@ -1081,6 +1085,10 @@ const RENDERED_BY: Record<string, string> = {
   "/gallery": "src/pages/Gallery.tsx",
   "/our-story": "src/pages/OurStory.tsx",
   "/places-to-visit-in-shantiniketan": "src/pages/PlacesToVisit.tsx",
+  "/homestay-near-sonajhuri-haat": "src/pages/HomestayNearSonajhuri.tsx",
+  "/homestay-near-visva-bharati": "src/pages/HomestayNearVisvaBharati.tsx",
+  "/shantiniketan-weekend-trip-from-kolkata": "src/pages/WeekendFromKolkata.tsx",
+  "/shantiniketan-2-day-itinerary": "src/pages/TwoDayItinerary.tsx",
   "/house-rules": "src/pages/HouseRules.tsx",
   "/pet-friendly-homestay-shantiniketan": "src/pages/PetFriendly.tsx",
   "/rates": "src/pages/Rates.tsx",
@@ -1356,9 +1364,12 @@ test("pet faq · the pet charge is described from the rate plan, never priced on
 
 test("homepage · title, description and social tags are the approved ones", () => {
   const html = render("/");
-  const title = "Raj Kuthir Homestays | Private Villa in Shantiniketan";
+  // Phase 3A: the query leads the title instead of the brand, and the
+  // description says "entire villa" because that is the distinction guests are
+  // actually shopping for.
+  const title = "Private 2-Bedroom Villa in Shantiniketan | Raj Kuthir";
   const description =
-    "Stay at Raj Kuthir Homestays, a private 2-bedroom pet-friendly villa with AC, garden and parking in Bolpur, Shantiniketan, West Bengal.";
+    "An entire 2-bedroom villa in Bolpur, Shantiniketan \u2014 not a room in a homestay. Two AC bedrooms, private garden, parking, pet-friendly. Book direct.";
 
   assert.deepEqual(titles(html), [title]);
   assert.deepEqual(metaByName(html, "description"), [description]);
@@ -1372,7 +1383,7 @@ test("homepage · title, description and social tags are the approved ones", () 
 test("routes · titles match the approved wording", () => {
   assert.equal(PAGES["/pet-friendly-homestay-shantiniketan"]!.title, "Pet-Friendly Homestay in Shantiniketan | Raj Kuthir");
   assert.equal(PAGES["/places-to-visit-in-shantiniketan"]!.title, "Places to Visit in Shantiniketan | Raj Kuthir Homestays");
-  assert.equal(PAGES["/gallery"]!.title, "Raj Kuthir Homestays Gallery | Shantiniketan Villa");
+  assert.equal(PAGES["/gallery"]!.title, "Villa Photos in Shantiniketan | Raj Kuthir Homestays");
   assert.equal(PAGES["/our-story"]!.title, "Our Story | Raj Kuthir Homestays, Shantiniketan");
 });
 
@@ -1475,7 +1486,9 @@ test("links · the pet page links back to the stay and on to places, photos and 
   const source = sourceOf("/pet-friendly-homestay-shantiniketan");
   for (const href of [
     "${basePath}/`",
-    "${basePath}/#booking`",
+    // #availability, not #booking: the calendar, not the banner above it.
+    // Every "Check availability" on the site now lands on the same element.
+    "${basePath}/#availability`",
     "${basePath}/places-to-visit-in-shantiniketan`",
     "${basePath}/gallery`",
     "${basePath}/rates`",
@@ -1717,10 +1730,7 @@ test("onboarding · every table the feature queries has a migration", () => {
     "guest_management_access",
   ]) {
     assert.ok(
-      // `IF NOT EXISTS` is optional: guest-tables.sql drops and recreates the
-      // five guest tables in one transaction, so its CREATE TABLE is
-      // unconditional by design.
-      new RegExp(`CREATE TABLE (?:IF NOT EXISTS )?${table}\\b`).test(sql),
+      new RegExp(`CREATE TABLE IF NOT EXISTS ${table}\\b`).test(sql),
       `${table} is queried but no migration creates it`,
     );
   }

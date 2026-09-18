@@ -211,9 +211,11 @@ const PLACES_FAQ = [
  */
 export const PAGES: Record<string, PageMeta> = {
   "/": {
-    title: "Raj Kuthir Homestays | Private Villa in Shantiniketan",
+    // The query leads, the brand follows. Nobody searches for "Raj Kuthir"
+    // yet; they search for the kind of place this is.
+    title: "Private 2-Bedroom Villa in Shantiniketan | Raj Kuthir",
     description:
-      "Stay at Raj Kuthir Homestays, a private 2-bedroom pet-friendly villa with AC, garden and parking in Bolpur, Shantiniketan, West Bengal.",
+      "An entire 2-bedroom villa in Bolpur, Shantiniketan \u2014 not a room in a homestay. Two AC bedrooms, private garden, parking, pet-friendly. Book direct.",
     lastmod: "2026-09-14",
     // The hero photograph is the homepage's LCP. Keep in step with IMG.villaNight
     // in App.tsx — a test asserts the two name the same file.
@@ -227,6 +229,8 @@ export const PAGES: Record<string, PageMeta> = {
         "private bungalow Shantiniketan",
         "family homestay Shantiniketan",
         "villa with garden Shantiniketan",
+        "villa in Shantiniketan",
+        "entire villa in Shantiniketan",
         // Accommodation near the market, so it belongs with the house, not
         // with the page about what to do once you are here.
         "homestay near Sonajhuri",
@@ -248,11 +252,18 @@ export const PAGES: Record<string, PageMeta> = {
     breadcrumb: "Staying with a pet",
     intent: {
       primary: "pet friendly homestay in Shantiniketan",
-      secondary: ["pet friendly villa Shantiniketan"],
+      secondary: [
+        "pet friendly villa Shantiniketan",
+        "dog friendly stay Shantiniketan",
+      ],
     },
   },
   "/gallery": {
-    title: "Raj Kuthir Homestays Gallery | Shantiniketan Villa",
+    // The gallery page has set this title in the browser since it was built,
+    // while the server sent the wording below it — so Google indexed one title
+    // and the tab showed another. The page's own version wins: it leads with
+    // the query, as the commercial titles now do.
+    title: "Villa Photos in Shantiniketan | Raj Kuthir Homestays",
     description:
       "Every room, the garden and the walk outside \u2014 photographs of Sobuj Potro, the two-bedroom villa at Raj Kuthir Homestays in Bolpur, Shantiniketan.",
     ogImage: {
@@ -293,6 +304,62 @@ export const PAGES: Record<string, PageMeta> = {
       secondary: ["things to do in Shantiniketan"],
     },
   },
+  /**
+   * Two local search landings. Each owns ONE accommodation intent — where to
+   * stay near a specific landmark — which is a different query from
+   * /places-to-visit-in-shantiniketan, a page about what to see. Keeping them
+   * apart is what stops either from becoming a doorway for the other.
+   */
+  "/homestay-near-sonajhuri-haat": {
+    title: "Homestay near Sonajhuri Haat, Shantiniketan | Raj Kuthir",
+    description:
+      "A private two-bedroom villa in Bolpur, a short ride from Sonajhuri Khoai Haat. Two AC bedrooms, garden, parking, pet-friendly. Enquire direct.",
+    lastmod: "2026-09-18",
+    breadcrumb: "Near Sonajhuri Haat",
+    intent: {
+      primary: "homestay near Sonajhuri Haat",
+      secondary: ["stay near Sonajhurir Hat Shantiniketan", "villa near Sonajhuri Khoai"],
+    },
+  },
+  "/homestay-near-visva-bharati": {
+    title: "Homestay near Visva-Bharati, Shantiniketan | Raj Kuthir",
+    description:
+      "A private two-bedroom villa in Bolpur, a short ride from Visva-Bharati and Rabindra Bhavan. Two AC bedrooms, garden, parking. Enquire direct.",
+    lastmod: "2026-09-18",
+    breadcrumb: "Near Visva-Bharati",
+    intent: {
+      primary: "homestay near Visva-Bharati",
+      secondary: ["stay near Visva-Bharati university", "accommodation near Rabindra Bhavan"],
+    },
+  },
+  /**
+   * Travel planning. Two pages, two intents: one is how you get here and when
+   * to come, the other is what to do once you have. Splitting them keeps
+   * either from being a thinner version of the other, and each links to its
+   * pair rather than restating it.
+   */
+  "/shantiniketan-weekend-trip-from-kolkata": {
+    title: "Shantiniketan Weekend Trip from Kolkata | Raj Kuthir",
+    description:
+      "Planning a weekend in Shantiniketan from Kolkata: trains, roads, which days the haat runs, and a private two-bedroom villa in Bolpur to come back to.",
+    lastmod: "2026-09-18",
+    breadcrumb: "Weekend from Kolkata",
+    intent: {
+      primary: "Shantiniketan weekend trip from Kolkata",
+      secondary: ["Kolkata to Shantiniketan trip", "Shantiniketan weekend getaway"],
+    },
+  },
+  "/shantiniketan-2-day-itinerary": {
+    title: "2-Day Shantiniketan Itinerary | Raj Kuthir Homestays",
+    description:
+      "A 2-day Shantiniketan itinerary with road distances from Bolpur: Sonajhuri haat and the Kopai on day one, the Tagore campus and Ballavpur on day two.",
+    lastmod: "2026-09-18",
+    breadcrumb: "2-day itinerary",
+    intent: {
+      primary: "2 day Shantiniketan itinerary",
+      secondary: ["Shantiniketan itinerary", "what to do in Shantiniketan in 2 days"],
+    },
+  },
   "/house-rules": {
     title: "House Rules | Raj Kuthir Homestays, Shantiniketan",
     description:
@@ -307,14 +374,18 @@ export const PAGES: Record<string, PageMeta> = {
    * the rate plan, and it would be the one nobody remembers to change.
    */
   "/rates": {
-    title: "Shantiniketan Homestay Rates | Raj Kuthir Homestays",
+    title: "Shantiniketan Homestay Rates & Tariff | Raj Kuthir",
     description:
-      "Nightly rates for Sobuj Potro, a private two-bedroom villa in Bolpur, Shantiniketan: priced by the number of guests, with extra-guest and pet charges in full.",
+      "The full tariff for Sobuj Potro, a private two-bedroom villa in Bolpur, Shantiniketan: priced by number of guests, with extra-guest and pet charges in full.",
     lastmod: "2026-09-17",
     breadcrumb: "Rates",
     intent: {
       primary: "Shantiniketan homestay price",
-      secondary: ["Raj Kuthir Homestays rates"],
+      secondary: [
+        "Raj Kuthir Homestays rates",
+        "Shantiniketan homestay tariff",
+        "villa price Shantiniketan",
+      ],
     },
   },
 
@@ -374,6 +445,10 @@ const CLIENT_ROUTES = new Set([
   "/gallery",
   "/our-story",
   "/places-to-visit-in-shantiniketan",
+  "/homestay-near-sonajhuri-haat",
+  "/homestay-near-visva-bharati",
+  "/shantiniketan-weekend-trip-from-kolkata",
+  "/shantiniketan-2-day-itinerary",
   "/house-rules",
   "/pet-friendly-homestay-shantiniketan",
   "/rates",

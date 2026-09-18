@@ -139,9 +139,10 @@ export default function PetFriendly() {
                 Pet-friendly in Shantiniketan,<br /><em className="text-accent">and we mean it.</em>
               </h1>
               <p className="mt-8 max-w-[560px] text-[15px] leading-7 text-muted-foreground md:text-[17px]">
-                Raj Kuthir &ndash; Sobuj Potro is a private two-bedroom villa in Bolpur with its own garden.
-                You get the whole house, so there is no front desk to clear your dog with, no corridor to
-                walk them down, and nobody else&rsquo;s pet on the other side of the wall.
+                Raj Kuthir &ndash; Sobuj Potro is a dog-friendly stay in Shantiniketan: a private
+                two-bedroom villa in Bolpur with its own garden. You get the whole house, so there is no
+                front desk to clear your dog with, no corridor to walk them down, and nobody else&rsquo;s
+                pet on the other side of the wall.
               </p>
 
               <div className="mt-9 flex flex-wrap gap-3">
@@ -272,7 +273,10 @@ export default function PetFriendly() {
               Every room, in the gallery
             </a>
             <a href={`${basePath}/rates`} className="underline decoration-accent decoration-2 underline-offset-4" data-testid="link-pet-rates">
-              Rates and what they cover
+              Shantiniketan homestay rates, and what they cover
+            </a>
+            <a href={`${basePath}/homestay-near-sonajhuri-haat`} className="underline decoration-accent decoration-2 underline-offset-4" data-testid="link-pet-sonajhuri">
+              Near the Sonajhuri forest market
             </a>
           </p>
         </section>

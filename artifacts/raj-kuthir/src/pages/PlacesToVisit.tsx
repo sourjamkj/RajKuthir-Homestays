@@ -147,6 +147,66 @@ export default function PlacesToVisit() {
           </p>
         </section>
 
+        {/* ------------------------------------------------ plan the trip
+            The list above answers "what is here". These answer "how do I fit
+            it into the days I have", which is the next question every visitor
+            asks and, until these pages existed, the one this page dropped. */}
+        <section className="border-t border-border py-16 md:py-24" aria-labelledby="places-plan-title">
+          <div className="section-shell">
+            <h2 id="places-plan-title" className="max-w-[680px] font-journal text-4xl leading-[.95] text-primary md:text-5xl">
+              Now fit it<br /><em>into your days.</em>
+            </h2>
+            <p className="mt-7 max-w-[640px] text-[15px] leading-7 text-muted-foreground md:text-[17px]">
+              Eighteen places is more than a short trip holds. Two things decide
+              most of it: the haat only runs on certain afternoons, and
+              Ballavpur only rewards an early start. These pages are built
+              around both.
+            </p>
+            <div className="mt-8 grid gap-4 sm:grid-cols-2">
+              <a
+                href={`${basePath}/shantiniketan-weekend-trip-from-kolkata`}
+                className="lift rounded-[1.4rem] border border-border bg-card p-6 transition-colors hover:border-primary"
+                data-testid="link-places-weekend"
+              >
+                <p className="font-journal text-2xl text-primary">A weekend from Kolkata</p>
+                <p className="mt-2 text-sm leading-6 text-muted-foreground">
+                  Trains, roads, and which days are worth travelling for.
+                </p>
+              </a>
+              <a
+                href={`${basePath}/shantiniketan-2-day-itinerary`}
+                className="lift rounded-[1.4rem] border border-border bg-card p-6 transition-colors hover:border-primary"
+                data-testid="link-places-itinerary"
+              >
+                <p className="font-journal text-2xl text-primary">A 2-day itinerary</p>
+                <p className="mt-2 text-sm leading-6 text-muted-foreground">
+                  Market on the first afternoon, campus on the second morning.
+                </p>
+              </a>
+              <a
+                href={`${basePath}/homestay-near-sonajhuri-haat`}
+                className="lift rounded-[1.4rem] border border-border bg-card p-6 transition-colors hover:border-primary"
+                data-testid="link-places-near-sonajhuri"
+              >
+                <p className="font-journal text-2xl text-primary">Staying near Sonajhuri Haat</p>
+                <p className="mt-2 text-sm leading-6 text-muted-foreground">
+                  If the forest market is the reason you are coming.
+                </p>
+              </a>
+              <a
+                href={`${basePath}/homestay-near-visva-bharati`}
+                className="lift rounded-[1.4rem] border border-border bg-card p-6 transition-colors hover:border-primary"
+                data-testid="link-places-near-visva"
+              >
+                <p className="font-journal text-2xl text-primary">Staying near Visva-Bharati</p>
+                <p className="mt-2 text-sm leading-6 text-muted-foreground">
+                  If the campus is the fixed point of the trip.
+                </p>
+              </a>
+            </div>
+          </div>
+        </section>
+
         {/* --------------------------------------------------------- the FAQ
             Rendered in full, never behind a toggle: the answers are marked up
             as FAQPage structured data, and Google requires marked-up text to
@@ -194,7 +254,7 @@ export default function PlacesToVisit() {
             </div>
             <div className="flex flex-wrap gap-3 lg:justify-end">
               <a
-                href={`${basePath}/#booking`}
+                href={`${basePath}/#availability`}
                 onClick={() => track('check_availability', { placement: 'places_to_visit' })}
                 className="flex items-center gap-2 rounded-full bg-secondary px-5 py-3 text-xs font-bold uppercase tracking-[.1em] text-primary transition-transform hover:-translate-y-0.5"
                 data-testid="link-places-book"

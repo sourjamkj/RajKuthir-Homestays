@@ -68,6 +68,10 @@ import PetFriendly from '@/pages/PetFriendly';
 import Gallery, { GALLERY_TEASER } from '@/pages/Gallery';
 import OurStory from '@/pages/OurStory';
 import PlacesToVisit from '@/pages/PlacesToVisit';
+import HomestayNearSonajhuri from '@/pages/HomestayNearSonajhuri';
+import HomestayNearVisvaBharati from '@/pages/HomestayNearVisvaBharati';
+import WeekendFromKolkata from '@/pages/WeekendFromKolkata';
+import TwoDayItinerary from '@/pages/TwoDayItinerary';
 import Rates from '@/pages/Rates';
 import Welcome from '@/pages/Welcome';
 import AdminGuestInfo from '@/pages/AdminGuestInfo';
@@ -885,6 +889,28 @@ function Home() {
           >
             Read more &mdash; all {NEIGHBOURHOOD_COUNT} places, with distances <ArrowUpRight size={14} />
           </a>
+
+          {/* The trip pages had only the places page pointing at them, which
+              left them two hops from the front door and getting none of the
+              homepage's weight. Planning is the question a visitor asks
+              immediately after "what is there", so this is where the links
+              belong. */}
+          <p className="mt-6 flex flex-wrap gap-x-6 gap-y-3 text-xs font-bold uppercase tracking-[.1em] text-primary">
+            <a
+              href={`${basePath}/shantiniketan-weekend-trip-from-kolkata`}
+              className="underline decoration-accent decoration-2 underline-offset-4"
+              data-testid="link-home-weekend"
+            >
+              Planning a weekend from Kolkata
+            </a>
+            <a
+              href={`${basePath}/shantiniketan-2-day-itinerary`}
+              className="underline decoration-accent decoration-2 underline-offset-4"
+              data-testid="link-home-itinerary"
+            >
+              What two days here look like
+            </a>
+          </p>
         </section>
 
         <section id="food" className="scroll-mt-24 border-y border-border bg-card py-24 md:py-32" aria-labelledby="food-title">
@@ -1110,6 +1136,15 @@ function Router() {
         <Route path="/gallery" component={Gallery} />
         <Route path="/our-story" component={OurStory} />
         <Route path="/places-to-visit-in-shantiniketan" component={PlacesToVisit} />
+        {/* Local search landings: one accommodation intent each, distinct from
+            the places page, which is about what to see rather than where to
+            sleep. */}
+        <Route path="/homestay-near-sonajhuri-haat" component={HomestayNearSonajhuri} />
+        <Route path="/homestay-near-visva-bharati" component={HomestayNearVisvaBharati} />
+        {/* Travel planning. Logistics and the itinerary are separate pages on
+            purpose: one intent each, linked to one another. */}
+        <Route path="/shantiniketan-weekend-trip-from-kolkata" component={WeekendFromKolkata} />
+        <Route path="/shantiniketan-2-day-itinerary" component={TwoDayItinerary} />
         {/* Public rate card, read live from /api/rates. */}
         <Route path="/rates" component={Rates} />
         {/* Guest arrival pack, unlocked with a booking reference. */}
