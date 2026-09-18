@@ -146,7 +146,7 @@ export default function PetFriendly() {
 
               <div className="mt-9 flex flex-wrap gap-3">
                 <a
-                  href={`${basePath}/#booking`}
+                  href={`${basePath}/#availability`}
                   className="flex items-center gap-2 rounded-full bg-primary px-6 py-4 text-xs font-bold uppercase tracking-[.12em] text-primary-foreground transition-transform hover:-translate-y-0.5"
                   data-testid="link-pet-check-availability"
                 >
@@ -478,7 +478,7 @@ export default function PetFriendly() {
               </p>
               <div className="mt-9 flex flex-wrap gap-3">
                 <a
-                  href={`${basePath}/#booking`}
+                  href={`${basePath}/#availability`}
                   className="flex items-center gap-2 rounded-full bg-primary px-6 py-4 text-xs font-bold uppercase tracking-[.12em] text-primary-foreground transition-transform hover:-translate-y-0.5"
                   data-testid="link-pet-cta-enquire"
                 >
@@ -527,7 +527,7 @@ export default function PetFriendly() {
             <a href={`${basePath}/our-story`} className="hover:text-[#e4c9a4]">Our story</a>
             <a href={`${basePath}/house-rules`} className="hover:text-[#e4c9a4]">House rules</a>
             <a href={`${basePath}/rates`} className="hover:text-[#e4c9a4]">Rates</a>
-            <a href={`${basePath}/#booking`} className="hover:text-[#e4c9a4]">Check availability</a>
+            <a href={`${basePath}/#availability`} className="hover:text-[#e4c9a4]">Check availability</a>
           </div>
         </div>
       </footer>

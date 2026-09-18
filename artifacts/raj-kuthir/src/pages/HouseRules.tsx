@@ -262,7 +262,7 @@ export default function HouseRules() {
                   <Phone size={15} /> Call the host
                 </a>
                 <a
-                  href={`${basePath}/#booking`}
+                  href={`${basePath}/#availability`}
                   className="flex items-center gap-2 rounded-full border border-border px-6 py-4 text-xs font-bold uppercase tracking-[.12em] text-primary transition-colors hover:border-primary"
                   data-testid="link-house-rules-enquire"
                 >

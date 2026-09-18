@@ -309,7 +309,7 @@ export default function Rates() {
             </div>
             <div className="flex flex-wrap gap-3 lg:justify-end">
               <a
-                href={`${basePath}/#booking`}
+                href={`${basePath}/#availability`}
                 onClick={() => track('check_availability', { placement: 'rates' })}
                 className="flex items-center gap-2 rounded-full bg-secondary px-5 py-3 text-xs font-bold uppercase tracking-[.1em] text-primary transition-transform hover:-translate-y-0.5"
                 data-testid="link-rates-book"

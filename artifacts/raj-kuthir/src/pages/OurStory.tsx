@@ -212,7 +212,7 @@ export default function OurStory() {
             </div>
             <div className="flex flex-wrap gap-3 lg:justify-end">
               <a
-                href={`${basePath}/#booking`}
+                href={`${basePath}/#availability`}
                 onClick={() => track('check_availability', { placement: 'our_story' })}
                 className="flex items-center gap-2 rounded-full bg-primary px-5 py-3 text-xs font-bold uppercase tracking-[.1em] text-primary-foreground transition-transform hover:-translate-y-0.5"
                 data-testid="link-story-book"
