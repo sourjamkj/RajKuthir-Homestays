@@ -3,6 +3,7 @@ import { logger } from "./lib/logger";
 import { startCalendarCron } from "./lib/calendar-cron";
 import { startNotificationsCron } from "./lib/notifications-cron";
 import { startMailCron } from "./lib/mail-cron";
+import { runSchemaCheck } from "./lib/schema-check";
 
 const rawPort = process.env["PORT"];
 
@@ -43,4 +44,16 @@ app.listen(port, (err) => {
   // MAIL_ENCRYPTION_KEY is unset, since the stored passwords cannot be
   // opened without it.
   startMailCron();
+
+  // Says in the log whether the database still matches the Drizzle schema.
+  // Four production 500s in one day came from that drift, each invisible until
+  // one particular query ran; this turns the next one into a line at boot.
+  //
+  // Deliberately after listening, and deliberately not awaited: the site is
+  // already serving by now, and a schema warning must never delay or prevent
+  // a boot. runSchemaCheck resolves rather than rejects, and the catch is
+  // belt and braces.
+  void runSchemaCheck().catch((error) => {
+    logger.error({ err: error }, "Schema check failed unexpectedly");
+  });
 });

@@ -1717,7 +1717,10 @@ test("onboarding · every table the feature queries has a migration", () => {
     "guest_management_access",
   ]) {
     assert.ok(
-      new RegExp(`CREATE TABLE IF NOT EXISTS ${table}\\b`).test(sql),
+      // `IF NOT EXISTS` is optional: guest-tables.sql drops and recreates the
+      // five guest tables in one transaction, so its CREATE TABLE is
+      // unconditional by design.
+      new RegExp(`CREATE TABLE (?:IF NOT EXISTS )?${table}\\b`).test(sql),
       `${table} is queried but no migration creates it`,
     );
   }
