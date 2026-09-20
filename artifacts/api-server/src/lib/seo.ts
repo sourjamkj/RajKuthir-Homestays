@@ -650,7 +650,7 @@ function jsonLd(pathname: string): string {
     })),
     sameAs: [
       "https://www.instagram.com/rajkuthirhomestays/",
-      "https://maps.app.goo.gl/D1tUUb3JfpVdcHwu5",
+      "https://maps.app.goo.gl/aEdaJaaeEy1DZ8Ps8?g_st=ac",
     ],
   };
 

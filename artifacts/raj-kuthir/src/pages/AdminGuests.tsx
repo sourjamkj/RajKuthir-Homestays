@@ -4,6 +4,9 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { format, parseISO } from 'date-fns';
 import {
   BellOff,
+  ArrowDown,
+  ArrowUp,
+  ArrowUpDown,
   CalendarPlus,
   Check,
   ExternalLink,
@@ -13,13 +16,14 @@ import {
   MessageCircle,
   Phone,
   Send,
+  Star,
   Timer,
   Trash2,
   Users,
   XCircle,
 } from 'lucide-react';
 import { adminFetch, useAdminSession, useLogout } from '@/lib/admin-api';
-import { formatRupees } from '@/lib/ledger-api';
+import { SOURCE_LABELS, formatRupees, type BookingSource } from '@/lib/ledger-api';
 import { CONFIG } from '@/lib/site';
 import { AdminHeader } from '@/components/AdminHeader';
 
@@ -149,6 +153,9 @@ const VERIFIED_ON_UPLOAD = 'auto:on-upload';
 type GuestStay = {
   bookingId: string;
   reference: string | null;
+  source: BookingSource;
+  /** When the booking was recorded — the default sort, newest first. */
+  createdAt: string;
   guestName: string | null;
   guestPhone: string | null;
   checkIn: string;
@@ -307,6 +314,50 @@ export default function AdminGuests() {
    */
   const [openDocuments, setOpenDocuments] = useState<string | null>(null);
   const [rejectReason, setRejectReason] = useState<Record<string, string>>({});
+
+  /*
+   * Guest details, editable at any time.
+   *
+   * OTA bookings parsed from email (MakeMyTrip, Booking.com) arrive with the
+   * guest's number masked or missing, and without a number the guest cannot
+   * be sent the verification link, the review ask or anything else. The
+   * PATCH /api/bookings/:id route already accepted these fields; nothing on
+   * screen used it. Dates, status and money are deliberately not here — they
+   * move availability and the ledger, and stay on the Earnings page.
+   */
+  const [stayOrder, setStayOrder] = useState<{ key: StaySortKey; dir: 'asc' | 'desc' }>({ key: 'booked', dir: 'desc' });
+  const sortedStays = sortStays(guestStays.data?.stays ?? [], stayOrder.key, stayOrder.dir);
+  const sortBy = (key: StaySortKey) =>
+    setStayOrder((current) =>
+      current.key === key
+        ? { key, dir: current.dir === 'asc' ? 'desc' : 'asc' }
+        : { key, dir: STAY_SORT_FIRST_DIR[key] },
+    );
+
+  const [editingStay, setEditingStay] = useState<string | null>(null);
+  const [details, setDetails] = useState({ guestName: '', guestPhone: '', guests: '', pets: '' });
+
+  const startEditing = (stay: GuestStay) => {
+    setDetails({
+      guestName: stay.guestName ?? '',
+      guestPhone: stay.guestPhone ?? '',
+      guests: stay.guests === null ? '' : String(stay.guests),
+      pets: stay.pets === null ? '' : String(stay.pets),
+    });
+    setEditingStay(stay.bookingId);
+  };
+
+  const saveDetails = useMutation({
+    mutationFn: (bookingId: string) =>
+      adminFetch(`/api/bookings/${bookingId}`, {
+        method: 'PATCH',
+        body: JSON.stringify(details),
+      }),
+    onSuccess: () => {
+      setEditingStay(null);
+      void queryClient.invalidateQueries();
+    },
+  });
 
   const documents = useQuery({
     queryKey: [...GUEST_STAYS_KEY, openDocuments, 'documents'],
@@ -834,17 +885,17 @@ export default function AdminGuests() {
             description="Pre-arrival verification, document status, guest confirmation and management handoff. Management messages never contain pricing or payment information."
           />
           <div className="mt-4 overflow-x-auto rounded-2xl border border-border bg-card">
-            <table className="w-full min-w-[980px] border-collapse text-sm">
+            <table className="w-full min-w-[1180px] border-collapse text-sm">
               <thead>
                 <tr className="border-b border-border text-left text-[10px] uppercase tracking-[.08em] text-muted-foreground">
-                  <th className="px-5 py-3 font-bold">Guest / stay</th>
-                  <th className="px-5 py-3 font-bold">Verification</th>
-                  <th className="px-5 py-3 font-bold">Documents</th>
+                  {STAY_COLUMNS.map((column) => (
+                    <SortableHeader key={column.key} label={column.label} active={stayOrder.key === column.key} dir={stayOrder.dir} onSort={() => sortBy(column.key)} testId={`sort-stays-${column.key}`} />
+                  ))}
                   <th className="px-5 py-3 font-bold text-right">Action</th>
                 </tr>
               </thead>
               <tbody>
-                {(guestStays.data?.stays ?? []).map((stay) => {
+                {sortedStays.map((stay) => {
                   const verified = stay.onboardingStatus === 'verified';
                   const submitted = stay.onboardingStatus === 'submitted';
                   const deadline = stay.verificationDeadline ? new Date(stay.verificationDeadline) : null;
@@ -860,11 +911,37 @@ export default function AdminGuests() {
                     <tr className="border-b border-border last:border-0" data-testid={`row-guest-stay-${stay.bookingId}`}>
                       <td className="px-5 py-4">
                         <p className="font-medium text-foreground">{stay.guestName ?? 'Unnamed guest'}</p>
-                        <p className="mt-1 text-xs text-muted-foreground">
-                          {format(parseISO(stay.checkIn), 'd MMM yyyy')} → {format(parseISO(stay.checkOut), 'd MMM yyyy')} · {stay.guests ?? '—'} guests
-                          {stay.pets ? ` · ${stay.pets} pet${stay.pets === 1 ? '' : 's'}` : ''}
-                        </p>
                         <p className="mt-1 font-mono-ui text-[10px] text-muted-foreground">{stay.reference ?? 'No Raj Kuthir reference'}</p>
+                        <div className="mt-2 flex flex-wrap items-center gap-2">
+                          {stay.guestPhone ? (
+                            <span className="font-mono-ui text-[10px] text-muted-foreground">{stay.guestPhone}</span>
+                          ) : (
+                            <span className="rounded-full border border-[#A65E45]/40 bg-[#A65E45]/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-[.07em] text-[#A65E45]" data-testid={`badge-no-phone-${stay.bookingId}`}>No phone</span>
+                          )}
+                          <button
+                            type="button"
+                            onClick={() => (editingStay === stay.bookingId ? setEditingStay(null) : startEditing(stay))}
+                            className="text-[10px] font-bold uppercase tracking-[.07em] text-primary underline decoration-accent underline-offset-2"
+                            data-testid={`button-edit-guest-${stay.bookingId}`}
+                          >
+                            {editingStay === stay.bookingId ? 'Close' : 'Edit details'}
+                          </button>
+                        </div>
+                      </td>
+                      <td className="px-5 py-4 text-xs text-muted-foreground">
+                        <p className="text-sm text-foreground">
+                          {format(parseISO(stay.checkIn), 'd MMM')} → {format(parseISO(stay.checkOut), 'd MMM yyyy')}
+                        </p>
+                        <p className="mt-1">
+                          {stay.guests ?? '—'} guests{stay.pets ? ` · ${stay.pets} pet${stay.pets === 1 ? '' : 's'}` : ''}
+                        </p>
+                        {stay.status === 'cancelled' && (
+                          <span className="mt-1 inline-block rounded-full bg-muted px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-muted-foreground">Cancelled</span>
+                        )}
+                      </td>
+                      <td className="px-5 py-4 text-xs text-muted-foreground">
+                        <p className="text-foreground">{format(parseISO(stay.createdAt), 'd MMM yyyy')}</p>
+                        <p className="mt-1">{SOURCE_LABELS[stay.source] ?? stay.source}</p>
                       </td>
                       <td className="px-5 py-4">
                         <span className={`rounded-full border px-2.5 py-1 text-[10px] font-bold uppercase tracking-[.07em] ${verified ? 'border-[#7A8065]/40 bg-[#7A8065]/10 text-[#4b5340]' : deadlinePassed ? 'border-[#A65E45]/40 bg-[#A65E45]/10 text-[#A65E45]' : submitted ? 'border-[#d8a24a]/40 bg-[#d8a24a]/10 text-[#8a6320]' : 'border-border text-muted-foreground'}`}>
@@ -905,6 +982,19 @@ export default function AdminGuests() {
                           <button type="button" onClick={() => openManagementBoth(stay).catch((e) => window.alert(e instanceof Error ? e.message : 'Could not prepare management message.'))} disabled={prepareManagement.isPending} className="rounded-lg border border-border px-3 py-2 text-[10px] font-bold uppercase tracking-[.07em] text-primary hover:border-primary disabled:opacity-40" data-testid={`button-both-management-${stay.bookingId}`}>
                             Both
                           </button>
+                          {stayIsOver(stay) && (
+                            <a
+                              href={reviewRequestUrl(stay)}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              aria-disabled={!stay.guestPhone}
+                              onClick={(e) => { if (!stay.guestPhone) e.preventDefault(); }}
+                              className={`flex items-center gap-1.5 rounded-lg border border-accent/60 px-3 py-2 text-[10px] font-bold uppercase tracking-[.07em] text-primary hover:border-primary ${stay.guestPhone ? '' : 'pointer-events-none opacity-40'}`}
+                              data-testid={`button-review-request-${stay.bookingId}`}
+                            >
+                              <Star size={12} /> Ask for review
+                            </a>
+                          )}
                         </div>
                         {createOnboarding.isError && createOnboarding.variables?.bookingId === stay.bookingId && <p className="mt-2 text-xs text-[#A65E45]">{createOnboarding.error instanceof Error ? createOnboarding.error.message : 'Could not prepare WhatsApp.'}</p>}
                       </td>
@@ -915,9 +1005,51 @@ export default function AdminGuests() {
                         admin-only route with the session cookie and shown in a
                         new tab; nothing is written to disk and nothing is
                         cached. */}
+                    {editingStay === stay.bookingId && (
+                      <tr className="border-b border-border bg-background/60" data-testid={`row-edit-guest-${stay.bookingId}`}>
+                        <td colSpan={STAY_COLUMNS.length + 1} className="px-5 py-5">
+                          <form
+                            onSubmit={(event) => {
+                              event.preventDefault();
+                              saveDetails.mutate(stay.bookingId);
+                            }}
+                            className="grid gap-3 sm:grid-cols-[1.4fr_1.2fr_.6fr_.6fr_auto] sm:items-end"
+                          >
+                            <label className="block">
+                              <span className="mb-1 block text-[10px] font-bold uppercase tracking-[.08em] text-muted-foreground">Guest name</span>
+                              <input id={`edit-name-${stay.bookingId}`} value={details.guestName} maxLength={200} onChange={(e) => setDetails({ ...details, guestName: e.target.value })} className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary" data-testid={`input-edit-name-${stay.bookingId}`} />
+                            </label>
+                            <label className="block">
+                              <span className="mb-1 block text-[10px] font-bold uppercase tracking-[.08em] text-muted-foreground">Mobile (with country code)</span>
+                              <input id={`edit-phone-${stay.bookingId}`} type="tel" inputMode="tel" value={details.guestPhone} maxLength={20} pattern="\+?[0-9 \-]{10,20}" title="10–15 digits, e.g. +91 98765 43210" placeholder="+91 98765 43210" onChange={(e) => setDetails({ ...details, guestPhone: e.target.value })} className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary" data-testid={`input-edit-phone-${stay.bookingId}`} />
+                            </label>
+                            <label className="block">
+                              <span className="mb-1 block text-[10px] font-bold uppercase tracking-[.08em] text-muted-foreground">Guests</span>
+                              <input id={`edit-guests-${stay.bookingId}`} type="number" min={0} max={100} value={details.guests} onChange={(e) => setDetails({ ...details, guests: e.target.value })} className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary" data-testid={`input-edit-guests-${stay.bookingId}`} />
+                            </label>
+                            <label className="block">
+                              <span className="mb-1 block text-[10px] font-bold uppercase tracking-[.08em] text-muted-foreground">Pets</span>
+                              <input id={`edit-pets-${stay.bookingId}`} type="number" min={0} max={100} value={details.pets} onChange={(e) => setDetails({ ...details, pets: e.target.value })} className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary" data-testid={`input-edit-pets-${stay.bookingId}`} />
+                            </label>
+                            <button type="submit" disabled={saveDetails.isPending} className="flex items-center justify-center gap-1.5 rounded-lg bg-primary px-4 py-2.5 text-[10px] font-bold uppercase tracking-[.07em] text-primary-foreground disabled:opacity-40" data-testid={`button-save-guest-${stay.bookingId}`}>
+                              {saveDetails.isPending ? <Loader2 size={12} className="animate-spin" /> : <Check size={12} />} Save
+                            </button>
+                          </form>
+                          {saveDetails.isError && (
+                            <p className="mt-2 text-xs text-[#A65E45]" role="alert">
+                              {saveDetails.error instanceof Error ? saveDetails.error.message : 'Could not save the guest details.'}
+                            </p>
+                          )}
+                          <p className="mt-2 text-[11px] text-muted-foreground">
+                            Changes the booking record. Dates, status and amounts are edited on the Earnings page.
+                          </p>
+                        </td>
+                      </tr>
+                    )}
+
                     {isOpen && (
                       <tr className="border-b border-border bg-background/60" data-testid={`row-documents-${stay.bookingId}`}>
-                        <td colSpan={4} className="px-5 py-5">
+                        <td colSpan={STAY_COLUMNS.length + 1} className="px-5 py-5">
                           {documents.isLoading && <p className="text-sm text-muted-foreground">Opening documents…</p>}
 
                           {documents.isError && (
@@ -958,12 +1090,11 @@ export default function AdminGuests() {
                                     </div>
                                     <a
                                       href={`/api/admin/guest-stays/${stay.bookingId}/documents/${doc.id}/file`}
-                                      target="_blank"
-                                      rel="noreferrer"
+                                      download
                                       className="flex shrink-0 items-center gap-1.5 rounded-lg border border-border px-3 py-2 text-[10px] font-bold uppercase tracking-[.07em] text-primary transition-colors hover:border-primary"
                                       data-testid={`link-open-document-${doc.id}`}
                                     >
-                                      <ExternalLink size={12} /> Open
+                                      <ExternalLink size={12} /> Download
                                     </a>
                                   </li>
                                 ))}
@@ -1211,6 +1342,128 @@ export default function AdminGuests() {
 
 function prettyGuestDate(value: string): string {
   return format(parseISO(value), 'd MMMM yyyy (EEEE)');
+}
+
+/*
+ * Sorting for the guest stays table. Every column but Action sorts; clicking
+ * the active column flips direction. Default: newest booking first.
+ */
+type StaySortKey = 'guest' | 'stay' | 'booked' | 'verification' | 'documents';
+
+const STAY_COLUMNS: Array<{ key: StaySortKey; label: string }> = [
+  { key: 'guest', label: 'Guest' },
+  { key: 'stay', label: 'Stay' },
+  { key: 'booked', label: 'Booked' },
+  { key: 'verification', label: 'Verification' },
+  { key: 'documents', label: 'Documents' },
+];
+
+/** Names read A→Z first; dates and counts read newest / most first. */
+const STAY_SORT_FIRST_DIR: Record<StaySortKey, 'asc' | 'desc'> = {
+  guest: 'asc',
+  stay: 'desc',
+  booked: 'desc',
+  verification: 'asc',
+  documents: 'desc',
+};
+
+/** Most in need of attention first when sorting ascending. */
+function verificationRank(stay: GuestStay): number {
+  const verified = stay.onboardingStatus === 'verified';
+  const deadlinePassed = Boolean(
+    stay.verificationDeadline && new Date(stay.verificationDeadline).getTime() <= Date.now() && !verified,
+  );
+  if (deadlinePassed) return 0;
+  if (stay.onboardingStatus === 'submitted') return 1;
+  if (!verified) return 2;
+  return 3;
+}
+
+function stayValue(stay: GuestStay, key: StaySortKey): string | number {
+  switch (key) {
+    case 'guest':
+      return (stay.guestName ?? '').trim().toLowerCase() || '\uffff';
+    case 'stay':
+      return stay.checkIn;
+    case 'booked':
+      return stay.createdAt;
+    case 'verification':
+      return verificationRank(stay);
+    case 'documents':
+      return stay.documents.verified + stay.documents.submitted + stay.documents.rejected + stay.documents.pending;
+  }
+}
+
+function sortStays(stays: GuestStay[], key: StaySortKey, dir: 'asc' | 'desc'): GuestStay[] {
+  const sign = dir === 'asc' ? 1 : -1;
+  return [...stays].sort((a, b) => {
+    const x = stayValue(a, key);
+    const y = stayValue(b, key);
+    if (x < y) return -sign;
+    if (x > y) return sign;
+    // Ties fall back to the default order, so the list never shuffles.
+    return a.createdAt < b.createdAt ? 1 : a.createdAt > b.createdAt ? -1 : 0;
+  });
+}
+
+function SortableHeader({
+  label,
+  active,
+  dir,
+  onSort,
+  testId,
+}: {
+  label: string;
+  active: boolean;
+  dir: 'asc' | 'desc';
+  onSort: () => void;
+  testId: string;
+}) {
+  const Icon = !active ? ArrowUpDown : dir === 'asc' ? ArrowUp : ArrowDown;
+  return (
+    <th className="px-5 py-3 font-bold" aria-sort={active ? (dir === 'asc' ? 'ascending' : 'descending') : 'none'}>
+      <button
+        type="button"
+        onClick={onSort}
+        className={`flex items-center gap-1.5 uppercase tracking-[.08em] transition-colors hover:text-primary ${active ? 'text-primary' : ''}`}
+        data-testid={testId}
+      >
+        {label} <Icon size={11} className={active ? '' : 'opacity-50'} />
+      </button>
+    </th>
+  );
+}
+
+/**
+ * The review ask, sent by hand from the owner's own WhatsApp.
+ *
+ * The server already queues a `review_request` for the day after check-out,
+ * but marketing messages wait as drafts for approval and the WhatsApp Business
+ * API is not live yet, so in practice no guest has received one. This is the
+ * same message, sent the way quotes are sent today. It links straight to
+ * Google's "write a review" box rather than the listing, and asks only for an
+ * honest review: no rating is suggested and nothing is offered in return.
+ */
+function todayInIndia(): string {
+  return new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
+}
+
+function stayIsOver(stay: GuestStay): boolean {
+  return stay.status !== 'cancelled' && stay.checkOut <= todayInIndia();
+}
+
+function buildReviewMessage(stay: GuestStay): string {
+  const first = (stay.guestName ?? '').trim().split(/\s+/)[0] || 'there';
+  return (
+    `Hello ${first}, we hope you got home well. If Sobuj Potro treated you kindly, ` +
+    `a short Google review helps other travellers find us: ${CONFIG.leaveReviewUrl}\n\n` +
+    `Thank you — you are welcome back any time.\n\nTeam Raj Kuthir Homestays – Sobuj Potro`
+  );
+}
+
+function reviewRequestUrl(stay: GuestStay): string {
+  const phone = (stay.guestPhone ?? '').replace(/\D/g, '').replace(/^0+/, '');
+  return `https://wa.me/${phone}?text=${encodeURIComponent(buildReviewMessage(stay))}`;
 }
 
 function nightsBetween(checkIn: string, checkOut: string): number {

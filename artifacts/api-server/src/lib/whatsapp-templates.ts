@@ -33,8 +33,10 @@ export type TemplateSpec = {
 const CONTACT = {
   hostPhone: "+91 62903 99165",
   caretakerPhone: "+91 78726 85558",
-  mapsUrl: "https://maps.app.goo.gl/D1tUUb3JfpVdcHwu5",
+  mapsUrl: "https://maps.app.goo.gl/aEdaJaaeEy1DZ8Ps8?g_st=ac",
   reviewUrl: "https://maps.app.goo.gl/Ptrm6eaXuXNoiXBbA?g_st=ac",
+  /** Google's "write a review" box for the listing — same as CONFIG.leaveReviewUrl. */
+  leaveReviewUrl: "https://g.page/r/CR9H9DboJM75EBM/review",
 };
 
 /** "2026-09-14" -> "14 Sep 2026", which is how a guest reads a date. */
@@ -114,10 +116,10 @@ export function buildTemplate(
         name: "rk_review_request",
         category: "marketing",
         languageCode: "en",
-        params: [guest, CONTACT.reviewUrl],
+        params: [guest, CONTACT.leaveReviewUrl],
         preview:
           `Hello ${guest}, we hope you got home well. If Sobuj Potro treated you kindly, ` +
-          `a short Google review helps other travellers find us: ${CONTACT.reviewUrl}. ` +
+          `a short Google review helps other travellers find us: ${CONTACT.leaveReviewUrl} ` +
           `Thank you — you are welcome back any time.`,
       };
   }

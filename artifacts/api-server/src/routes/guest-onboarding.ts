@@ -14,6 +14,7 @@ import {
   submitGuestOnboarding,
   verifyGuestDocuments,
 } from "../lib/guest-onboarding-repo";
+import { documentDownloadHeaders } from "../lib/document-security";
 
 const router: IRouter = Router();
 const MAX_TEXT = 500;
@@ -181,9 +182,8 @@ router.post("/management/documents/file", async (req, res) => {
     res.status(404).json({ error: "Document not found or access link expired." });
     return;
   }
-  const mimeType = result.document.mimeType || "application/octet-stream";
-  res.type(mimeType);
-  res.setHeader("Content-Disposition", `inline; filename="${(result.document.originalFilename || "guest-document").replace(/[^a-zA-Z0-9._ -]/g, "_")}"`);
+  // Fixed octet-stream + attachment: the uploader's MIME claim is never echoed.
+  res.set(documentDownloadHeaders(result.document));
   res.send(result.document.fileData);
 });
 
@@ -225,11 +225,8 @@ router.get("/admin/guest-stays/:bookingId/documents/:documentId/file", requireAd
     res.status(404).json({ error: "Document not found." });
     return;
   }
-  res.type(document.mimeType || "application/octet-stream");
-  res.setHeader(
-    "Content-Disposition",
-    `inline; filename="${(document.originalFilename || "guest-document").replace(/[^a-zA-Z0-9._ -]/g, "_")}"`,
-  );
+  // Fixed octet-stream + attachment: the uploader's MIME claim is never echoed.
+  res.set(documentDownloadHeaders(document));
   res.send(document.fileData);
 });
 

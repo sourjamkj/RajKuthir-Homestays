@@ -2,6 +2,7 @@ import { useLocation } from 'wouter';
 import { ArrowUpRight, LogOut } from 'lucide-react';
 
 import { useLogout } from '@/lib/admin-api';
+import { AdminActivity } from '@/components/AdminActivity';
 
 /**
  * The owner console header, on every admin screen.
@@ -91,6 +92,8 @@ export function AdminHeader({
           >
             View site <ArrowUpRight size={13} />
           </a>
+
+          <AdminActivity />
 
           <button
             type="button"

@@ -395,7 +395,22 @@ router.patch("/bookings/:id", async (req, res) => {
     };
 
     assign("guestName", text(body.guestName));
-    assign("guestPhone", text(body.guestPhone, 40));
+
+    // A phone number set here is what WhatsApp links and reminders are sent
+    // to, so it has to be dialable: 10–15 digits. A bare 10-digit number is an
+    // Indian mobile typed without its code; store it with +91 so wa.me links
+    // built from it reach India rather than wherever those digits point.
+    const phone = text(body.guestPhone, 40);
+    if (typeof phone === "string") {
+      const digits = phone.replace(/\D/g, "");
+      if (digits.length < 10 || digits.length > 15) {
+        res.status(400).json({ error: "Enter a mobile number with 10–15 digits, e.g. +91 98765 43210." });
+        return;
+      }
+      assign("guestPhone", digits.length === 10 ? `+91 ${digits}` : phone);
+    } else {
+      assign("guestPhone", phone);
+    }
     assign("guests", count(body.guests));
     assign("pets", count(body.pets));
     assign("grossPaise", money(body.gross));

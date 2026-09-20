@@ -27,7 +27,7 @@ export const CONFIG = {
   advanceShare: 0.3,
   hostPhone: '+91 62903 99165',
   caretakerPhone: '+91 78726 85558',
-  mapsUrl: 'https://maps.app.goo.gl/D1tUUb3JfpVdcHwu5',
+  mapsUrl: 'https://maps.app.goo.gl/aEdaJaaeEy1DZ8Ps8?g_st=ac',
   instagramUrl: 'https://www.instagram.com/rajkuthirhomestays?igsh=MTBkOWljNTZmbWttdg==',
   /** The Maps listing — where a visitor goes to READ what guests have said. */
   reviewUrl: 'https://maps.app.goo.gl/Ptrm6eaXuXNoiXBbA?g_st=ac',
@@ -169,6 +169,24 @@ export const NEIGHBOURHOOD = [
     ],
   },
 ] as const;
+
+/**
+ * One place in NEIGHBOURHOOD, whichever group it sits in.
+ *
+ * Named because `flatMap` cannot infer it on its own: NEIGHBOURHOOD is
+ * `as const`, so each group has its own tuple type for `places` and there is
+ * no single element type for the callback to return — the result collapses to
+ * `unknown`, and every `place.distance` after it fails to compile. Passing
+ * this as the type argument (`flatMap<NeighbourhoodPlace>`) tells it what the
+ * flattened element is. App.tsx already does exactly this for the homepage
+ * teaser; the landing pages did not, which is where the errors came from.
+ *
+ * Derived from the data rather than written out, so it cannot drift from it.
+ */
+export type NeighbourhoodPlace = (typeof NEIGHBOURHOOD)[number]["places"][number];
+
+/** One group of places — "Getting here", "The Tagore campus", and so on. */
+export type NeighbourhoodGroup = (typeof NEIGHBOURHOOD)[number];
 
 // Photos and documents live in artifacts/raj-kuthir/public/ and Vite copies that
 // folder to the site root verbatim, so they are referenced by URL rather than

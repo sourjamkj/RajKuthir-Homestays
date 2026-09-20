@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { ArrowLeft, ArrowUpRight, Leaf, MessageCircle, Phone } from 'lucide-react';
 
 import { CONFIG, NEIGHBOURHOOD, basePath, phoneHref, track } from '@/lib/site';
+import type { NeighbourhoodPlace } from '@/lib/site';
 
 /**
  * Planning page for the commonest trip anyone makes to Shantiniketan: two
@@ -27,7 +28,7 @@ import { CONFIG, NEIGHBOURHOOD, basePath, phoneHref, track } from '@/lib/site';
  * how far away something is.
  */
 const distanceTo = (title: string) =>
-  NEIGHBOURHOOD.flatMap((group) => group.places).find((place) => place.title === title)
+  NEIGHBOURHOOD.flatMap<NeighbourhoodPlace>((group) => group.places).find((place) => place.title === title)
     ?.distance ?? null;
 
 export default function WeekendFromKolkata() {

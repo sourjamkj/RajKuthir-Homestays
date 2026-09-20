@@ -24,6 +24,20 @@ type Lookup = {
   status: string;
 };
 
+/*
+ * The server requires a MIME type from its allowlist (PDF, JPEG, PNG, WebP)
+ * and checks the bytes match it. Some phones hand over files with an empty
+ * file.type, so fall back to the extension rather than send nothing.
+ */
+const DOCUMENT_ACCEPT = 'application/pdf,image/jpeg,image/png,image/webp,.pdf,.jpg,.jpeg,.png,.webp';
+const MIME_BY_EXTENSION: Record<string, string> = { pdf: 'application/pdf', jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', webp: 'image/webp' };
+function documentMime(file: File): string {
+  const declared = file.type.toLowerCase();
+  if (Object.values(MIME_BY_EXTENSION).includes(declared)) return declared;
+  if (declared) return '';
+  return MIME_BY_EXTENSION[file.name.split('.').pop()?.toLowerCase() ?? ''] ?? '';
+}
+
 type DocumentDraft = { documentType: string; documentNumber: string; originalFilename: string; mimeType: string; dataBase64: string };
 
 export default function PreArrival() {
@@ -62,6 +76,7 @@ export default function PreArrival() {
   const addDocument = async (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
+    if (!documentMime(file)) { setError('Please upload a PDF, JPG, PNG or WebP file.'); event.target.value = ''; return; }
     if (file.size > 8 * 1024 * 1024) { setError('Each document must be 8 MB or smaller.'); return; }
     const dataBase64 = await new Promise<string>((resolve, reject) => {
       const reader = new FileReader();
@@ -69,7 +84,7 @@ export default function PreArrival() {
       reader.onerror = () => reject(new Error('Could not read the document.'));
       reader.readAsDataURL(file);
     });
-    setDocuments((current) => [...current, { documentType: 'Identity document', documentNumber: '', originalFilename: file.name, mimeType: file.type, dataBase64 }]);
+    setDocuments((current) => [...current, { documentType: 'Identity document', documentNumber: '', originalFilename: file.name, mimeType: documentMime(file), dataBase64 }]);
     event.target.value = '';
   };
 
@@ -108,7 +123,7 @@ export default function PreArrival() {
         <label className="block"><span className="eyebrow text-muted-foreground">Mobile number</span><input required type="tel" value={phone} onChange={e=>setPhone(e.target.value)} className="mt-2 w-full border-b border-border bg-transparent py-3 text-base outline-none focus:border-primary"/></label>
         <label className="block"><span className="eyebrow text-muted-foreground">Email (optional)</span><input type="email" value={email} onChange={e=>setEmail(e.target.value)} className="mt-2 w-full border-b border-border bg-transparent py-3 text-base outline-none focus:border-primary"/></label>
         <label className="block"><span className="eyebrow text-muted-foreground">Address (optional)</span><textarea value={address} onChange={e=>setAddress(e.target.value)} rows={3} className="mt-2 w-full rounded-xl border border-border bg-transparent p-3 text-sm outline-none focus:border-primary"/></label>
-        <div className="rounded-2xl border border-border bg-card p-5"><p className="eyebrow text-muted-foreground">Identity documents</p><p className="mt-2 text-sm leading-6 text-muted-foreground">You can upload an issued identity document here. DigiLocker integration can be enabled when Raj Kuthir's approved API credentials are configured.</p><label className="mt-4 flex cursor-pointer items-center justify-center gap-2 rounded-xl border border-dashed border-border px-4 py-5 text-xs font-bold uppercase tracking-[.08em] text-primary hover:border-primary"><Upload size={15}/> Add document<input type="file" accept="image/*,.pdf" className="hidden" onChange={addDocument}/></label>{documents.map((doc,i)=><div key={`${doc.originalFilename}-${i}`} className="mt-3 rounded-xl border border-border p-3"><div className="flex items-center gap-3"><FileText size={16} className="text-accent"/><div className="min-w-0"><p className="truncate text-sm font-medium">{doc.originalFilename}</p><input value={doc.documentType} onChange={e=>setDocuments(ds=>ds.map((d,j)=>j===i?{...d,documentType:e.target.value}:d))} className="mt-1 w-full border-b border-border bg-transparent py-1 text-xs outline-none" placeholder="Document type"/></div></div></div>)}</div>
+        <div className="rounded-2xl border border-border bg-card p-5"><p className="eyebrow text-muted-foreground">Identity documents</p><p className="mt-2 text-sm leading-6 text-muted-foreground">You can upload an issued identity document here. DigiLocker integration can be enabled when Raj Kuthir's approved API credentials are configured.</p><label className="mt-4 flex cursor-pointer items-center justify-center gap-2 rounded-xl border border-dashed border-border px-4 py-5 text-xs font-bold uppercase tracking-[.08em] text-primary hover:border-primary"><Upload size={15}/> Add document<input type="file" accept={DOCUMENT_ACCEPT} className="hidden" onChange={addDocument}/></label>{documents.map((doc,i)=><div key={`${doc.originalFilename}-${i}`} className="mt-3 rounded-xl border border-border p-3"><div className="flex items-center gap-3"><FileText size={16} className="text-accent"/><div className="min-w-0"><p className="truncate text-sm font-medium">{doc.originalFilename}</p><input value={doc.documentType} onChange={e=>setDocuments(ds=>ds.map((d,j)=>j===i?{...d,documentType:e.target.value}:d))} className="mt-1 w-full border-b border-border bg-transparent py-1 text-xs outline-none" placeholder="Document type"/></div></div></div>)}</div>
         {error && <p className="text-sm text-[#A65E45]" role="alert">{error}</p>}
         <button disabled={saving || !documents.length} className="flex items-center gap-3 rounded-full bg-primary px-6 py-4 text-xs font-bold uppercase tracking-[.12em] text-primary-foreground disabled:opacity-50">{saving ? <Loader2 size={15} className="animate-spin"/> : <CheckCircle2 size={15}/>} Submit verification</button>
       </form>}

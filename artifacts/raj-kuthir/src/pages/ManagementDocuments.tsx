@@ -71,6 +71,8 @@ export default function ManagementDocuments() {
   if (!data) return <Shell><Loader2 className="animate-spin text-primary"/></Shell>;
 
   const ready = data.documents.length > 0 && data.documents.every((document) => document.status === 'verified');
+  // The server now sends documents as attachments (application/octet-stream),
+  // never as something the browser renders, so save them under their name.
   const openDocument = async (documentId: string) => {
     setOpening(documentId);
     try {
@@ -83,8 +85,15 @@ export default function ManagementDocuments() {
         const body = await response.json().catch(() => ({}));
         throw new Error(body.error ?? 'Could not open this document.');
       }
+      const disposition = response.headers.get('Content-Disposition') ?? '';
+      const filename = /filename="([^"]+)"/.exec(disposition)?.[1] ?? 'guest-document';
       const blobUrl = URL.createObjectURL(await response.blob());
-      window.open(blobUrl, '_blank', 'noopener,noreferrer');
+      const link = document.createElement('a');
+      link.href = blobUrl;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
       window.setTimeout(() => URL.revokeObjectURL(blobUrl), 60_000);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not open this document.');
@@ -112,7 +121,7 @@ export default function ManagementDocuments() {
           {data.documents.map((document) => (
             <div key={document.id} className="flex items-center justify-between gap-4 rounded-xl border border-border p-4">
               <div className="flex min-w-0 items-center gap-3"><FileText size={17} className="shrink-0 text-accent"/><div className="min-w-0"><p className="truncate text-sm font-medium text-primary">{document.documentType}</p><p className="truncate text-xs text-muted-foreground">{document.originalFilename ?? 'Uploaded document'}</p></div></div>
-              <div className="flex shrink-0 items-center gap-3"><span className={`rounded-full border px-2.5 py-1 text-[10px] font-bold uppercase tracking-[.07em] ${document.status === 'verified' ? 'border-[#7A8065]/40 bg-[#7A8065]/10 text-[#4b5340]' : document.status === 'rejected' ? 'border-[#A65E45]/40 bg-[#A65E45]/10 text-[#A65E45]' : 'border-border text-muted-foreground'}`}>{document.status}</span><button type="button" onClick={() => openDocument(document.id)} disabled={opening === document.id} className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-2 text-[10px] font-bold uppercase tracking-[.07em] text-primary hover:border-primary disabled:opacity-50"><ExternalLink size={12}/> {opening === document.id ? 'Opening…' : 'Open'}</button></div>
+              <div className="flex shrink-0 items-center gap-3"><span className={`rounded-full border px-2.5 py-1 text-[10px] font-bold uppercase tracking-[.07em] ${document.status === 'verified' ? 'border-[#7A8065]/40 bg-[#7A8065]/10 text-[#4b5340]' : document.status === 'rejected' ? 'border-[#A65E45]/40 bg-[#A65E45]/10 text-[#A65E45]' : 'border-border text-muted-foreground'}`}>{document.status}</span><button type="button" onClick={() => openDocument(document.id)} disabled={opening === document.id} className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-2 text-[10px] font-bold uppercase tracking-[.07em] text-primary hover:border-primary disabled:opacity-50"><ExternalLink size={12}/> {opening === document.id ? 'Downloading…' : 'Download'}</button></div>
             </div>
           ))}
         </div>}

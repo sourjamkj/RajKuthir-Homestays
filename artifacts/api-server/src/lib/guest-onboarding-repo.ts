@@ -18,6 +18,12 @@ import {
   readinessOf,
   type Readiness,
 } from "./guest-verification-rules.ts";
+import {
+  authoriseAdminDocument,
+  authoriseManagementDocument,
+  checkDocumentUpload,
+  type AllowedDocumentMime,
+} from "./document-security.ts";
 
 const TOKEN_BYTES = 32;
 
@@ -32,7 +38,6 @@ const TOKEN_BYTES = 32;
  * here instead of having to guess.
  */
 export const VERIFIED_ON_UPLOAD = "auto:on-upload";
-const MAX_DOCUMENT_BYTES = 8 * 1024 * 1024;
 
 export type GuestDocumentInput = {
   documentType: string;
@@ -253,11 +258,14 @@ export async function listManagementDocuments(token: string) {
 export async function getManagementDocument(token: string, documentId: string) {
   const found = await findManagementAccess(token);
   if (!found) return null;
-  const document = (await db
+  // The SQL filter scopes the lookup to the link's booking; the authorise call
+  // re-checks the same boundary in code, where it is unit-tested.
+  const row = (await db
     .select()
     .from(guestDocuments)
     .where(and(eq(guestDocuments.id, documentId), eq(guestDocuments.bookingId, found.booking.id), isNull(guestDocuments.deletedAt)))
     .limit(1))[0];
+  const document = authoriseManagementDocument(found.access, found.booking, documentId, row, new Date());
   return document ? { booking: found.booking, document } : null;
 }
 
@@ -293,11 +301,14 @@ export async function submitGuestOnboarding(input: {
     return { ok: false as const, reason: "deadline_passed" as const };
   }
 
+  // Every document is checked before anything is written: MIME type is
+  // mandatory and allowlisted, the bytes must match it, and size is capped.
+  // See document-security.ts.
+  const checked: Array<{ doc: GuestDocumentInput; bytes: Buffer; mimeType: AllowedDocumentMime }> = [];
   for (const doc of input.documents) {
-    if (!doc.documentType.trim() || !doc.dataBase64) return { ok: false as const, reason: "invalid_document" as const };
-    if (doc.mimeType && !["application/pdf", "image/jpeg", "image/png", "image/webp"].includes(doc.mimeType.toLowerCase())) return { ok: false as const, reason: "unsupported_document_type" as const };
-    const bytes = Buffer.from(doc.dataBase64, "base64");
-    if (!bytes.length || bytes.length > MAX_DOCUMENT_BYTES) return { ok: false as const, reason: "document_too_large" as const };
+    const check = checkDocumentUpload(doc);
+    if (!check.ok) return { ok: false as const, reason: check.reason };
+    checked.push({ doc, bytes: check.bytes, mimeType: check.mimeType });
   }
 
   const result = await db.transaction(async (tx) => {
@@ -347,8 +358,7 @@ export async function submitGuestOnboarding(input: {
 
     const uploadedAt = new Date();
 
-    for (const doc of input.documents) {
-      const bytes = Buffer.from(doc.dataBase64, "base64");
+    for (const { doc, bytes, mimeType } of checked) {
       await tx.insert(guestDocuments).values({
         guestId: guest.id,
         bookingId: found.booking.id,
@@ -356,7 +366,7 @@ export async function submitGuestOnboarding(input: {
         documentNumber: doc.documentNumber?.trim() || null,
         source: doc.source?.trim() || "upload",
         originalFilename: doc.originalFilename?.trim() || null,
-        mimeType: doc.mimeType?.trim() || "application/octet-stream",
+        mimeType,
         sizeBytes: bytes.length,
         fileData: bytes,
         // A completed upload lands as verified rather than waiting for the
@@ -387,6 +397,8 @@ export async function listAdminGuestStays() {
     .select({
       bookingId: bookings.id,
       reference: bookings.reference,
+      source: bookings.source,
+      createdAt: bookings.createdAt,
       guestName: bookings.guestName,
       guestPhone: bookings.guestPhone,
       checkIn: bookings.checkIn,
@@ -402,7 +414,8 @@ export async function listAdminGuestStays() {
     })
     .from(bookings)
     .leftJoin(guestOnboarding, eq(guestOnboarding.bookingId, bookings.id))
-    .orderBy(desc(bookings.checkIn));
+    // Latest booking first; the admin table re-sorts on any column.
+    .orderBy(desc(bookings.createdAt));
 
   const documents = await db
     .select({ bookingId: guestDocuments.bookingId, status: guestDocuments.status })
@@ -453,7 +466,7 @@ export async function listAdminDocuments(bookingId: string) {
 
 /** One document's bytes, scoped to its booking so an id alone is not enough. */
 export async function getAdminDocument(bookingId: string, documentId: string) {
-  return (
+  const row =
     (await db
       .select()
       .from(guestDocuments)
@@ -464,8 +477,8 @@ export async function getAdminDocument(bookingId: string, documentId: string) {
           isNull(guestDocuments.deletedAt),
         ),
       )
-      .limit(1))[0] ?? null
-  );
+      .limit(1))[0] ?? null;
+  return authoriseAdminDocument(bookingId, documentId, row);
 }
 
 /**

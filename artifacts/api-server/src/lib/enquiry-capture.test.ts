@@ -121,3 +121,22 @@ test("enquiry · a refused enquiry does not continue into WhatsApp", () => {
   assert.ok(refusal > -1 && earlyReturn > -1, "the refusal branch is gone");
   assert.ok(earlyReturn < open, "a refused enquiry still opens WhatsApp");
 });
+
+test("enquiry · the sticky mobile bar goes through the form, not straight to wa.me", () => {
+  // The phone-only bar was the last bare wa.me link on the homepage: an
+  // enquiry started there was never saved.
+  assert.ok(
+    !/<a[^>]*href=\{whatsappUrl\}[^>]*data-testid="button-sticky-whatsapp"/.test(APP_CODE),
+    "the sticky WhatsApp bar is a bare link again, bypassing /api/enquiries",
+  );
+  assert.match(APP_CODE, /onClick=\{enquireFromStickyBar\}[^>]*data-testid="button-sticky-whatsapp"/);
+
+  const handler = APP_CODE.slice(
+    APP_CODE.indexOf("const enquireFromStickyBar"),
+    APP_CODE.indexOf("const shiftCalendarMonth"),
+  );
+  assert.match(handler, /checkValidity\(\)/, "a filled form is not detected");
+  assert.match(handler, /link-booking-whatsapp"\]'\)\?\.click\(\)/, "a filled form is not saved before WhatsApp");
+  assert.match(handler, /scrollToAvailability\(\)/, "an empty form does not lead to the form");
+  assert.match(APP_CODE, /<form id="enquiry-form"/, "the form the bar looks for has lost its id");
+});

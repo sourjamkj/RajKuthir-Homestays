@@ -9,6 +9,7 @@ import notificationsRouter from "./notifications";
 import guestRouter from "./guest";
 import guestOnboardingRouter from "./guest-onboarding";
 import mailRouter from "./mail";
+import activityRouter from "./activity";
 
 const router: IRouter = Router();
 
@@ -22,5 +23,6 @@ router.use(notificationsRouter);
 router.use(guestRouter);
 router.use(guestOnboardingRouter);
 router.use(mailRouter);
+router.use(activityRouter);
 
 export default router;
