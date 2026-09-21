@@ -1,5 +1,5 @@
 /**
- * Choosing a stay by clicking the availability calendar.
+ * Choosing a stay by clicking or dragging across the availability calendar.
  *
  * A block holds every night from its start date up to, but not including,
  * its end date — the same half-open rule the server uses, so arriving the
@@ -7,22 +7,28 @@
  * the very day the next booking begins.
  *
  * Everything here works on plain `yyyy-mm-dd` strings. They sort and compare
- * correctly with `<` and `>`, so there are no Date objects in this file and
- * no timezone to get wrong — the calendar grid and the form both speak the
- * same string, which is why the two stay in step without syncing state.
+ * correctly with `<` and `>`, so there are no Date objects in the comparisons
+ * and no timezone to get wrong — the calendar grid and the form both speak
+ * the same string, which is why the two stay in step without syncing state.
  */
 
 export type StayBlock = { start: string; end: string };
 
 export type StaySelection = { checkIn: string; checkOut: string };
 
+/** The only place a date is taken apart, so the arithmetic is wrong in at most one place. */
+function shiftDay(day: string, by: number): string {
+  const [year, month, date] = day.split('-').map(Number);
+  return new Date(Date.UTC(year, month - 1, date + by)).toISOString().slice(0, 10);
+}
+
 /**
  * The first held night on or after `day`, or null if the calendar is clear
  * from there on.
  *
- * This is the one primitive the rest of the file is built from: it answers
- * both "is this night taken" (the answer is `day` itself) and "how far can a
- * stay starting here run" (the answer is where it must stop).
+ * This is the primitive most of the file is built from: it answers both "is
+ * this night taken" (the answer is `day` itself) and "how far can a stay
+ * starting here run" (the answer is where it must stop).
  */
 export function firstHeldNightFrom(
   blocks: readonly StayBlock[],
@@ -63,6 +69,35 @@ export function latestCheckOut(
   return firstHeldNightFrom(blocks, checkIn);
 }
 
+/**
+ * The earliest check-in a stay ending on `checkOut` could have — the morning
+ * after the last night somebody else holds. Null when nothing is in the way.
+ *
+ * The mirror of latestCheckOut, and the reason dragging the check-in handle
+ * backwards stops in the right place instead of swallowing a booking.
+ */
+export function earliestCheckIn(
+  blocks: readonly StayBlock[],
+  checkOut: string,
+): string | null {
+  let lastHeld: string | null = null;
+
+  for (const block of blocks) {
+    // Starts on or after the check-out, so none of its nights are in the way.
+    if (block.start >= checkOut) continue;
+
+    // The block's last night that falls before the check-out.
+    const stopsAt = block.end < checkOut ? block.end : checkOut;
+    const night = shiftDay(stopsAt, -1);
+
+    if (night >= block.start && (lastHeld === null || night > lastHeld)) {
+      lastHeld = night;
+    }
+  }
+
+  return lastHeld === null ? null : shiftDay(lastHeld, 1);
+}
+
 /** Are all the nights from `checkIn` up to (not including) `checkOut` free? */
 export function stayIsFree(
   blocks: readonly StayBlock[],
@@ -76,13 +111,51 @@ export function stayIsFree(
 }
 
 /**
+ * The stay a drag describes: one end pinned at `anchor`, the other following
+ * the pointer to `day`.
+ *
+ * Dragging clamps rather than refuses. Run the pointer across somebody else's
+ * booking and the highlight stops at their door instead of vanishing, which
+ * both keeps the range legal and shows the guest exactly why it stopped.
+ *
+ * The anchor is whichever end is standing still — the pressed day for a new
+ * range, the opposite end when a handle is being dragged — so all three
+ * gestures come back through here.
+ */
+export function stayFromDrag(
+  blocks: readonly StayBlock[],
+  anchor: string,
+  day: string,
+): StaySelection {
+  if (day > anchor) {
+    const ceiling = latestCheckOut(blocks, anchor);
+    const checkOut = ceiling !== null && day > ceiling ? ceiling : day;
+    return checkOut > anchor
+      ? { checkIn: anchor, checkOut }
+      : { checkIn: anchor, checkOut: '' };
+  }
+
+  if (day < anchor) {
+    const floor = earliestCheckIn(blocks, anchor);
+    const checkIn = floor !== null && day < floor ? floor : day;
+    return checkIn < anchor
+      ? { checkIn, checkOut: anchor }
+      : { checkIn: anchor, checkOut: '' };
+  }
+
+  // Pressed and released on one day: a check-in waiting for its check-out.
+  return { checkIn: anchor, checkOut: '' };
+}
+
+/**
  * What one click on `day` should do to the current selection.
  *
- * Two rules keep this forgiving: a click that cannot extend the current
- * selection starts a new one rather than doing nothing, and a range that
- * would run through somebody else's booking is never produced. So the guest
- * can always click their way out of a wrong choice, and the dates that reach
- * the form are dates the host could actually accept.
+ * Three rules keep this forgiving. A click that cannot extend the selection
+ * starts a new one rather than doing nothing, so the guest can always click
+ * their way out of a wrong choice. A click past the check-in of a finished
+ * range moves the check-out, so a stay can be adjusted in place instead of
+ * being cleared and rebuilt. And a range that would run through somebody
+ * else's booking is never produced.
  */
 export function nextStaySelection(
   current: StaySelection,
@@ -91,12 +164,14 @@ export function nextStaySelection(
 ): StaySelection {
   const fresh: StaySelection = { checkIn: day, checkOut: '' };
 
-  // Nothing chosen yet, or a finished range — begin again from here.
-  if (!current.checkIn || current.checkOut) return fresh;
+  // Nothing chosen yet — begin here.
+  if (!current.checkIn) return fresh;
 
-  // Clicking at or before the check-in moves the check-in.
+  // Clicking at or before the check-in always moves the check-in, whether or
+  // not the range is finished. That is how the guest re-picks from the front.
   if (day <= current.checkIn) return fresh;
 
+  // Past the check-in: set the check-out, or move it if one is already there.
   return stayIsFree(blocks, current.checkIn, day)
     ? { checkIn: current.checkIn, checkOut: day }
     : fresh;

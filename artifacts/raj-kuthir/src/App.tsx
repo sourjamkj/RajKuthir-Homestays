@@ -1,4 +1,4 @@
-import { useMemo, useState, type FormEvent, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import {
   MutationCache,
   QueryCache,
@@ -57,8 +57,10 @@ import {
 import {
   latestCheckOut,
   nextStaySelection,
+  stayFromDrag,
   stayIsFree,
   type StayBlock,
+  type StaySelection,
 } from '@/lib/stay-dates';
 import { ErrorBoundary } from '@/components/error-boundary';
 import { Toaster } from '@/components/ui/toaster';
@@ -404,24 +406,101 @@ function Home() {
   const todayKey = dateKey(new Date());
   /** Set while the guest has a check-in but no check-out, to shade the run they are hovering. */
   const [hoverDay, setHoverDay] = useState<string | null>(null);
-  const choosingCheckOut = Boolean(form.checkIn) && !form.checkOut;
+
+  /*
+    Dragging across the grid.
+
+    One end of the stay stands still — `dragAnchor` — while the other follows
+    the pointer. Which end is pinned depends on where the press landed: on a
+    bare day it is that day, on one of the two handles it is the opposite end,
+    which is what lets a finished stay be stretched from either side rather
+    than cleared and rebuilt.
+
+    `dragMoved` exists because a press that never travels is a click, and a
+    click means something different (see nextStaySelection). The ref is read
+    by the click handler to swallow the click the browser fires after a drag
+    that happens to end where it began.
+  */
+  const [dragAnchor, setDragAnchor] = useState<string | null>(null);
+  const [dragDay, setDragDay] = useState<string | null>(null);
+  const [dragMoved, setDragMoved] = useState(false);
+  const justDragged = useRef(false);
+
+  const applySelection = (next: StaySelection) => {
+    setForm((current) => ({ ...current, checkIn: next.checkIn, checkOut: next.checkOut }));
+    if (submitted) setSubmitted(false);
+    setSubmitError(null);
+  };
+
+  /* What the grid paints: the drag in progress, else what the form holds.
+     A press that has not travelled yet is still a click, so the existing
+     stay stays on screen rather than blinking down to a single day. */
+  const shownStay: StaySelection =
+    dragAnchor && dragDay && dragMoved
+      ? stayFromDrag(stayBlocks, dragAnchor, dragDay)
+      : { checkIn: form.checkIn, checkOut: form.checkOut };
+
+  const choosingCheckOut = Boolean(shownStay.checkIn) && !shownStay.checkOut;
   const previewEnd =
-    choosingCheckOut && hoverDay && stayIsFree(stayBlocks, form.checkIn, hoverDay)
+    !dragAnchor && choosingCheckOut && hoverDay && stayIsFree(stayBlocks, shownStay.checkIn, hoverDay)
       ? hoverDay
       : null;
   /** Where a stay starting on the chosen check-in has to stop, if anything is in the way. */
-  const checkOutCeiling = form.checkIn ? latestCheckOut(stayBlocks, form.checkIn) : null;
+  const checkOutCeiling = shownStay.checkIn ? latestCheckOut(stayBlocks, shownStay.checkIn) : null;
+
+  const beginDrag = (day: string) => {
+    const complete = Boolean(form.checkIn && form.checkOut);
+    const anchor = complete && day === form.checkIn
+      ? form.checkOut
+      : complete && day === form.checkOut
+        ? form.checkIn
+        : day;
+
+    setDragAnchor(anchor);
+    setDragDay(day);
+    setDragMoved(false);
+    setHoverDay(null);
+  };
+
+  const extendDrag = (day: string) => {
+    setDragDay(day);
+    setDragMoved(true);
+  };
+
+  // The release may land anywhere — off the grid, off the window — so the
+  // drag is finished from the window rather than from a day cell.
+  useEffect(() => {
+    if (!dragAnchor) return;
+
+    const finish = () => {
+      if (dragMoved && dragDay) {
+        applySelection(stayFromDrag(stayBlocks, dragAnchor, dragDay));
+        justDragged.current = true;
+      }
+      setDragAnchor(null);
+      setDragDay(null);
+      setDragMoved(false);
+    };
+
+    window.addEventListener('pointerup', finish);
+    window.addEventListener('pointercancel', finish);
+    return () => {
+      window.removeEventListener('pointerup', finish);
+      window.removeEventListener('pointercancel', finish);
+    };
+  });
 
   const pickDay = (day: string) => {
-    const next = nextStaySelection(
-      { checkIn: form.checkIn, checkOut: form.checkOut },
-      day,
-      stayBlocks,
+    // Swallow the click the browser fires at the end of a drag.
+    if (justDragged.current) {
+      justDragged.current = false;
+      return;
+    }
+
+    applySelection(
+      nextStaySelection({ checkIn: form.checkIn, checkOut: form.checkOut }, day, stayBlocks),
     );
-    setForm((current) => ({ ...current, checkIn: next.checkIn, checkOut: next.checkOut }));
     setHoverDay(null);
-    if (submitted) setSubmitted(false);
-    setSubmitError(null);
   };
 
   const clearStayDates = () => {
@@ -857,7 +936,7 @@ function Home() {
                 </p>
               </div>
 
-              <div className="mt-6 grid grid-cols-7 gap-1.5 text-center">
+              <div className="mt-6 grid select-none grid-cols-7 gap-1.5 text-center">
                 {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((day) => <p key={day} className="pb-2 font-mono-ui text-[9px] uppercase tracking-[.08em] text-muted-foreground">{day}</p>)}
                 {daysInView.map((day) => {
                   const key = dateKey(day);
@@ -868,34 +947,42 @@ function Home() {
                   const nightPaise = rateForNight(ratePlan.data, key, calendarGuests);
                   const held = dayEvents.length > 0;
 
-                  const isCheckIn = Boolean(form.checkIn) && key === form.checkIn;
-                  const isCheckOut = Boolean(form.checkOut) && key === form.checkOut;
+                  const isCheckIn = Boolean(shownStay.checkIn) && key === shownStay.checkIn;
+                  const isCheckOut = Boolean(shownStay.checkOut) && key === shownStay.checkOut;
                   const inRange =
-                    Boolean(form.checkIn && form.checkOut) && key > form.checkIn && key < form.checkOut;
+                    Boolean(shownStay.checkIn && shownStay.checkOut) &&
+                    key > shownStay.checkIn &&
+                    key < shownStay.checkOut;
                   const inPreview =
-                    previewEnd !== null && key > form.checkIn && key < previewEnd;
+                    previewEnd !== null && key > shownStay.checkIn && key < previewEnd;
 
                   /* A held night can still be a legal check-out: it is the
                      morning the next guest arrives, and a check-out claims no
                      night of its own. */
                   const isReachableCheckOut =
-                    choosingCheckOut && key > form.checkIn && stayIsFree(stayBlocks, form.checkIn, key);
-                  const selectable = !isOutsideMonth && !isPast && (!held || isReachableCheckOut);
-
-                  const tone =
-                    isCheckIn || isCheckOut
-                      ? 'border-primary bg-primary text-primary-foreground'
-                      : inRange || inPreview
-                        ? 'border-primary/40 bg-primary/10'
-                        : isOutsideMonth
-                          ? 'border-transparent bg-background/40 opacity-35'
-                          : held
-                            ? 'border-accent/35 bg-secondary/40'
-                            : isPast
-                              ? 'border-border bg-background opacity-40'
-                              : 'border-border bg-background';
+                    choosingCheckOut &&
+                    key > shownStay.checkIn &&
+                    stayIsFree(stayBlocks, shownStay.checkIn, key);
 
                   const onEnds = isCheckIn || isCheckOut;
+                  const between = inRange || inPreview;
+
+                  // An end of the current stay stays live even when it sits on
+                  // a held night, or the handle could not be picked up again.
+                  const selectable =
+                    !isOutsideMonth && !isPast && (!held || isReachableCheckOut || onEnds);
+
+                  const tone = onEnds
+                    ? 'border-primary bg-primary text-primary-foreground shadow-sm'
+                    : between
+                      ? 'border-primary/45 bg-[#cfdbd1]'
+                      : isOutsideMonth
+                        ? 'border-transparent bg-background/40 opacity-35'
+                        : held
+                          ? 'border-accent/35 bg-secondary/40'
+                          : isPast
+                            ? 'border-border bg-background opacity-40'
+                            : 'border-border bg-background';
 
                   return (
                     <button
@@ -903,11 +990,25 @@ function Home() {
                       type="button"
                       disabled={!selectable}
                       onClick={() => pickDay(key)}
-                      onMouseEnter={() => selectable && setHoverDay(key)}
-                      onMouseLeave={() => setHoverDay(null)}
+                      onPointerDown={(event) => {
+                        // Touch keeps tapping: a drag there would fight the
+                        // page scroll, and tap-tap already sets both dates.
+                        if (event.pointerType === 'touch' || !selectable) return;
+                        // Without this the press captures the pointer and no
+                        // other day ever sees it, so the drag would never move.
+                        event.currentTarget.releasePointerCapture?.(event.pointerId);
+                        beginDrag(key);
+                      }}
+                      onPointerEnter={() => {
+                        if (dragAnchor) extendDrag(key);
+                        else if (selectable) setHoverDay(key);
+                      }}
+                      onPointerLeave={() => {
+                        if (!dragAnchor) setHoverDay(null);
+                      }}
                       aria-pressed={onEnds}
                       aria-label={`${shortDate(key)}${held ? ', booked' : ''}${isCheckIn ? ', check-in' : ''}${isCheckOut ? ', check-out' : ''}`}
-                      className={`min-h-[76px] rounded-lg border p-2 text-left transition-colors ${tone} ${isToday ? 'ring-2 ring-accent/60 ring-offset-1 ring-offset-card' : ''} ${selectable ? 'cursor-pointer hover:border-primary' : 'cursor-default'}`}
+                      className={`min-h-[76px] rounded-lg border p-2 text-left transition-colors ${tone} ${isToday ? 'ring-2 ring-accent/60 ring-offset-1 ring-offset-card' : ''} ${selectable ? 'cursor-pointer hover:border-primary' : 'cursor-default'} ${onEnds ? 'md:cursor-ew-resize' : ''}`}
                       data-testid={`calendar-day-${key}`}
                     >
                       <span className={`block text-xs font-bold ${onEnds ? 'text-primary-foreground' : isToday ? 'text-accent' : 'text-primary'}`}>{day.getDate()}</span>
@@ -927,21 +1028,23 @@ function Home() {
               {/* What the guest has picked so far, and the way back out of it.
                   The same two strings are already in the form below, so this
                   strip is a confirmation rather than a second control. */}
-              {form.checkIn && (
+              {shownStay.checkIn && (
                 <div
                   className="mt-5 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-primary/25 bg-primary/5 px-4 py-3"
                   role="status"
                   data-testid="text-calendar-selection"
                 >
-                  {form.checkOut ? (
+                  {shownStay.checkOut ? (
                     <p className="text-xs leading-5 text-primary">
-                      <span className="font-bold">{shortDate(form.checkIn)} → {shortDate(form.checkOut)}</span>
-                      {nights > 0 && <> · {nights} night{nights === 1 ? '' : 's'}</>}
-                      <span className="text-muted-foreground"> · filled into the enquiry form</span>
+                      <span className="font-bold">{shortDate(shownStay.checkIn)} → {shortDate(shownStay.checkOut)}</span>
+                      {nights > 0 && !dragAnchor && <> · {nights} night{nights === 1 ? '' : 's'}</>}
+                      <span className="text-muted-foreground">
+                        {' '}· drag either end, or tap a new date, to change it
+                      </span>
                     </p>
                   ) : (
                     <p className="text-xs leading-5 text-primary">
-                      Check-in <span className="font-bold">{shortDate(form.checkIn)}</span>
+                      Check-in <span className="font-bold">{shortDate(shownStay.checkIn)}</span>
                       <span className="text-muted-foreground">
                         {' '}· now pick your check-out
                         {checkOutCeiling ? ` — up to ${shortDate(checkOutCeiling)}, the next booking` : ''}
@@ -959,7 +1062,7 @@ function Home() {
                 </div>
               )}
 
-              <p className="mt-6 border-t border-border pt-5 text-[10px] leading-4 text-muted-foreground">Tap a date to set your check-in, then tap another for your check-out — they fill the enquiry form automatically. Dates marked as booked are unavailable, though a checkout day remains open for a new arrival.</p>
+              <p className="mt-6 border-t border-border pt-5 text-[10px] leading-4 text-muted-foreground">Tap a date for your check-in and another for your check-out, or drag across the nights you want — either way they fill the enquiry form. Once a stay is set you can drag either end to adjust it. Dates marked as booked are unavailable, though a checkout day remains open for a new arrival.</p>
            </div>
 
             <div className="rounded-[1.5rem] bg-background p-6 shadow-lg md:p-8">
