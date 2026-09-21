@@ -16,7 +16,6 @@ import {
   formatMonth,
   formatRupees,
   useBookings,
-  useCreateBooking,
   useCreateExpense,
   useDeleteBooking,
   useDeleteExpense,
@@ -24,7 +23,6 @@ import {
   useLedgerSummary,
   CATEGORY_LABELS,
   SOURCE_LABELS,
-  type BookingDraft,
   type BookingSource,
   type ExpenseCategory,
 } from '@/lib/ledger-api';
@@ -358,20 +356,6 @@ function ChannelTable({
   );
 }
 
-const EMPTY_BOOKING: BookingDraft = {
-  source: 'manual',
-  guestName: '',
-  guestPhone: '',
-  checkIn: '',
-  checkOut: '',
-  guests: '',
-  gross: '',
-  commission: '',
-  received: '',
-  status: 'confirmed',
-  note: '',
-};
-
 function BookingsSection({
   bookings,
   loading,
@@ -388,162 +372,19 @@ function BookingsSection({
   }>;
   loading: boolean;
 }) {
-  const [open, setOpen] = useState(false);
-  const [draft, setDraft] = useState<BookingDraft>(EMPTY_BOOKING);
-  const create = useCreateBooking();
   const remove = useDeleteBooking();
-
-  const errorMessage =
-    create.error instanceof Error ? create.error.message : null;
-
-  const submit = () => {
-    if (!draft.checkIn || !draft.checkOut) return;
-    create.mutate(draft, {
-      onSuccess: () => {
-        setDraft(EMPTY_BOOKING);
-        setOpen(false);
-      },
-    });
-  };
 
   return (
     <section className="mt-8" aria-label="Bookings">
       <SectionHeading
         icon={<CalendarDays size={15} />}
         title="Bookings"
-        description="Every stay, whichever channel it came through. Add offline and direct bookings here — they never appear in any OTA feed."
-        action={
-          <button
-            type="button"
-            onClick={() => setOpen((value) => !value)}
-            className="flex items-center gap-2 rounded-full bg-primary px-5 py-2.5 text-[11px] font-bold uppercase tracking-[.09em] text-primary-foreground transition-transform hover:-translate-y-0.5"
-            data-testid="button-add-booking"
-          >
-            <Plus size={14} /> {open ? 'Close' : 'Add booking'}
-          </button>
-        }
+        description="Every stay, whichever channel it came through. Bookings are created only by uploading a channel's confirmation below — not entered by hand here. To add a lead who hasn't booked yet, use Add enquiry on the Guests page."
       />
 
       <div className="mt-4">
         <BookingImport />
       </div>
-
-      {open && (
-        <div className="mt-4 rounded-2xl border border-border bg-card p-5">
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            <Field label="Channel">
-              <select
-                value={draft.source}
-                onChange={(event) =>
-                  setDraft({
-                    ...draft,
-                    source: event.target.value as BookingSource,
-                  })
-                }
-                className="w-full rounded-lg border border-border bg-background px-3 py-2.5 text-sm"
-                data-testid="select-booking-source"
-              >
-                {(
-                  Object.keys(SOURCE_LABELS) as Array<
-                    keyof typeof SOURCE_LABELS
-                  >
-                ).map((key) => (
-                  <option key={key} value={key}>
-                    {SOURCE_LABELS[key]}
-                  </option>
-                ))}
-              </select>
-            </Field>
-
-            <Field label="Guest name">
-              <TextInput
-                value={draft.guestName}
-                onChange={(value) => setDraft({ ...draft, guestName: value })}
-                testId="input-booking-guest"
-              />
-            </Field>
-
-            <Field label="Phone">
-              <TextInput
-                value={draft.guestPhone}
-                onChange={(value) => setDraft({ ...draft, guestPhone: value })}
-                testId="input-booking-phone"
-              />
-            </Field>
-
-            <Field label="Check-in">
-              <TextInput
-                type="date"
-                value={draft.checkIn}
-                onChange={(value) => setDraft({ ...draft, checkIn: value })}
-                testId="input-booking-checkin"
-              />
-            </Field>
-
-            <Field label="Check-out">
-              <TextInput
-                type="date"
-                value={draft.checkOut}
-                onChange={(value) => setDraft({ ...draft, checkOut: value })}
-                testId="input-booking-checkout"
-              />
-            </Field>
-
-            <Field label="Guests">
-              <TextInput
-                type="number"
-                value={draft.guests}
-                onChange={(value) => setDraft({ ...draft, guests: value })}
-                testId="input-booking-guests"
-              />
-            </Field>
-
-            <Field label="Total charged (₹)">
-              <TextInput
-                type="number"
-                value={draft.gross}
-                onChange={(value) => setDraft({ ...draft, gross: value })}
-                testId="input-booking-gross"
-              />
-            </Field>
-
-            <Field label="Commission (₹)">
-              <TextInput
-                type="number"
-                value={draft.commission}
-                onChange={(value) => setDraft({ ...draft, commission: value })}
-                testId="input-booking-commission"
-              />
-            </Field>
-
-            <Field label="Received so far (₹)">
-              <TextInput
-                type="number"
-                value={draft.received}
-                onChange={(value) => setDraft({ ...draft, received: value })}
-                testId="input-booking-received"
-              />
-            </Field>
-          </div>
-
-          {errorMessage && (
-            <p className="mt-3 text-xs text-[#A65E45]" role="alert">
-              {errorMessage}
-            </p>
-          )}
-
-          <button
-            type="button"
-            onClick={submit}
-            disabled={!draft.checkIn || !draft.checkOut || create.isPending}
-            className="mt-5 flex items-center gap-2 rounded-full bg-primary px-6 py-3 text-[11px] font-bold uppercase tracking-[.09em] text-primary-foreground transition-transform hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-50"
-            data-testid="button-save-booking"
-          >
-            {create.isPending && <Loader2 size={14} className="animate-spin" />}
-            Save booking
-          </button>
-        </div>
-      )}
 
       <div className="mt-4 overflow-x-auto rounded-2xl border border-border bg-card">
         <table className="w-full min-w-[640px] border-collapse text-sm">

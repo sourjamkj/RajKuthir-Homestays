@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { addDays, eachDayOfInterval, format, parseISO } from "date-fns";
 import { DayPicker, type DateRange } from "react-day-picker";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Loader2, Lock, Plus, Trash2 } from "lucide-react";
+import { ArrowDown, ArrowUp, Loader2, Lock, Plus, Trash2 } from "lucide-react";
 import "react-day-picker/dist/style.css";
 
 type Source = "manual" | "direct" | "bookingCom" | "airbnb" | "makeMyTrip";
@@ -88,6 +88,8 @@ export function AdminCalendar() {
   const [range, setRange] = useState<DateRange | undefined>();
   const [title, setTitle] = useState("");
   const [error, setError] = useState<string | null>(null);
+  // Ascending by default; flip this when chasing down a specific date.
+  const [sortDescending, setSortDescending] = useState(false);
 
   const { data, isLoading } = useQuery({
     queryKey: EVENTS_QUERY_KEY,
@@ -167,8 +169,13 @@ export function AdminCalendar() {
   }
 
   const upcoming = useMemo(
-    () => [...events].sort((left, right) => left.startDate.localeCompare(right.startDate)),
-    [events],
+    () =>
+      [...events].sort((left, right) =>
+        sortDescending
+          ? right.startDate.localeCompare(left.startDate)
+          : left.startDate.localeCompare(right.startDate),
+      ),
+    [events, sortDescending],
   );
 
   return (
@@ -243,7 +250,18 @@ export function AdminCalendar() {
       </div>
 
       <div className="rounded-2xl border border-border bg-card p-5">
-        <h3 className="font-journal text-xl text-primary">Blocked & booked</h3>
+        <div className="flex items-center justify-between gap-3">
+          <h3 className="font-journal text-xl text-primary">Blocked & booked</h3>
+          <button
+            type="button"
+            onClick={() => setSortDescending((value) => !value)}
+            className="flex items-center gap-1.5 rounded-full border border-border px-3 py-1.5 text-[11px] font-semibold text-muted-foreground hover:text-foreground"
+            data-testid="button-sort-calendar-events"
+          >
+            {sortDescending ? <ArrowDown className="h-3.5 w-3.5" /> : <ArrowUp className="h-3.5 w-3.5" />}
+            {sortDescending ? "Newest first" : "Earliest first"}
+          </button>
+        </div>
         {isLoading ? (
           <p className="mt-4 flex items-center gap-2 text-sm text-muted-foreground">
             <Loader2 className="h-4 w-4 animate-spin" /> Loading…

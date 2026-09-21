@@ -5,6 +5,8 @@ import {
   AlertCircle,
   CalendarDays,
   Check,
+  ChevronDown,
+  ChevronUp,
   CircleAlert,
   ArrowDownToLine,
   ArrowUpFromLine,
@@ -78,6 +80,11 @@ export default function AdminDashboard() {
   const feedInfo = useFeedInfo(signedIn);
   const feedSources = useFeedSources(signedIn);
 
+  // Hidden by default — this is the day-picker and the full "blocked &
+  // booked" list, useful when debugging a specific date but not something to
+  // look at on every page load.
+  const [showCalendar, setShowCalendar] = useState(false);
+
   const events = useQuery({
     queryKey: CALENDAR_EVENTS_KEY,
     queryFn: () => adminFetch<{ events: CalendarEventDto[] }>('/api/calendar/events'),
@@ -145,17 +152,6 @@ export default function AdminDashboard() {
           onSync={() => runSync.mutate()}
         />
 
-        <section className="mt-6" aria-label="Calendar">
-          <SectionHeading
-            icon={<CalendarDays size={15} />}
-            title="Calendar"
-            description="Every booking across all channels. Select nights to block for a direct booking, family stay, or maintenance."
-          />
-          <div className="mt-4">
-            <AdminCalendar />
-          </div>
-        </section>
-
         {/*
           Both directions of calendar plumbing live together. They were split
           across the page before, which made two halves of one job look like
@@ -208,6 +204,36 @@ export default function AdminDashboard() {
           <div className="mt-4">
             <AdminMailboxes />
           </div>
+        </section>
+
+        {/*
+          Hidden by default and pushed to the bottom of the page — this is the
+          day-picker plus the full "blocked & booked" list, which is useful
+          when debugging a specific date but not something to look at every
+          time the dashboard loads.
+        */}
+        <section className="mt-8 pb-4" aria-label="Calendar">
+          <SectionHeading
+            icon={<CalendarDays size={15} />}
+            title="Calendar"
+            description="Every booking across all channels. Select nights to block for a direct booking, family stay, or maintenance."
+            action={
+              <button
+                type="button"
+                onClick={() => setShowCalendar((value) => !value)}
+                className="flex items-center gap-1.5 rounded-full border border-border px-4 py-2 text-[11px] font-bold uppercase tracking-[.08em] text-muted-foreground hover:text-foreground"
+                data-testid="button-toggle-calendar"
+              >
+                {showCalendar ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                {showCalendar ? 'Hide' : 'Show'}
+              </button>
+            }
+          />
+          {showCalendar && (
+            <div className="mt-4">
+              <AdminCalendar />
+            </div>
+          )}
         </section>
       </main>
     </div>

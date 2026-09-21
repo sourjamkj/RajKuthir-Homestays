@@ -171,6 +171,56 @@ router.post("/enquiries", async (req, res) => {
 });
 
 /**
+ * Admin: add a lead by hand — a phone call, a walk-in ask, a contact from
+ * somewhere the automated capture doesn't reach.
+ *
+ * Deliberately thin: only name and phone are required, same as the public
+ * form, so this is fast to use while standing at the desk. It reuses
+ * createEnquiry rather than the booking path — a hand-entered lead is a lead,
+ * not a confirmed stay, and it shows up in the enquiries list to be quoted,
+ * followed up, or converted the normal way. No IP throttle: this is an
+ * authenticated owner action, not the open internet.
+ */
+router.post("/admin/enquiries", requireAdmin, async (req, res) => {
+  const name = text(req.body?.name, 200);
+  const phone = text(req.body?.phone, 40);
+
+  if (!name || !phone) {
+    res.status(400).json({ error: "Name and phone number are required." });
+    return;
+  }
+
+  const dialable = normaliseMobile(phone);
+
+  if (!dialable) {
+    res.status(400).json({ error: "That does not look like a mobile number we can reach." });
+    return;
+  }
+
+  const checkIn = text(req.body?.checkIn, 10);
+  const checkOut = text(req.body?.checkOut, 10);
+
+  try {
+    const created = await createEnquiry({
+      name,
+      phone: dialable,
+      email: text(req.body?.email, 200),
+      checkIn: checkIn && ISO_DATE.test(checkIn) ? checkIn : null,
+      checkOut: checkOut && ISO_DATE.test(checkOut) ? checkOut : null,
+      adults: count(req.body?.adults),
+      children: count(req.body?.children),
+      pets: count(req.body?.pets),
+      requests: text(req.body?.requests, 1000),
+    });
+
+    res.status(201).json({ id: created.id });
+  } catch (error) {
+    logger.error({ err: error }, "Could not save hand-entered enquiry");
+    res.status(500).json({ error: "Could not save this enquiry. Please try again." });
+  }
+});
+
+/**
  * Every enquiry, each with the price it would be quoted at today.
  *
  * The quote is attached here rather than fetched per row so the owner sees
