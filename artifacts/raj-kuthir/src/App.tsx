@@ -54,6 +54,12 @@ import {
   Wifi,
   X,
 } from 'lucide-react';
+import {
+  latestCheckOut,
+  nextStaySelection,
+  stayIsFree,
+  type StayBlock,
+} from '@/lib/stay-dates';
 import { ErrorBoundary } from '@/components/error-boundary';
 import { Toaster } from '@/components/ui/toaster';
 import { TooltipProvider } from '@/components/ui/tooltip';
@@ -385,6 +391,44 @@ function Home() {
 
   const daysInView = useMemo(() => calendarDays(calendarMonth), [calendarMonth]);
   const calendarMonthLabel = new Intl.DateTimeFormat('en-IN', { month: 'long', year: 'numeric' }).format(calendarMonth);
+
+  /*
+    Picking the stay straight off the calendar.
+
+    The selection is not held in its own state — it *is* form.checkIn and
+    form.checkOut. Clicking a day writes to the form, and typing in the form's
+    date fields repaints the grid, because both read the same two strings.
+    Keeping a second copy here is what would let the two drift apart.
+  */
+  const stayBlocks: StayBlock[] = busyPeriods;
+  const todayKey = dateKey(new Date());
+  /** Set while the guest has a check-in but no check-out, to shade the run they are hovering. */
+  const [hoverDay, setHoverDay] = useState<string | null>(null);
+  const choosingCheckOut = Boolean(form.checkIn) && !form.checkOut;
+  const previewEnd =
+    choosingCheckOut && hoverDay && stayIsFree(stayBlocks, form.checkIn, hoverDay)
+      ? hoverDay
+      : null;
+  /** Where a stay starting on the chosen check-in has to stop, if anything is in the way. */
+  const checkOutCeiling = form.checkIn ? latestCheckOut(stayBlocks, form.checkIn) : null;
+
+  const pickDay = (day: string) => {
+    const next = nextStaySelection(
+      { checkIn: form.checkIn, checkOut: form.checkOut },
+      day,
+      stayBlocks,
+    );
+    setForm((current) => ({ ...current, checkIn: next.checkIn, checkOut: next.checkOut }));
+    setHoverDay(null);
+    if (submitted) setSubmitted(false);
+    setSubmitError(null);
+  };
+
+  const clearStayDates = () => {
+    setForm((current) => ({ ...current, checkIn: '', checkOut: '' }));
+    setHoverDay(null);
+    setSubmitError(null);
+  };
   /*
    * The WhatsApp message, written from what the guest has actually typed.
    *
@@ -498,36 +542,6 @@ function Home() {
       window.open(whatsappUrl, '_blank', 'noopener,noreferrer');
       setHandOffToWhatsApp(false);
     }
-  };
-
-  /*
-   * The sticky "Enquire on WhatsApp" bar on phones.
-   *
-   * It was a bare wa.me link, so every enquiry that started there skipped
-   * /api/enquiries and never reached the owner's console. It now goes through
-   * the form:
-   *   - form filled in  -> press the form's own WhatsApp button, so the
-   *                        enquiry is saved first and WhatsApp opens after,
-   *                        exactly as it does from inside the form;
-   *   - form incomplete -> take the guest to the calendar and form and put
-   *                        the cursor in the first field still needed;
-   *   - already sent    -> the form is gone (thank-you panel showing) and the
-   *                        enquiry is on record, so open WhatsApp directly.
-   */
-  const enquireFromStickyBar = () => {
-    const formEl = document.getElementById('enquiry-form') as HTMLFormElement | null;
-    if (!formEl) {
-      window.open(whatsappUrl, '_blank', 'noopener,noreferrer');
-      return;
-    }
-    if (formEl.checkValidity() && !dateConflict) {
-      formEl.querySelector<HTMLButtonElement>('[data-testid="link-booking-whatsapp"]')?.click();
-      return;
-    }
-    scrollToAvailability();
-    window.setTimeout(() => {
-      formEl.querySelector<HTMLElement>(':invalid')?.focus({ preventScroll: true });
-    }, 500);
   };
 
   const shiftCalendarMonth = (amount: number) => {
@@ -849,29 +863,107 @@ function Home() {
                   const key = dateKey(day);
                   const dayEvents = busyPeriods.filter((event) => eventTouchesDay(event, key));
                   const isOutsideMonth = day.getMonth() !== calendarMonth.getMonth();
-                  const isToday = key === dateKey(new Date());
+                  const isToday = key === todayKey;
+                  const isPast = key < todayKey;
                   const nightPaise = rateForNight(ratePlan.data, key, calendarGuests);
+                  const held = dayEvents.length > 0;
+
+                  const isCheckIn = Boolean(form.checkIn) && key === form.checkIn;
+                  const isCheckOut = Boolean(form.checkOut) && key === form.checkOut;
+                  const inRange =
+                    Boolean(form.checkIn && form.checkOut) && key > form.checkIn && key < form.checkOut;
+                  const inPreview =
+                    previewEnd !== null && key > form.checkIn && key < previewEnd;
+
+                  /* A held night can still be a legal check-out: it is the
+                     morning the next guest arrives, and a check-out claims no
+                     night of its own. */
+                  const isReachableCheckOut =
+                    choosingCheckOut && key > form.checkIn && stayIsFree(stayBlocks, form.checkIn, key);
+                  const selectable = !isOutsideMonth && !isPast && (!held || isReachableCheckOut);
+
+                  const tone =
+                    isCheckIn || isCheckOut
+                      ? 'border-primary bg-primary text-primary-foreground'
+                      : inRange || inPreview
+                        ? 'border-primary/40 bg-primary/10'
+                        : isOutsideMonth
+                          ? 'border-transparent bg-background/40 opacity-35'
+                          : held
+                            ? 'border-accent/35 bg-secondary/40'
+                            : isPast
+                              ? 'border-border bg-background opacity-40'
+                              : 'border-border bg-background';
+
+                  const onEnds = isCheckIn || isCheckOut;
+
                   return (
-                    <div key={key} className={`min-h-[76px] rounded-lg border p-2 text-left transition-colors ${isOutsideMonth ? 'border-transparent bg-background/40 opacity-35' : dayEvents.length ? 'border-accent/35 bg-secondary/40' : 'border-border bg-background'} ${isToday ? 'ring-2 ring-accent/60 ring-offset-1 ring-offset-card' : ''}`} data-testid={`calendar-day-${key}`}>
-                      <p className={`text-xs font-bold ${isToday ? 'text-accent' : 'text-primary'}`}>{day.getDate()}</p>
-                      <div className="mt-2 space-y-1">
-                        {dayEvents.slice(0, 1).map((event) => <div key={`${event.id}-${key}`} className="truncate rounded bg-[#c8a89a] px-1.5 py-1 text-[9px] font-bold leading-none text-primary" title="Booked">Booked</div>)}
+                    <button
+                      key={key}
+                      type="button"
+                      disabled={!selectable}
+                      onClick={() => pickDay(key)}
+                      onMouseEnter={() => selectable && setHoverDay(key)}
+                      onMouseLeave={() => setHoverDay(null)}
+                      aria-pressed={onEnds}
+                      aria-label={`${shortDate(key)}${held ? ', booked' : ''}${isCheckIn ? ', check-in' : ''}${isCheckOut ? ', check-out' : ''}`}
+                      className={`min-h-[76px] rounded-lg border p-2 text-left transition-colors ${tone} ${isToday ? 'ring-2 ring-accent/60 ring-offset-1 ring-offset-card' : ''} ${selectable ? 'cursor-pointer hover:border-primary' : 'cursor-default'}`}
+                      data-testid={`calendar-day-${key}`}
+                    >
+                      <span className={`block text-xs font-bold ${onEnds ? 'text-primary-foreground' : isToday ? 'text-accent' : 'text-primary'}`}>{day.getDate()}</span>
+                      <span className="mt-2 block space-y-1">
+                        {dayEvents.slice(0, 1).map((event) => <span key={`${event.id}-${key}`} className="block truncate rounded bg-[#c8a89a] px-1.5 py-1 text-[9px] font-bold leading-none text-primary" title="Booked">Booked</span>)}
                         {nightPaise !== null && !isOutsideMonth && (
-                          <p className={`font-mono-ui text-[10px] leading-none ${dayEvents.length ? 'text-muted-foreground/50 line-through' : 'text-muted-foreground'}`} data-testid={`calendar-price-${key}`}>
+                          <span className={`block font-mono-ui text-[10px] leading-none ${onEnds ? 'text-primary-foreground/80' : held ? 'text-muted-foreground/50 line-through' : 'text-muted-foreground'}`} data-testid={`calendar-price-${key}`}>
                             {formatRupeesCompact(nightPaise)}
-                          </p>
+                          </span>
                         )}
-                      </div>
-                    </div>
+                      </span>
+                    </button>
                   );
                 })}
               </div>
 
-              <p className="mt-6 border-t border-border pt-5 text-[10px] leading-4 text-muted-foreground">Dates marked as booked are currently unavailable. Checkout days remain available for a new arrival.</p>
+              {/* What the guest has picked so far, and the way back out of it.
+                  The same two strings are already in the form below, so this
+                  strip is a confirmation rather than a second control. */}
+              {form.checkIn && (
+                <div
+                  className="mt-5 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-primary/25 bg-primary/5 px-4 py-3"
+                  role="status"
+                  data-testid="text-calendar-selection"
+                >
+                  {form.checkOut ? (
+                    <p className="text-xs leading-5 text-primary">
+                      <span className="font-bold">{shortDate(form.checkIn)} → {shortDate(form.checkOut)}</span>
+                      {nights > 0 && <> · {nights} night{nights === 1 ? '' : 's'}</>}
+                      <span className="text-muted-foreground"> · filled into the enquiry form</span>
+                    </p>
+                  ) : (
+                    <p className="text-xs leading-5 text-primary">
+                      Check-in <span className="font-bold">{shortDate(form.checkIn)}</span>
+                      <span className="text-muted-foreground">
+                        {' '}· now pick your check-out
+                        {checkOutCeiling ? ` — up to ${shortDate(checkOutCeiling)}, the next booking` : ''}
+                      </span>
+                    </p>
+                  )}
+                  <button
+                    type="button"
+                    onClick={clearStayDates}
+                    className="rounded-full border border-border px-3 py-1.5 text-[10px] font-bold uppercase tracking-[.09em] text-muted-foreground transition-colors hover:border-primary hover:text-primary"
+                    data-testid="button-clear-dates"
+                  >
+                    Clear
+                  </button>
+                </div>
+              )}
+
+              <p className="mt-6 border-t border-border pt-5 text-[10px] leading-4 text-muted-foreground">Tap a date to set your check-in, then tap another for your check-out — they fill the enquiry form automatically. Dates marked as booked are unavailable, though a checkout day remains open for a new arrival.</p>
            </div>
 
             <div className="rounded-[1.5rem] bg-background p-6 shadow-lg md:p-8">
-              {submitted ? <div className="flex min-h-[530px] flex-col items-center justify-center text-center" data-testid="status-enquiry-success"><span className="grid h-16 w-16 place-items-center rounded-full bg-primary text-secondary"><Check size={28} /></span><p className="eyebrow mt-7 text-accent">Enquiry received</p><h3 className="mt-3 font-journal text-4xl text-primary">Thank you, {form.name || 'friend'}.</h3><p className="mt-4 max-w-[390px] text-sm leading-6 text-muted-foreground">Your enquiry is ready to share with the host. For the quickest reply, you can also send the selected details on WhatsApp.</p><div className="mt-8 flex flex-wrap justify-center gap-3"><a href={whatsappUrl} target="_blank" rel="noreferrer" className="flex items-center gap-2 rounded-full bg-primary px-5 py-3 text-xs font-bold uppercase tracking-[.1em] text-primary-foreground" data-testid="link-success-whatsapp"><MessageCircle size={15} /> Send on WhatsApp</a><button onClick={() => setSubmitted(false)} className="rounded-full border border-border px-5 py-3 text-xs font-bold uppercase tracking-[.1em] text-primary" data-testid="button-new-enquiry">New enquiry</button></div></div> : <form id="enquiry-form" onSubmit={submitEnquiry} className="space-y-6" data-testid="form-booking-enquiry"><div className="flex items-center justify-between border-b border-border pb-5"><div><p className="font-journal text-3xl text-primary">Enquire to stay</p><p className="mt-1 text-xs text-muted-foreground">A clear estimate, before a conversation.</p></div><Send size={20} className="text-accent" /></div><div className="grid gap-5 sm:grid-cols-2"><label className="block sm:col-span-2"><span className="eyebrow text-muted-foreground">Your name *</span><input required minLength={2} maxLength={80} autoComplete="name" value={form.name} onChange={(event) => updateForm('name', event.target.value)} className="mt-2 w-full border-b border-border bg-transparent px-0 py-3 text-sm text-primary outline-none placeholder:text-muted-foreground/60 focus:border-primary" placeholder="Name" data-testid="input-guest-name" /></label><label className="block"><span className="eyebrow text-muted-foreground">Phone *</span><input required type="tel" inputMode="tel" autoComplete="tel" maxLength={20} pattern="(\+?91[- ]?|0)?[6-9][0-9]{9}" title="A 10-digit Indian mobile number, with or without +91" value={form.phone} onChange={(event) => updateForm('phone', event.target.value)} className="mt-2 w-full border-b border-border bg-transparent px-0 py-3 text-sm text-primary outline-none placeholder:text-muted-foreground/60 focus:border-primary" placeholder="+91 98765 43210" data-testid="input-guest-phone" /></label><label className="block"><span className="eyebrow text-muted-foreground">Email</span><input type="email" autoComplete="email" maxLength={200} value={form.email} onChange={(event) => updateForm('email', event.target.value)} className="mt-2 w-full border-b border-border bg-transparent px-0 py-3 text-sm text-primary outline-none placeholder:text-muted-foreground/60 focus:border-primary" placeholder="you@example.com" data-testid="input-guest-email" /></label><label className="block"><span className="eyebrow text-muted-foreground">Check-in *</span><input required type="date" min={new Date().toISOString().split('T')[0]} value={form.checkIn} onChange={(event) => updateForm('checkIn', event.target.value)} className="mt-2 w-full border-b border-border bg-transparent px-0 py-3 text-sm text-primary outline-none focus:border-primary" data-testid="input-check-in" /></label><label className="block"><span className="eyebrow text-muted-foreground">Check-out *</span><input required type="date" min={form.checkIn || new Date().toISOString().split('T')[0]} value={form.checkOut} onChange={(event) => updateForm('checkOut', event.target.value)} className="mt-2 w-full border-b border-border bg-transparent px-0 py-3 text-sm text-primary outline-none focus:border-primary" data-testid="input-check-out" /></label></div>{dateConflict && <p className="flex items-start gap-2 rounded-xl border border-[#A65E45]/40 bg-[#A65E45]/5 px-4 py-3 text-[13px] leading-6 text-[#A65E45]" role="alert" data-testid="text-date-conflict"><CircleAlert size={15} className="mt-0.5 shrink-0" /><span>Those nights are already taken &mdash; {shortDate(eventDateKey(dateConflict.startDate))} to {shortDate(eventDateKey(dateConflict.endDate))} is booked. Pick other dates and the estimate will update.</span></p>}<div className="grid grid-cols-3 gap-3"><label className="block rounded-xl border border-border p-3"><span className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[.08em] text-muted-foreground"><Users size={13} /> Adults</span><input required type="number" min="1" value={form.adults} onChange={(event) => updateForm('adults', event.target.value)} className="mt-2 w-full bg-transparent text-lg font-bold text-primary outline-none" data-testid="input-adults" /></label><label className="block rounded-xl border border-border p-3"><span className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[.08em] text-muted-foreground"><Baby size={13} /> Children</span><input type="number" min="0" value={form.children} onChange={(event) => updateForm('children', event.target.value)} className="mt-2 w-full bg-transparent text-lg font-bold text-primary outline-none" data-testid="input-children" /></label><label className="block rounded-xl border border-border p-3"><span className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[.08em] text-muted-foreground"><PawPrint size={13} /> Pets</span><input type="number" min="0" value={form.pets} onChange={(event) => updateForm('pets', event.target.value)} className="mt-2 w-full bg-transparent text-lg font-bold text-primary outline-none" data-testid="input-pets" /></label></div><label className="block"><span className="eyebrow text-muted-foreground">Special requests</span><textarea rows={3} value={form.requests} onChange={(event) => updateForm('requests', event.target.value)} className="mt-2 w-full resize-none border-b border-border bg-transparent px-0 py-3 text-sm text-primary outline-none placeholder:text-muted-foreground/60 focus:border-primary" placeholder="Arrival notes, pet details, meal preferences..." data-testid="input-special-requests" /></label><div className="rounded-xl bg-card p-4"><div className="flex items-center justify-between"><p className="text-sm font-bold text-primary">Planning estimate</p><p className="font-mono-ui text-[10px] text-muted-foreground">{nights ? `${nights} night${nights === 1 ? '' : 's'}` : 'Select dates'}</p></div><div className="mt-3 flex items-end justify-between"><div><p className="font-mono-ui text-[10px] uppercase tracking-[.08em] text-muted-foreground">{fromRate === null ? 'Check availability & current rate' : `From ${currency(fromRate)} / night`}</p><p className="mt-1 text-xs text-muted-foreground">Advance {Math.round(CONFIG.advanceShare * 100)}% · balance after confirmation</p></div><p className="font-journal text-3xl text-primary">{nights > 0 && fromRate !== null ? currency(total) : '—'}</p></div>{nights > 0 && extrasPaise > 0 && <p className="mt-3 border-t border-border pt-3 text-[11px] leading-5 text-muted-foreground" data-testid="text-estimate-extras">Includes {currency(Math.round(extrasPaise / 100))} for {[breakdown.extraChildren + breakdown.extraAdults > 0 ? `${breakdown.extraChildren + breakdown.extraAdults} guest${breakdown.extraChildren + breakdown.extraAdults === 1 ? '' : 's'} above ${ratePlan.data?.maxGuests ?? 5}` : null, breakdown.pets > 0 ? `${breakdown.pets} pet${breakdown.pets === 1 ? '' : 's'}` : null].filter(Boolean).join(' and ')}.</p>}{nights > 0 && <div className="mt-3 flex justify-between border-t border-border pt-3 text-xs text-muted-foreground"><span>Advance estimate: {currency(advance)}</span><span>Balance: {currency(balance)}</span></div>}</div>{submitError && <p className="flex items-start gap-2 rounded-xl border border-[#A65E45]/40 bg-[#A65E45]/5 px-4 py-3 text-[13px] leading-6 text-[#A65E45]" role="alert" data-testid="text-submit-error"><CircleAlert size={15} className="mt-0.5 shrink-0" /><span>{submitError}</span></p>}<div className="flex flex-col gap-3 sm:flex-row"><button type="submit" disabled={Boolean(dateConflict)} className="flex flex-1 items-center justify-center gap-2 rounded-full bg-primary px-5 py-4 text-xs font-bold uppercase tracking-[.11em] text-primary-foreground transition-transform hover:-translate-y-0.5 active:scale-95 disabled:translate-y-0 disabled:cursor-not-allowed disabled:opacity-40" data-testid="button-submit-enquiry">Send enquiry <ArrowRight size={15} /></button><button type="submit" onClick={() => setHandOffToWhatsApp(true)} disabled={Boolean(dateConflict)} className="flex items-center justify-center gap-2 rounded-full border border-primary/25 px-5 py-4 text-xs font-bold uppercase tracking-[.11em] text-primary transition-colors hover:bg-primary/5 disabled:cursor-not-allowed disabled:opacity-40" data-testid="link-booking-whatsapp"><MessageCircle size={16} /> WhatsApp</button></div><p className="text-center text-[10px] leading-4 text-muted-foreground">Availability and final pricing are confirmed by the host. By sending an enquiry you agree to our <a href={`${basePath}/house-rules`} className="underline decoration-accent decoration-1 underline-offset-2 hover:text-primary" data-testid="link-form-house-rules">house rules</a>.</p></form>}
+              {submitted ? <div className="flex min-h-[530px] flex-col items-center justify-center text-center" data-testid="status-enquiry-success"><span className="grid h-16 w-16 place-items-center rounded-full bg-primary text-secondary"><Check size={28} /></span><p className="eyebrow mt-7 text-accent">Enquiry received</p><h3 className="mt-3 font-journal text-4xl text-primary">Thank you, {form.name || 'friend'}.</h3><p className="mt-4 max-w-[390px] text-sm leading-6 text-muted-foreground">Your enquiry is ready to share with the host. For the quickest reply, you can also send the selected details on WhatsApp.</p><div className="mt-8 flex flex-wrap justify-center gap-3"><a href={whatsappUrl} target="_blank" rel="noreferrer" className="flex items-center gap-2 rounded-full bg-primary px-5 py-3 text-xs font-bold uppercase tracking-[.1em] text-primary-foreground" data-testid="link-success-whatsapp"><MessageCircle size={15} /> Send on WhatsApp</a><button onClick={() => setSubmitted(false)} className="rounded-full border border-border px-5 py-3 text-xs font-bold uppercase tracking-[.1em] text-primary" data-testid="button-new-enquiry">New enquiry</button></div></div> : <form onSubmit={submitEnquiry} className="space-y-6" data-testid="form-booking-enquiry"><div className="flex items-center justify-between border-b border-border pb-5"><div><p className="font-journal text-3xl text-primary">Enquire to stay</p><p className="mt-1 text-xs text-muted-foreground">A clear estimate, before a conversation.</p></div><Send size={20} className="text-accent" /></div><div className="grid gap-5 sm:grid-cols-2"><label className="block sm:col-span-2"><span className="eyebrow text-muted-foreground">Your name *</span><input required minLength={2} maxLength={80} autoComplete="name" value={form.name} onChange={(event) => updateForm('name', event.target.value)} className="mt-2 w-full border-b border-border bg-transparent px-0 py-3 text-sm text-primary outline-none placeholder:text-muted-foreground/60 focus:border-primary" placeholder="Name" data-testid="input-guest-name" /></label><label className="block"><span className="eyebrow text-muted-foreground">Phone *</span><input required type="tel" inputMode="tel" autoComplete="tel" maxLength={20} pattern="(\+?91[- ]?|0)?[6-9][0-9]{9}" title="A 10-digit Indian mobile number, with or without +91" value={form.phone} onChange={(event) => updateForm('phone', event.target.value)} className="mt-2 w-full border-b border-border bg-transparent px-0 py-3 text-sm text-primary outline-none placeholder:text-muted-foreground/60 focus:border-primary" placeholder="+91 98765 43210" data-testid="input-guest-phone" /></label><label className="block"><span className="eyebrow text-muted-foreground">Email</span><input type="email" autoComplete="email" maxLength={200} value={form.email} onChange={(event) => updateForm('email', event.target.value)} className="mt-2 w-full border-b border-border bg-transparent px-0 py-3 text-sm text-primary outline-none placeholder:text-muted-foreground/60 focus:border-primary" placeholder="you@example.com" data-testid="input-guest-email" /></label><label className="block"><span className="eyebrow text-muted-foreground">Check-in *</span><input required type="date" min={new Date().toISOString().split('T')[0]} value={form.checkIn} onChange={(event) => updateForm('checkIn', event.target.value)} className="mt-2 w-full border-b border-border bg-transparent px-0 py-3 text-sm text-primary outline-none focus:border-primary" data-testid="input-check-in" /></label><label className="block"><span className="eyebrow text-muted-foreground">Check-out *</span><input required type="date" min={form.checkIn || new Date().toISOString().split('T')[0]} value={form.checkOut} onChange={(event) => updateForm('checkOut', event.target.value)} className="mt-2 w-full border-b border-border bg-transparent px-0 py-3 text-sm text-primary outline-none focus:border-primary" data-testid="input-check-out" /></label></div>{dateConflict && <p className="flex items-start gap-2 rounded-xl border border-[#A65E45]/40 bg-[#A65E45]/5 px-4 py-3 text-[13px] leading-6 text-[#A65E45]" role="alert" data-testid="text-date-conflict"><CircleAlert size={15} className="mt-0.5 shrink-0" /><span>Those nights are already taken &mdash; {shortDate(eventDateKey(dateConflict.startDate))} to {shortDate(eventDateKey(dateConflict.endDate))} is booked. Pick other dates and the estimate will update.</span></p>}<div className="grid grid-cols-3 gap-3"><label className="block rounded-xl border border-border p-3"><span className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[.08em] text-muted-foreground"><Users size={13} /> Adults</span><input required type="number" min="1" value={form.adults} onChange={(event) => updateForm('adults', event.target.value)} className="mt-2 w-full bg-transparent text-lg font-bold text-primary outline-none" data-testid="input-adults" /></label><label className="block rounded-xl border border-border p-3"><span className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[.08em] text-muted-foreground"><Baby size={13} /> Children</span><input type="number" min="0" value={form.children} onChange={(event) => updateForm('children', event.target.value)} className="mt-2 w-full bg-transparent text-lg font-bold text-primary outline-none" data-testid="input-children" /></label><label className="block rounded-xl border border-border p-3"><span className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[.08em] text-muted-foreground"><PawPrint size={13} /> Pets</span><input type="number" min="0" value={form.pets} onChange={(event) => updateForm('pets', event.target.value)} className="mt-2 w-full bg-transparent text-lg font-bold text-primary outline-none" data-testid="input-pets" /></label></div><label className="block"><span className="eyebrow text-muted-foreground">Special requests</span><textarea rows={3} value={form.requests} onChange={(event) => updateForm('requests', event.target.value)} className="mt-2 w-full resize-none border-b border-border bg-transparent px-0 py-3 text-sm text-primary outline-none placeholder:text-muted-foreground/60 focus:border-primary" placeholder="Arrival notes, pet details, meal preferences..." data-testid="input-special-requests" /></label><div className="rounded-xl bg-card p-4"><div className="flex items-center justify-between"><p className="text-sm font-bold text-primary">Planning estimate</p><p className="font-mono-ui text-[10px] text-muted-foreground">{nights ? `${nights} night${nights === 1 ? '' : 's'}` : 'Select dates'}</p></div><div className="mt-3 flex items-end justify-between"><div><p className="font-mono-ui text-[10px] uppercase tracking-[.08em] text-muted-foreground">{fromRate === null ? 'Check availability & current rate' : `From ${currency(fromRate)} / night`}</p><p className="mt-1 text-xs text-muted-foreground">Advance {Math.round(CONFIG.advanceShare * 100)}% · balance after confirmation</p></div><p className="font-journal text-3xl text-primary">{nights > 0 && fromRate !== null ? currency(total) : '—'}</p></div>{nights > 0 && extrasPaise > 0 && <p className="mt-3 border-t border-border pt-3 text-[11px] leading-5 text-muted-foreground" data-testid="text-estimate-extras">Includes {currency(Math.round(extrasPaise / 100))} for {[breakdown.extraChildren + breakdown.extraAdults > 0 ? `${breakdown.extraChildren + breakdown.extraAdults} guest${breakdown.extraChildren + breakdown.extraAdults === 1 ? '' : 's'} above ${ratePlan.data?.maxGuests ?? 5}` : null, breakdown.pets > 0 ? `${breakdown.pets} pet${breakdown.pets === 1 ? '' : 's'}` : null].filter(Boolean).join(' and ')}.</p>}{nights > 0 && <div className="mt-3 flex justify-between border-t border-border pt-3 text-xs text-muted-foreground"><span>Advance estimate: {currency(advance)}</span><span>Balance: {currency(balance)}</span></div>}</div>{submitError && <p className="flex items-start gap-2 rounded-xl border border-[#A65E45]/40 bg-[#A65E45]/5 px-4 py-3 text-[13px] leading-6 text-[#A65E45]" role="alert" data-testid="text-submit-error"><CircleAlert size={15} className="mt-0.5 shrink-0" /><span>{submitError}</span></p>}<div className="flex flex-col gap-3 sm:flex-row"><button type="submit" disabled={Boolean(dateConflict)} className="flex flex-1 items-center justify-center gap-2 rounded-full bg-primary px-5 py-4 text-xs font-bold uppercase tracking-[.11em] text-primary-foreground transition-transform hover:-translate-y-0.5 active:scale-95 disabled:translate-y-0 disabled:cursor-not-allowed disabled:opacity-40" data-testid="button-submit-enquiry">Send enquiry <ArrowRight size={15} /></button><button type="submit" onClick={() => setHandOffToWhatsApp(true)} disabled={Boolean(dateConflict)} className="flex items-center justify-center gap-2 rounded-full border border-primary/25 px-5 py-4 text-xs font-bold uppercase tracking-[.11em] text-primary transition-colors hover:bg-primary/5 disabled:cursor-not-allowed disabled:opacity-40" data-testid="link-booking-whatsapp"><MessageCircle size={16} /> WhatsApp</button></div><p className="text-center text-[10px] leading-4 text-muted-foreground">Availability and final pricing are confirmed by the host. By sending an enquiry you agree to our <a href={`${basePath}/house-rules`} className="underline decoration-accent decoration-1 underline-offset-2 hover:text-primary" data-testid="link-form-house-rules">house rules</a>.</p></form>}
             </div>
             </div>
           </div>
@@ -1140,7 +1232,7 @@ function Home() {
         </a>
       </div>
 
-      <div className="fixed inset-x-3 bottom-3 z-40 flex items-center gap-2 rounded-full border border-border bg-background/95 p-2 shadow-lg backdrop-blur-md md:hidden" data-testid="mobile-contact-bar"><a href={phoneHref(CONFIG.hostPhone)} className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-secondary text-primary" aria-label="Call host" data-testid="button-sticky-call"><Phone size={18} /></a><button type="button" onClick={enquireFromStickyBar} className="flex flex-1 items-center justify-center gap-2 rounded-full bg-primary py-3 text-xs font-bold uppercase tracking-[.1em] text-primary-foreground" data-testid="button-sticky-whatsapp"><MessageCircle size={16} /> Enquire on WhatsApp</button><button onClick={scrollToAvailability} className="grid h-11 w-11 shrink-0 place-items-center rounded-full border border-border text-primary" aria-label="Book now" data-testid="button-sticky-book"><CalendarDays size={18} /></button></div>
+      <div className="fixed inset-x-3 bottom-3 z-40 flex items-center gap-2 rounded-full border border-border bg-background/95 p-2 shadow-lg backdrop-blur-md md:hidden" data-testid="mobile-contact-bar"><a href={phoneHref(CONFIG.hostPhone)} className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-secondary text-primary" aria-label="Call host" data-testid="button-sticky-call"><Phone size={18} /></a><a href={whatsappUrl} target="_blank" rel="noreferrer" className="flex flex-1 items-center justify-center gap-2 rounded-full bg-primary py-3 text-xs font-bold uppercase tracking-[.1em] text-primary-foreground" data-testid="button-sticky-whatsapp"><MessageCircle size={16} /> Enquire on WhatsApp</a><button onClick={scrollToAvailability} className="grid h-11 w-11 shrink-0 place-items-center rounded-full border border-border text-primary" aria-label="Book now" data-testid="button-sticky-book"><CalendarDays size={18} /></button></div>
     </div>
   );
 }
