@@ -228,6 +228,140 @@ const faqs = [
   },
 ];
 
+/*
+  Guest reviews, as written on Google. Quoted in the guest's own words —
+  trimmed with an ellipsis where a review runs long, capitals and spelling
+  tidied, never reworded. These used to be two tall image cards that filled
+  a screen and a half on a phone; as text they read in one strip, and a new
+  review is one more entry here.
+
+  `image` is optional: drop a rendered 4:3 review card into /public and set
+  it, and that card shows the image instead of the text. The quote stays as
+  the image's alt text, so it is still read out and still indexed.
+*/
+type GuestReview = { name: string; text: string; image?: string };
+
+const REVIEWS: readonly GuestReview[] = [
+  {
+    name: 'Roshni Chakraborty',
+    text: '…honestly our stay better than anywhere else we stayed. The host and caretaker were very helpful and caring, we had a very peaceful and luxurious stay… Literally the perfect break from everything.',
+  },
+  {
+    name: 'Angela Banerjee',
+    text: 'It was a serene experience staying at Raj Kuthir. The place is immaculate, the kitchen well furnished and the garden beautiful. The host, Mr Sourjyo, is a generous and amicable host. Overall, we would highly recommend Raj Kuthir homestays.',
+  },
+  {
+    name: 'Adrija Banerjee',
+    text: "Beautiful place! A little outside the City. Perfect for people who want to stay away from the noise. The owner was extremely helpful and friendly. The place is pet friendly too. Not only that my fur baby got lots of love from our caretaker as well :D So if you're planning a vacation to Shantiniketan soon with your fur baby, this is the spot!",
+  },
+  {
+    name: 'Swarup Banik',
+    text: 'This is an awe inspiring property amidst the green corridor of Bolpur, Shantiniketan. The place offers a plethora of options to sit back and relax while soaking in the rustic vibe… When in Bolpur, look no further and settle for this value for money space.',
+  },
+  {
+    name: 'Santanu Paul',
+    text: 'Wanna feel real vibes of Santiniketan - the best place to go for. Enjoyed the serenity in secured privacy where we remain ourselves only. Starting from the decor to support for anything, we had maximum satisfaction.',
+  },
+  {
+    name: 'Lipi Paul',
+    text: 'We spent a weekend at Sobujpotro. It was a great experience. The place is well furnished, clean, beautifully maintained. You can cook yourself or order from the canteen. The owner took very good care of us and regularly stayed in touch on call. Highly recommended.',
+  },
+  {
+    name: 'Kaushik Das',
+    text: 'Clean air, peaceful environment, lots of greenery in surrounding areas. Perfect place to detox from city life. Would highly recommend this place if you are looking for a nice relaxing vacation.',
+  },
+  {
+    name: 'Uday Sankar Chattopadhyay',
+    text: 'This is a quiet and serene place, ideal for those who want to stay away from city crowd for a while. This unit is comfortable, self sufficient. I loved this place.',
+  },
+  {
+    name: 'Sukanta Moule',
+    text: 'You can use the bungalow for your family of 6 to 7 and will get a good space of drawing room and a useful kitchen. Overall it was a nice experience and hope visit again.',
+  },
+];
+
+/*
+  One row of review cards that scrolls sideways. Native overflow with scroll
+  snapping, so a phone swipes it and a trackpad scrolls it with no library;
+  the arrow buttons are for mouse users and step one card at a time.
+*/
+function ReviewCarousel() {
+  const trackRef = useRef<HTMLDivElement | null>(null);
+
+  const step = (direction: 1 | -1) => {
+    const track = trackRef.current;
+    if (!track) return;
+    const card = track.querySelector<HTMLElement>('[data-review-card]');
+    const distance = card ? card.offsetWidth + 16 : track.clientWidth;
+    const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    track.scrollBy({ left: direction * distance, behavior: reduceMotion ? 'auto' : 'smooth' });
+  };
+
+  return (
+    <div>
+      <div className="flex flex-wrap items-end justify-between gap-5">
+        <div>
+          <p className="eyebrow mb-3 text-accent">From our guests</p>
+          <h2 id="reviews-title" className="font-journal text-4xl leading-none text-primary md:text-5xl">
+            Kind <em>words.</em>
+          </h2>
+        </div>
+        <div className="flex items-center gap-4">
+          <a href={CONFIG.leaveReviewUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-[.1em] text-primary underline decoration-accent decoration-2 underline-offset-4" data-testid="link-google-review">
+            Leave a Google review <ExternalLink size={14} />
+          </a>
+          <div className="hidden items-center gap-2 sm:flex">
+            <button type="button" onClick={() => step(-1)} className="grid h-9 w-9 place-items-center rounded-full border border-border text-primary transition-colors hover:border-primary" aria-label="Previous reviews" data-testid="button-reviews-previous"><ChevronLeft size={16} /></button>
+            <button type="button" onClick={() => step(1)} className="grid h-9 w-9 place-items-center rounded-full border border-border text-primary transition-colors hover:border-primary" aria-label="More reviews" data-testid="button-reviews-next"><ChevronRight size={16} /></button>
+          </div>
+        </div>
+      </div>
+
+      <div
+        ref={trackRef}
+        className="mt-8 flex snap-x snap-mandatory gap-4 overflow-x-auto pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        role="region"
+        aria-label="Guest reviews"
+        tabIndex={0}
+        data-testid="carousel-reviews"
+      >
+        {REVIEWS.map((review) => (
+          <figure
+            key={review.name}
+            data-review-card
+            className={`flex w-[85%] shrink-0 snap-start flex-col justify-between rounded-[1.25rem] border border-border bg-card sm:w-[calc(50%-8px)] lg:w-[calc((100%-32px)/3)] ${review.image ? 'p-2' : 'p-6'}`}
+          >
+            {review.image ? (
+              <img
+                src={review.image}
+                alt={`Google review by ${review.name}: “${review.text}”`}
+                width={1200}
+                height={900}
+                loading="lazy"
+                decoding="async"
+                className="aspect-[4/3] w-full rounded-[.9rem] object-cover"
+              />
+            ) : (
+              <>
+                <div>
+                  <div className="flex gap-0.5 text-accent" aria-label="5 out of 5 stars">
+                    {Array.from({ length: 5 }, (_, index) => <Star key={index} size={13} fill="currentColor" strokeWidth={0} />)}
+                  </div>
+                  <blockquote className="mt-4 text-sm leading-6 text-primary/85">“{review.text}”</blockquote>
+                </div>
+                <figcaption className="mt-5 text-xs font-bold text-primary">
+                  {review.name}
+                  <span className="font-normal text-muted-foreground"> · Google review</span>
+                </figcaption>
+              </>
+            )}
+          </figure>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 const currency = (amount: number) =>
   new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(amount);
 
@@ -1347,52 +1481,42 @@ function Home() {
           </div>
         </section>
 
-        <section id="reviews" className="scroll-mt-24 section-shell py-24 md:py-32" aria-labelledby="reviews-title">
-          <div className="grid gap-12 lg:grid-cols-[.7fr_1.3fr] lg:gap-24"><div><p className="eyebrow mb-5 text-accent">From our guests</p><h2 id="reviews-title" className="font-journal text-5xl leading-[.94] text-primary md:text-6xl">Kind<br /><em>words.</em></h2><a href={CONFIG.leaveReviewUrl} target="_blank" rel="noreferrer" className="mt-8 inline-flex items-center gap-2 text-xs font-bold uppercase tracking-[.1em] text-primary underline decoration-accent decoration-2 underline-offset-4" data-testid="link-google-review">Leave a Google review <ExternalLink size={14} /></a></div><div className="grid gap-4 sm:grid-cols-2"><img src={IMG.review1} alt="Guest review card: Sukanta Moule on the space, kitchen and value for families" width={768} height={1376} loading="lazy" decoding="async" className="w-full rounded-[1.4rem] object-cover shadow-sm" /><img src={IMG.review2} alt="Guest review card: Adrija Banerjee on a quiet, pet-friendly stay and a helpful owner" width={656} height={1604} loading="lazy" decoding="async" className="w-full rounded-[1.4rem] object-cover shadow-sm" /></div></div>
+        <section id="reviews" className="scroll-mt-24 section-shell py-16 md:py-20" aria-labelledby="reviews-title">
+          <ReviewCarousel />
         </section>
 
       </main>
 
-      {/* A slim band, laid out like the header rather than the four-column
-          block this used to be: brand and contacts on one row, every page on
-          the next, the small print on a third. The tall empty column under
-          the tagline is gone. It scrolls with the page — only the header is
-          pinned. */}
-      <footer className="bg-[#172d25] py-8 pb-28 text-[#f5eadb] md:pb-8" data-testid="site-footer">
+      {/* Two lines. The first is everything a guest might click — brand,
+          every page, and the ways to reach us, with Instagram and reviews as
+          icons so the row fits on a laptop. The second is the small print.
+          It scrolls with the page — only the header is pinned. */}
+      <footer className="bg-[#172d25] py-6 pb-28 text-[#f5eadb] md:pb-6" data-testid="site-footer">
         <div className="section-shell">
-          {/* Row one — who this is, and how to reach them. */}
-          <div className="flex flex-col justify-between gap-5 sm:flex-row sm:items-center">
+          <div className="flex flex-wrap items-center justify-between gap-x-8 gap-y-4">
             <div className="flex items-center gap-3">
-              <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-[#e4c9a4] text-[#172d25]"><Leaf size={17} /></span>
-              <span>
-                <span className="block font-mono-ui text-[10px] tracking-[.18em] text-[#f5eadb]/70">RAJ KUTHIR</span>
-                <span className="font-journal text-xl leading-tight">Homestays</span>
-              </span>
-              <span className="hidden border-l border-[#f5eadb]/15 pl-4 text-xs leading-5 text-[#f5eadb]/55 lg:block">Sobuj Potro — a private home in nature,<br />in Bolpur / Shantiniketan.</span>
+              <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-[#e4c9a4] text-[#172d25]"><Leaf size={15} /></span>
+              <span className="font-journal text-lg leading-none">Raj Kuthir <span className="text-[#f5eadb]/60">Homestays</span></span>
             </div>
-            <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-sm text-[#f5eadb]/70">
-              <a href={CONFIG.instagramUrl} target="_blank" rel="noreferrer" className="flex items-center gap-2 transition-colors hover:text-[#e4c9a4]" data-testid="link-footer-instagram"><Instagram size={15} /> Instagram</a>
-              <a href={CONFIG.reviewUrl} target="_blank" rel="noreferrer" className="flex items-center gap-2 transition-colors hover:text-[#e4c9a4]" data-testid="link-footer-review"><Star size={15} /> Google Reviews</a>
+            <nav className="flex flex-wrap items-center gap-x-5 gap-y-2 text-sm text-[#f5eadb]/70" aria-label="Footer navigation">
+              <a href={`${basePath}/our-story`} className="transition-colors hover:text-[#e4c9a4]" data-testid="link-footer-story">Our story</a>
+              <a href={`${basePath}/places-to-visit-in-shantiniketan`} className="transition-colors hover:text-[#e4c9a4]" data-testid="link-footer-places">Places to visit</a>
+              <a href={`${basePath}/gallery`} className="transition-colors hover:text-[#e4c9a4]" data-testid="link-footer-gallery">Photos</a>
+              <a href={`${basePath}/pet-friendly-homestay-shantiniketan`} className="transition-colors hover:text-[#e4c9a4]" data-testid="link-footer-pet">Staying with a pet</a>
+              <a href={`${basePath}/rates`} className="transition-colors hover:text-[#e4c9a4]" data-testid="link-footer-rates">Rates</a>
+              <a href={`${basePath}/house-rules`} className="transition-colors hover:text-[#e4c9a4]" data-testid="link-footer-house-rules">House rules</a>
+              <a href={`${basePath}/welcome`} className="transition-colors hover:text-[#e4c9a4]" data-testid="link-footer-welcome">Arriving guests</a>
+            </nav>
+            <div className="flex items-center gap-4 text-sm text-[#f5eadb]/70">
+              <a href={CONFIG.instagramUrl} target="_blank" rel="noreferrer" className="transition-colors hover:text-[#e4c9a4]" aria-label="Instagram" data-testid="link-footer-instagram"><Instagram size={16} /></a>
+              <a href={CONFIG.reviewUrl} target="_blank" rel="noreferrer" className="transition-colors hover:text-[#e4c9a4]" aria-label="Google reviews" data-testid="link-footer-review"><Star size={16} /></a>
               <a href={phoneHref(CONFIG.hostPhone)} className="flex items-center gap-2 transition-colors hover:text-[#e4c9a4]" data-testid="link-footer-call"><Phone size={15} /> {CONFIG.hostPhone}</a>
             </div>
           </div>
 
-          {/* Row two — every page, inline. The same seven links, one line of
-              height instead of seven. */}
-          <nav className="mt-6 flex flex-wrap items-center gap-x-5 gap-y-2 border-t border-[#f5eadb]/15 pt-5 text-sm text-[#f5eadb]/70" aria-label="Footer navigation">
-            <a href={`${basePath}/our-story`} className="transition-colors hover:text-[#e4c9a4]" data-testid="link-footer-story">Our story</a>
-            <a href={`${basePath}/places-to-visit-in-shantiniketan`} className="transition-colors hover:text-[#e4c9a4]" data-testid="link-footer-places">Places to visit</a>
-            <a href={`${basePath}/gallery`} className="transition-colors hover:text-[#e4c9a4]" data-testid="link-footer-gallery">Photos</a>
-            <a href={`${basePath}/pet-friendly-homestay-shantiniketan`} className="transition-colors hover:text-[#e4c9a4]" data-testid="link-footer-pet">Staying with a pet</a>
-            <a href={`${basePath}/rates`} className="transition-colors hover:text-[#e4c9a4]" data-testid="link-footer-rates">Rates</a>
-            <a href={`${basePath}/house-rules`} className="transition-colors hover:text-[#e4c9a4]" data-testid="link-footer-house-rules">House rules</a>
-            <a href={`${basePath}/welcome`} className="transition-colors hover:text-[#e4c9a4]" data-testid="link-footer-welcome">Arriving guests</a>
-          </nav>
-
-          {/* Row three — the small print. */}
-          <div className="mt-5 flex flex-col justify-between gap-2 border-t border-[#f5eadb]/15 pt-4 text-[10px] uppercase tracking-[.13em] text-[#f5eadb]/40 sm:flex-row">
-            <p>© {new Date().getFullYear()} Raj Kuthir Homestays</p>
-            <p>Made for slower days</p>
+          <div className="mt-4 flex flex-col justify-between gap-1.5 border-t border-[#f5eadb]/15 pt-3 text-[10px] uppercase tracking-[.13em] text-[#f5eadb]/40 sm:flex-row">
+            <p>© {new Date().getFullYear()} Raj Kuthir Homestays · Made for slower days</p>
+            <p className="normal-case tracking-[.04em] text-[#f5eadb]/30" data-testid="text-footer-credit">Developed by Sourja Mukherjee</p>
           </div>
         </div>
       </footer>
