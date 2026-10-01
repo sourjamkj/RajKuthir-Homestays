@@ -25,7 +25,7 @@ import {
 } from 'lucide-react';
 import { adminFetch, useAdminSession, useLogout } from '@/lib/admin-api';
 import { SOURCE_LABELS, formatRupees, type BookingSource } from '@/lib/ledger-api';
-import { CONFIG } from '@/lib/site';
+import { CONFIG, asset } from '@/lib/site';
 import { AdminHeader } from '@/components/AdminHeader';
 
 const ENQUIRIES_KEY = ['/api/enquiries'];
@@ -51,6 +51,25 @@ const MANAGEMENT_WHATSAPP = CONFIG.hostPhone.replace(/\D/g, '');
  */
 const CHECK_IN_TIME = '12:00 PM';
 const CHECK_OUT_TIME = '11:00 AM';
+
+/**
+ * The arrival pack as the owner keeps it in Admin → Guest info. Read at the
+ * moment the check-in message is composed, so a changed Wi-Fi password or a
+ * new caretaker number goes out without touching this file.
+ */
+type ArrivalInfo = {
+  wifiSsid: string;
+  wifiPassword: string;
+  arrival: string;
+  contacts: { label: string; name: string; phone: string }[];
+};
+
+/**
+ * Files the owner attaches to the check-in chat by hand. A wa.me link can
+ * carry text but not files, so these are downloaded as the chat opens and
+ * dropped in with the paperclip. Add a file to /public and list it here.
+ */
+const CHECKIN_ATTACHMENTS = ['raj-kuthir-house-rules.pdf'];
 
 type EnquiryStatus = 'new' | 'contacted' | 'converted' | 'closed';
 
@@ -256,6 +275,51 @@ export default function AdminGuests() {
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: GUEST_STAYS_KEY }),
   });
+
+  /**
+   * The check-in message, for a guest whose verification is done.
+   *
+   * Everything goes in the message itself — Wi-Fi, arrival notes, contacts —
+   * rather than behind a link the guest has to open and log in to. The house
+   * PDFs download as the chat opens, for the owner to attach.
+   *
+   * The chat window is opened before the arrival pack is fetched: a window
+   * opened after an await is treated as a pop-up and blocked.
+   */
+  const [attachHint, setAttachHint] = useState<string | null>(null);
+
+  const openCheckinWhatsApp = async (stay: GuestStay) => {
+    if (!stay.guestPhone) return;
+    const chat = window.open('', '_blank');
+
+    let info: ArrivalInfo | null = null;
+    try {
+      info = await adminFetch<ArrivalInfo>('/api/admin/guest-info');
+    } catch {
+      // Still send the message: it falls back to the host and caretaker
+      // numbers, and the owner can paste the Wi-Fi in by hand.
+      info = null;
+    }
+
+    const message = buildCheckinWhatsAppMessage(stay, info);
+    const url = `https://wa.me/${stay.guestPhone.replace(/\D/g, '')}?text=${encodeURIComponent(message)}`;
+    if (chat) {
+      chat.opener = null;
+      chat.location.href = url;
+    } else {
+      window.open(url, '_blank', 'noopener,noreferrer');
+    }
+
+    for (const file of CHECKIN_ATTACHMENTS) {
+      const link = document.createElement('a');
+      link.href = asset(file);
+      link.download = file;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+    }
+    setAttachHint(stay.bookingId);
+  };
 
   /**
    * Asks the server for a management access link AND the management view of
@@ -985,6 +1049,10 @@ export default function AdminGuests() {
                     stay.documents.rejected +
                     stay.documents.pending;
                   const isOpen = openDocuments === stay.bookingId;
+                  // Once the papers are in and nothing is rejected, the guest
+                  // has done their part: the next message is about arriving,
+                  // not about documents.
+                  const readyForCheckin = verified && stay.documents.rejected === 0;
                   return (
                     <Fragment key={stay.bookingId}>
                     <tr className="border-b border-border last:border-0" data-testid={`row-guest-stay-${stay.bookingId}`}>
@@ -1049,9 +1117,15 @@ export default function AdminGuests() {
                           {submitted && !verified && (
                             <button type="button" onClick={() => verifyDocuments.mutate({ bookingId: stay.bookingId, verified: true })} className="rounded-lg border border-border px-3 py-2 text-[10px] font-bold uppercase tracking-[.07em] text-primary hover:border-primary">Verify</button>
                           )}
-                          <button type="button" onClick={() => createOnboarding.mutate(stay)} disabled={createOnboarding.isPending || !stay.guestPhone} className="flex items-center gap-1.5 rounded-lg bg-primary px-3 py-2 text-[10px] font-bold uppercase tracking-[.07em] text-primary-foreground disabled:opacity-40" data-testid={`button-whatsapp-guest-${stay.bookingId}`}>
-                            {createOnboarding.isPending ? <Loader2 size={12} className="animate-spin" /> : <MessageCircle size={12} />} Guest WhatsApp
-                          </button>
+                          {readyForCheckin ? (
+                            <button type="button" onClick={() => openCheckinWhatsApp(stay)} disabled={!stay.guestPhone} title="Verification is complete — sends the check-in details" className="flex items-center gap-1.5 rounded-lg bg-primary px-3 py-2 text-[10px] font-bold uppercase tracking-[.07em] text-primary-foreground disabled:opacity-40" data-testid={`button-whatsapp-guest-${stay.bookingId}`}>
+                              <MessageCircle size={12} /> Check-in WhatsApp
+                            </button>
+                          ) : (
+                            <button type="button" onClick={() => createOnboarding.mutate(stay)} disabled={createOnboarding.isPending || !stay.guestPhone} title="Sends the document verification link" className="flex items-center gap-1.5 rounded-lg bg-primary px-3 py-2 text-[10px] font-bold uppercase tracking-[.07em] text-primary-foreground disabled:opacity-40" data-testid={`button-whatsapp-guest-${stay.bookingId}`}>
+                              {createOnboarding.isPending ? <Loader2 size={12} className="animate-spin" /> : <MessageCircle size={12} />} Verification WhatsApp
+                            </button>
+                          )}
                           <button type="button" onClick={() => openManagementWhatsApp(stay).catch((e) => window.alert(e instanceof Error ? e.message : 'Could not prepare management WhatsApp.'))} disabled={prepareManagement.isPending} className="flex items-center gap-1.5 rounded-lg border border-border px-3 py-2 text-[10px] font-bold uppercase tracking-[.07em] text-primary hover:border-primary disabled:opacity-40" data-testid={`button-whatsapp-management-${stay.bookingId}`}>
                             <MessageCircle size={12} /> Mgmt WA
                           </button>
@@ -1076,6 +1150,11 @@ export default function AdminGuests() {
                           )}
                         </div>
                         {createOnboarding.isError && createOnboarding.variables?.bookingId === stay.bookingId && <p className="mt-2 text-xs text-[#A65E45]">{createOnboarding.error instanceof Error ? createOnboarding.error.message : 'Could not prepare WhatsApp.'}</p>}
+                        {attachHint === stay.bookingId && (
+                          <p className="mt-2 text-xs text-muted-foreground" role="status" data-testid={`text-attach-hint-${stay.bookingId}`}>
+                            House rules PDF downloaded — attach it in the WhatsApp chat with the 📎 before sending.
+                          </p>
+                        )}
                       </td>
                     </tr>
 
@@ -1368,16 +1447,19 @@ export default function AdminGuests() {
                           (stay) => stay.guestPhone?.replace(/\D/g, '') === contact.phone.replace(/\D/g, ''),
                         );
                         const stay = matchingStays.find((item) => item.status !== 'cancelled') ?? matchingStays[0];
+                        const stayReady = Boolean(stay && stay.onboardingStatus === 'verified' && stay.documents.rejected === 0);
                         return stay ? (
                           <button
                             type="button"
-                            onClick={() => createOnboarding.mutate(stay)}
+                            onClick={() => (stayReady ? openCheckinWhatsApp(stay) : createOnboarding.mutate(stay))}
                             disabled={createOnboarding.isPending || !stay.guestPhone}
                             className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-3 py-2 text-[10px] font-bold uppercase tracking-[.07em] text-primary-foreground disabled:opacity-40"
                             data-testid={`button-whatsapp-contact-${contact.phone}`}
-                            title="Send the booking confirmation and document-verification link on WhatsApp"
+                            title={stayReady
+                              ? 'Verification is complete — sends the check-in details on WhatsApp'
+                              : 'Send the booking confirmation and document-verification link on WhatsApp'}
                           >
-                            <MessageCircle size={12} /> WhatsApp
+                            <MessageCircle size={12} /> {stayReady ? 'Check-in WhatsApp' : 'WhatsApp'}
                           </button>
                         ) : guestStays.isError ? (
                           // The stays list failed to load, so we cannot tell
@@ -1562,6 +1644,74 @@ function buildGuestWhatsAppMessage(stay: GuestStay, verificationUrl: string): st
     ? money(Math.max(0, stay.grossPaise - stay.receivedPaise))
     : 'To be confirmed';
   return `Greetings from Raj Kuthir Homestays – Sobuj Potro, Shantiniketan! 🌿\n\nDear ${stay.guestName ?? 'Guest'},\n\nThank you for choosing Raj Kuthir Homestays – Sobuj Potro. We are pleased to confirm your booking.\n\n🔴 IMPORTANT – ACTION REQUIRED BEFORE ARRIVAL\n\n📄 Document Verification / Pre-Arrival Check-in:\n${verificationUrl}\n\nPlease complete the mandatory guest information and ID document verification at least 48 hours before your scheduled check-in time.\n\n⚠️ Failure to complete the mandatory verification within this timeframe may result in check-in being denied without refund, in accordance with the booking terms.\n\n📅 Check-in: ${prettyGuestDate(stay.checkIn)} – ${CHECK_IN_TIME} onwards\n📅 Check-out: ${prettyGuestDate(stay.checkOut)} – ${CHECK_OUT_TIME}\n👥 Guests: ${stay.guests ?? 'As booked'}\n🏡 Accommodation: Entire Two-Bedroom Villa${nights ? ` (${nights} Nights)` : ''}${stay.pets ? `\n🐾 Pets: ${stay.pets}` : ''}\n\n💰 Booking Details\n\n- Total Booking Amount: ₹${total}\n- Advance Received: ₹${advance} ✅\n- Balance Amount Due: ₹${balance} (Payable at the property during check-in)\n\n📍 Google Maps: https://maps.app.goo.gl/aEdaJaaeEy1DZ8Ps8?g_st=ac\n\n📞 Contact Numbers\n- Host: +91 62903 99165\n- Designated Caretaker: +91 78726 85558\n\nAdditional Information\n\n- High-speed Wi-Fi is available and suitable for work/staycations.\n- Cafe Soi, located within the premises, serves snacks and beverages.\n- Home-cooked meals can also be arranged after discussing the menu and charges directly with the caretaker.\n- Zomato is available in the area with multiple restaurant options. Delivery availability and timings may vary depending on weather and local conditions.\n- Basic cooking utensils are available for simple meals. Additional utensils for elaborate cooking can be arranged subject to availability. Guests are also welcome to bring their own induction/microwave-compatible cookware if required.\n\nWe look forward to hosting you and wish you a wonderful stay at Raj Kuthir Homestays – Sobuj Potro.\n\nWarm regards,\nTeam Raj Kuthir Homestays – Sobuj Potro`;
+}
+
+/**
+ * Sent once verification is complete, in place of the documents message.
+ *
+ * Self-contained on purpose: no link to open and nothing to log in to. Times
+ * come from the house rules, Wi-Fi, arrival notes and contacts from the
+ * arrival pack the owner maintains, and the map link and fallback numbers
+ * match the booking confirmation. Written so the automated check-in reminder
+ * can send the same words later.
+ */
+function buildCheckinWhatsAppMessage(stay: GuestStay, info: ArrivalInfo | null): string {
+  const first = (stay.guestName ?? '').trim().split(/\s+/)[0] || 'there';
+  const nights = nightsBetween(stay.checkIn, stay.checkOut);
+  const balancePaise = stay.grossPaise != null && stay.receivedPaise != null
+    ? Math.max(0, stay.grossPaise - stay.receivedPaise)
+    : null;
+
+  const wifi = info && (info.wifiSsid || info.wifiPassword)
+    ? [
+        '',
+        `📶 Wi-Fi`,
+        ...(info.wifiSsid ? [`- Network: ${info.wifiSsid}`] : []),
+        ...(info.wifiPassword ? [`- Password: ${info.wifiPassword}`] : []),
+      ]
+    : [];
+
+  const arrival = info?.arrival.trim()
+    ? ['', `🧭 Arriving at the villa`, info.arrival.trim()]
+    : [];
+
+  const contacts = info && info.contacts.length > 0
+    ? info.contacts.map((c) => `- ${c.label || 'Contact'}${c.name ? ` (${c.name})` : ''}: ${c.phone}`)
+    : [
+        `- Caretaker (arrival, meals, local help): ${CONFIG.caretakerPhone}`,
+        `- Host: ${CONFIG.hostPhone}`,
+      ];
+
+  const lines = [
+    `Hello ${first} 🌿`,
+    '',
+    `Thank you — your verification is complete and you are all set for your stay at Raj Kuthir Homestays – Sobuj Potro.`,
+    '',
+    `📅 Check-in: ${prettyGuestDate(stay.checkIn)} – ${CHECK_IN_TIME} onwards`,
+    `📅 Check-out: ${prettyGuestDate(stay.checkOut)} – ${CHECK_OUT_TIME}`,
+    `🏡 Entire Two-Bedroom Villa${nights ? ` (${nights} Night${nights === 1 ? '' : 's'})` : ''}`,
+    `👥 Guests: ${stay.guests ?? 'As booked'}${stay.pets ? ` · 🐾 Pets: ${stay.pets}` : ''}`,
+    ...(stay.reference ? [`🔖 Booking reference: ${stay.reference}`] : []),
+    '',
+    `📍 Google Maps: https://maps.app.goo.gl/aEdaJaaeEy1DZ8Ps8?g_st=ac`,
+    ...arrival,
+    ...wifi,
+    ...(balancePaise && balancePaise > 0
+      ? ['', `💰 Balance payable at check-in: ₹${money(balancePaise)}`]
+      : []),
+    '',
+    `📞 Who to call`,
+    ...contacts,
+    `Do let the caretaker know your expected arrival time so the house is ready for you.`,
+    '',
+    `📋 Our house rules are attached to this chat as a PDF.`,
+    '',
+    `Safe travels — we look forward to welcoming you.`,
+    '',
+    `Warm regards,`,
+    `Team Raj Kuthir Homestays – Sobuj Potro`,
+  ];
+  return lines.join('\n');
 }
 
 function buildManagementMessage(

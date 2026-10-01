@@ -1,5 +1,5 @@
 import crypto from "node:crypto";
-import { and, desc, eq, isNull } from "drizzle-orm";
+import { and, desc, eq, isNull, sql } from "drizzle-orm";
 import {
   bookingGuests,
   bookings,
@@ -24,8 +24,16 @@ import {
   checkDocumentUpload,
   type AllowedDocumentMime,
 } from "./document-security.ts";
+import { whatsappReadyPhone } from "./phone-format.ts";
 
 const TOKEN_BYTES = 32;
+
+/**
+ * Channels that hide the guest's real number behind a relay or leave it out.
+ * A message sent to that number goes to the OTA, not to the guest.
+ */
+const OTA_SOURCES = new Set(["bookingCom", "airbnb", "makeMyTrip"]);
+
 
 /**
  * Recorded in guest_documents.verified_by when a document was accepted simply
@@ -338,6 +346,31 @@ export async function submitGuestOnboarding(input: {
     const pair = (await tx.select().from(bookingGuests).where(and(eq(bookingGuests.bookingId, found.booking.id), eq(bookingGuests.guestId, guest.id))).limit(1))[0];
     if (!pair) {
       await tx.insert(bookingGuests).values({ bookingId: found.booking.id, guestId: guest.id, isPrimary: true });
+    }
+
+    // Put the guest's own number on the booking when the booking cannot reach
+    // them: an OTA booking carries the channel's relay number (or none), and
+    // every WhatsApp action, the scheduled messages and the arrival-pack phone
+    // check all read bookings.guest_phone. The guest typed this number
+    // themselves through their private link, so it is the best one we have.
+    // A direct booking keeps the number it was made with. The number it
+    // replaces is kept in the note.
+    const reachable = whatsappReadyPhone(input.phone);
+    const bookingPhone = normalisePhone(found.booking.guestPhone);
+    if (
+      reachable &&
+      bookingPhone !== phone &&
+      (OTA_SOURCES.has(found.booking.source) || bookingPhone === null)
+    ) {
+      const was = found.booking.guestPhone ?? "none";
+      await tx
+        .update(bookings)
+        .set({
+          guestPhone: reachable,
+          note: sql`concat_ws(' | ', ${bookings.note}, ${`Phone from pre-arrival form; booking had ${was}`}::text)`,
+          updatedAt: new Date(),
+        })
+        .where(eq(bookings.id, found.booking.id));
     }
 
     // Documents the owner already rejected are superseded by this upload.
