@@ -1,4 +1,4 @@
-import { and, eq, gt, inArray, isNotNull, lte, ne } from "drizzle-orm";
+import { and, eq, gte, inArray, isNotNull, lt, lte, ne } from "drizzle-orm";
 import {
   appSettings,
   bookings,
@@ -49,6 +49,14 @@ export async function listActivity(now = new Date()): Promise<{
   items: ActivityItem[];
 }> {
   const since = activityWindowStart(await readSeenAt(), now);
+  /*
+    Postgres keeps timestamps to the microsecond; a JS Date (and so the stored
+    marker) only to the millisecond. An item created at 04:17:17.394136 is
+    marked read as 04:17:17.394, and "created_at > marker" then stays true for
+    ever: the bell could never be cleared. Comparing against the start of the
+    next millisecond treats everything inside the marker's millisecond as read.
+  */
+  const after = new Date(since.getTime() + 1);
 
   const [newBookings, cancelledBookings, otaBlocks, newEnquiries, uploads] = await Promise.all([
     db
@@ -62,7 +70,7 @@ export async function listActivity(now = new Date()): Promise<{
         createdAt: bookings.createdAt,
       })
       .from(bookings)
-      .where(and(gt(bookings.createdAt, since), lte(bookings.createdAt, now)))
+      .where(and(gte(bookings.createdAt, after), lte(bookings.createdAt, now)))
       .limit(MAX_ITEMS),
 
     // Cancelled after the marker, but created before it — a booking made and
@@ -80,8 +88,8 @@ export async function listActivity(now = new Date()): Promise<{
       .where(
         and(
           eq(bookings.status, "cancelled"),
-          gt(bookings.updatedAt, since),
-          lte(bookings.createdAt, since),
+          gte(bookings.updatedAt, after),
+          lt(bookings.createdAt, after),
         ),
       )
       .limit(MAX_ITEMS),
@@ -99,7 +107,7 @@ export async function listActivity(now = new Date()): Promise<{
         and(
           inArray(calendarEvents.source, [...OTA_SOURCES]),
           ne(calendarEvents.status, "cancelled"),
-          gt(calendarEvents.createdAt, since),
+          gte(calendarEvents.createdAt, after),
         ),
       )
       .limit(MAX_ITEMS),
@@ -113,7 +121,7 @@ export async function listActivity(now = new Date()): Promise<{
         createdAt: enquiries.createdAt,
       })
       .from(enquiries)
-      .where(gt(enquiries.createdAt, since))
+      .where(gte(enquiries.createdAt, after))
       .limit(MAX_ITEMS),
 
     db
@@ -125,7 +133,7 @@ export async function listActivity(now = new Date()): Promise<{
       })
       .from(guestOnboarding)
       .innerJoin(bookings, eq(bookings.id, guestOnboarding.bookingId))
-      .where(and(isNotNull(guestOnboarding.completedAt), gt(guestOnboarding.completedAt, since)))
+      .where(and(isNotNull(guestOnboarding.completedAt), gte(guestOnboarding.completedAt, after)))
       .limit(MAX_ITEMS),
   ]);
 

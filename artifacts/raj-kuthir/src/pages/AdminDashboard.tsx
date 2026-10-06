@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
-import { useLocation } from 'wouter';
+import { Link, useLocation } from 'wouter';
 import { format, isAfter, isBefore, parseISO, startOfToday } from 'date-fns';
 import {
   AlertCircle,
@@ -35,6 +35,7 @@ import {
   type SyncSourceStatus,
 } from '@/lib/admin-api';
 import { AdminHeader } from '@/components/AdminHeader';
+import { useFocusTarget } from '@/hooks/use-focus-target';
 
 type CalendarEventDto = {
   id: string;
@@ -83,7 +84,19 @@ export default function AdminDashboard() {
   // Hidden by default — this is the day-picker and the full "blocked &
   // booked" list, useful when debugging a specific date but not something to
   // look at on every page load.
-  const [showCalendar, setShowCalendar] = useState(false);
+  // Opened up front when the bell links to a specific calendar entry.
+  const [showCalendar, setShowCalendar] = useState(
+    () => typeof window !== 'undefined' && window.location.hash.startsWith('#event-'),
+  );
+  useEffect(() => {
+    const open = () => {
+      if (window.location.hash.startsWith('#event-')) setShowCalendar(true);
+    };
+    window.addEventListener('hashchange', open);
+    return () => window.removeEventListener('hashchange', open);
+  }, []);
+  // An entry that has since left the feed falls back to the calendar section.
+  useFocusTarget((id) => (id.startsWith('event-') ? 'calendar' : null));
 
   const events = useQuery({
     queryKey: CALENDAR_EVENTS_KEY,
@@ -131,6 +144,7 @@ export default function AdminDashboard() {
           aria-label="Booking summary"
         >
           <StatCard
+            href="/admin/guests#stays"
             label="Upcoming bookings"
             value={events.isLoading ? '—' : String(stats.upcoming)}
             hint={
@@ -223,7 +237,7 @@ export default function AdminDashboard() {
           when debugging a specific date but not something to look at every
           time the dashboard loads.
         */}
-        <section className="mt-8 pb-4" aria-label="Calendar">
+        <section id="calendar" className="mt-8 scroll-mt-6 pb-4" aria-label="Calendar">
           <SectionHeading
             icon={<CalendarDays size={15} />}
             title="Calendar"
@@ -251,15 +265,37 @@ export default function AdminDashboard() {
   );
 }
 
-function StatCard({ label, value, hint }: { label: string; value: string; hint?: string }) {
-  return (
-    <div className="rounded-2xl border border-border bg-card p-5">
+function StatCard({
+  label,
+  value,
+  hint,
+  href,
+}: {
+  label: string;
+  value: string;
+  hint?: string;
+  href?: string;
+}) {
+  const body = (
+    <>
       <p className="text-[10px] font-bold uppercase tracking-[.1em] text-muted-foreground">
         {label}
       </p>
       <p className="mt-2 font-journal text-2xl text-primary">{value}</p>
       {hint ? <p className="mt-1 text-xs text-muted-foreground">{hint}</p> : null}
-    </div>
+    </>
+  );
+  if (!href) {
+    return <div className="rounded-2xl border border-border bg-card p-5">{body}</div>;
+  }
+  return (
+    <Link
+      href={href}
+      className="block rounded-2xl border border-border bg-card p-5 transition-colors hover:border-primary/40 hover:bg-secondary/40 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
+      data-testid="link-upcoming-bookings"
+    >
+      {body}
+    </Link>
   );
 }
 

@@ -275,6 +275,7 @@ export function AdminCalendar() {
             {upcoming.map((event) => (
               <li
                 key={event.id}
+                id={`event-${event.id}`}
                 className="flex items-center justify-between gap-3 rounded-xl border border-border px-4 py-3"
               >
                 <div className="min-w-0">

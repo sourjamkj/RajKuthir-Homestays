@@ -158,7 +158,7 @@ export function AdminActivity() {
                 const Icon = ICONS[item.kind];
                 return (
                   <li key={item.id} className="border-b border-border last:border-0">
-                    <a href={item.href} className="flex gap-3 px-4 py-3 transition-colors hover:bg-background/60" data-testid={`activity-${item.id}`}>
+                    <a href={item.href} onClick={() => setOpen(false)} className="flex gap-3 px-4 py-3 transition-colors hover:bg-background/60" data-testid={`activity-${item.id}`}>
                       <span className={`mt-0.5 grid h-8 w-8 shrink-0 place-items-center rounded-full ${TONE[item.kind]}`}>
                         <Icon size={14} />
                       </span>

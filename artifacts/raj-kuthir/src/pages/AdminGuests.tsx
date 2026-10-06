@@ -26,6 +26,7 @@ import {
 import { adminFetch, useAdminSession, useLogout } from '@/lib/admin-api';
 import { SOURCE_LABELS, formatRupees, type BookingSource } from '@/lib/ledger-api';
 import { CONFIG, asset } from '@/lib/site';
+import { useFocusTarget } from '@/hooks/use-focus-target';
 import { AdminHeader } from '@/components/AdminHeader';
 
 const ENQUIRIES_KEY = ['/api/enquiries'];
@@ -422,8 +423,13 @@ export default function AdminGuests() {
    * screen used it. Dates, status and money are deliberately not here — they
    * move availability and the ledger, and stay on the Earnings page.
    */
-  const [stayOrder, setStayOrder] = useState<{ key: StaySortKey; dir: 'asc' | 'desc' }>({ key: 'booked', dir: 'desc' });
+  const [stayOrder, setStayOrder] = useState<{ key: StaySortKey; dir: 'asc' | 'desc' }>({ key: 'stay', dir: 'asc' });
   const sortedStays = sortStays(guestStays.data?.stays ?? [], stayOrder.key, stayOrder.dir);
+  // Deep links from the dashboard tile (#stays) and the activity bell
+  // (#stay-<id>, #enquiry-<id>) land on the exact row.
+  useFocusTarget((id) =>
+    id.startsWith('stay-') ? 'stays' : id.startsWith('enquiry-') ? 'enquiries' : null,
+  );
   const sortBy = (key: StaySortKey) =>
     setStayOrder((current) =>
       current.key === key
@@ -639,7 +645,7 @@ export default function AdminGuests() {
       <AdminHeader eyebrow="Guests" title="Enquiries & contacts" />
 
       <main className="mx-auto max-w-[1180px] px-5 py-8 md:px-8 md:py-10">
-        <section aria-label="Enquiries">
+        <section id="enquiries" className="scroll-mt-6" aria-label="Enquiries">
           <Heading
             icon={<Inbox size={15} />}
             title={`Enquiries${newCount ? ` · ${newCount} new` : ''}`}
@@ -709,7 +715,8 @@ export default function AdminGuests() {
             {rows.map((row) => (
               <div
                 key={row.id}
-                className="rounded-2xl border border-border bg-card p-5"
+                id={`enquiry-${row.id}`}
+                className="scroll-mt-6 rounded-2xl border border-border bg-card p-5"
                 data-testid={`row-enquiry-${row.id}`}
               >
                 <div className="flex flex-wrap items-start justify-between gap-4">
@@ -1021,7 +1028,7 @@ export default function AdminGuests() {
           </div>
         </section>
 
-        <section className="mt-10" aria-label="Upcoming guest stays">
+        <section id="stays" className="mt-10 scroll-mt-6" aria-label="Upcoming guest stays">
           <Heading
             icon={<Users size={15} />}
             title="Guest check-in readiness"
@@ -1055,7 +1062,7 @@ export default function AdminGuests() {
                   const readyForCheckin = verified && stay.documents.rejected === 0;
                   return (
                     <Fragment key={stay.bookingId}>
-                    <tr className="border-b border-border last:border-0" data-testid={`row-guest-stay-${stay.bookingId}`}>
+                    <tr id={`stay-${stay.bookingId}`} className="border-b border-border last:border-0" data-testid={`row-guest-stay-${stay.bookingId}`}>
                       <td className="px-5 py-4">
                         <p className="font-medium text-foreground">{stay.guestName ?? 'Unnamed guest'}</p>
                         <p className="mt-1 font-mono-ui text-[10px] text-muted-foreground">{stay.reference ?? 'No Raj Kuthir reference'}</p>
@@ -1507,7 +1514,10 @@ function prettyGuestDate(value: string): string {
 
 /*
  * Sorting for the guest stays table. Every column but Action sorts; clicking
- * the active column flips direction. Default: newest booking first.
+ * the active column flips direction. Default: Stay ascending, which means
+ * upcoming and in-house stays first, soonest arrival at the top, then past
+ * stays most recent first, and cancelled bookings last. Stay descending is
+ * plain latest check-in first.
  */
 type StaySortKey = 'guest' | 'stay' | 'booked' | 'verification' | 'documents';
 
@@ -1522,7 +1532,7 @@ const STAY_COLUMNS: Array<{ key: StaySortKey; label: string }> = [
 /** Names read A→Z first; dates and counts read newest / most first. */
 const STAY_SORT_FIRST_DIR: Record<StaySortKey, 'asc' | 'desc'> = {
   guest: 'asc',
-  stay: 'desc',
+  stay: 'asc',
   booked: 'desc',
   verification: 'asc',
   documents: 'desc',
@@ -1555,7 +1565,23 @@ function stayValue(stay: GuestStay, key: StaySortKey): string | number {
   }
 }
 
+/** 0 = upcoming or in the house now, 1 = already left, 2 = cancelled. */
+function stayPhase(stay: GuestStay, today: string): number {
+  if (stay.status === 'cancelled') return 2;
+  return stay.checkOut > today ? 0 : 1;
+}
+
 function sortStays(stays: GuestStay[], key: StaySortKey, dir: 'asc' | 'desc'): GuestStay[] {
+  if (key === 'stay' && dir === 'asc') {
+    const today = format(new Date(), 'yyyy-MM-dd');
+    return [...stays].sort((a, b) => {
+      const phase = stayPhase(a, today) - stayPhase(b, today);
+      if (phase !== 0) return phase;
+      // Upcoming: soonest first. Past and cancelled: most recent first.
+      const byDate = a.checkIn.localeCompare(b.checkIn);
+      return stayPhase(a, today) === 0 ? byDate : -byDate;
+    });
+  }
   const sign = dir === 'asc' ? 1 : -1;
   return [...stays].sort((a, b) => {
     const x = stayValue(a, key);

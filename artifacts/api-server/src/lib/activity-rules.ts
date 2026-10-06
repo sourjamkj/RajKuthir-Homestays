@@ -21,7 +21,7 @@ export type ActivityItem = {
   at: string;
   title: string;
   detail: string;
-  /** Where in the console to deal with it. */
+  /** Where in the console to deal with it: a page plus the #id of the exact row. */
   href: string;
 };
 
@@ -109,7 +109,7 @@ export function buildActivity(rows: ActivityRows): ActivityItem[] {
       detail:
         `${b.guestName ?? "Unnamed guest"} · ${stay(b.checkIn, b.checkOut)}` +
         (b.guestPhone ? "" : " · no phone number yet"),
-      href: "/admin/guests",
+      href: `/admin/guests#stay-${b.id}`,
     });
   }
 
@@ -120,7 +120,7 @@ export function buildActivity(rows: ActivityRows): ActivityItem[] {
       at: b.updatedAt.toISOString(),
       title: `${sourceLabel(b.source)} booking cancelled`,
       detail: `${b.guestName ?? "Unnamed guest"} · ${stay(b.checkIn, b.checkOut)}`,
-      href: "/admin/earnings",
+      href: `/admin/guests#stay-${b.id}`,
     });
   }
 
@@ -131,7 +131,7 @@ export function buildActivity(rows: ActivityRows): ActivityItem[] {
       at: e.createdAt.toISOString(),
       title: `${sourceLabel(e.source)} blocked dates`,
       detail: `${stay(e.startDate, e.endDate)} · from the ${sourceLabel(e.source)} calendar feed`,
-      href: "/admin",
+      href: `/admin#event-${e.id}`,
     });
   }
 
@@ -142,7 +142,7 @@ export function buildActivity(rows: ActivityRows): ActivityItem[] {
       at: q.createdAt.toISOString(),
       title: "New website enquiry",
       detail: `${q.name} · ${stay(q.checkIn, q.checkOut)}`,
-      href: "/admin/guests",
+      href: `/admin/guests#enquiry-${q.id}`,
     });
   }
 
@@ -153,7 +153,7 @@ export function buildActivity(rows: ActivityRows): ActivityItem[] {
       at: u.completedAt.toISOString(),
       title: "Guest ID documents uploaded",
       detail: `${u.guestName ?? "Unnamed guest"} · arriving ${shortDate(u.checkIn)}`,
-      href: "/admin/guests",
+      href: `/admin/guests#stay-${u.bookingId}`,
     });
   }
 
