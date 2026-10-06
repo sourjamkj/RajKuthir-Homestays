@@ -608,6 +608,9 @@ const VILLA = {
  * photographs in public/, at three different aspect ratios; anything under
  * 1200px on its long edge is left out, since Google ignores it anyway.
  */
+/** Variant spellings of the brand that people search with. */
+const BRAND_SPELLINGS = ["Raj Kutir Homestay", "Raj Kuthir Homestay", "Raj Kuthir"];
+
 function jsonLd(pathname: string): string {
   const path = normalisePath(pathname);
 
@@ -617,6 +620,9 @@ function jsonLd(pathname: string): string {
     "@type": "Organization",
     "@id": `${SITE_ORIGIN}/#organization`,
     name: "Raj Kuthir Homestays",
+    // How guests actually type it into Google: Search Console's top query is
+    // "raj kutir homestay bolpur". Spellings of our own name, nothing else.
+    alternateName: BRAND_SPELLINGS,
     url: `${SITE_ORIGIN}/`,
   };
 
@@ -625,6 +631,7 @@ function jsonLd(pathname: string): string {
     "@type": "LodgingBusiness",
     "@id": `${SITE_ORIGIN}/#lodging`,
     name: "Raj Kuthir Homestays – Sobuj Potro",
+    alternateName: BRAND_SPELLINGS,
     url: SITE_ORIGIN,
     telephone: "+916290399165",
     image: [

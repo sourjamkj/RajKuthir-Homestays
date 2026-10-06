@@ -228,140 +228,6 @@ const faqs = [
   },
 ];
 
-/*
-  Guest reviews, as written on Google. Quoted in the guest's own words —
-  trimmed with an ellipsis where a review runs long, capitals and spelling
-  tidied, never reworded. These used to be two tall image cards that filled
-  a screen and a half on a phone; as text they read in one strip, and a new
-  review is one more entry here.
-
-  `image` is optional: drop a rendered 4:3 review card into /public and set
-  it, and that card shows the image instead of the text. The quote stays as
-  the image's alt text, so it is still read out and still indexed.
-*/
-type GuestReview = { name: string; text: string; image?: string };
-
-const REVIEWS: readonly GuestReview[] = [
-  {
-    name: 'Roshni Chakraborty',
-    text: '…honestly our stay better than anywhere else we stayed. The host and caretaker were very helpful and caring, we had a very peaceful and luxurious stay… Literally the perfect break from everything.',
-  },
-  {
-    name: 'Angela Banerjee',
-    text: 'It was a serene experience staying at Raj Kuthir. The place is immaculate, the kitchen well furnished and the garden beautiful. The host, Mr Sourjyo, is a generous and amicable host. Overall, we would highly recommend Raj Kuthir homestays.',
-  },
-  {
-    name: 'Adrija Banerjee',
-    text: "Beautiful place! A little outside the City. Perfect for people who want to stay away from the noise. The owner was extremely helpful and friendly. The place is pet friendly too. Not only that my fur baby got lots of love from our caretaker as well :D So if you're planning a vacation to Shantiniketan soon with your fur baby, this is the spot!",
-  },
-  {
-    name: 'Swarup Banik',
-    text: 'This is an awe inspiring property amidst the green corridor of Bolpur, Shantiniketan. The place offers a plethora of options to sit back and relax while soaking in the rustic vibe… When in Bolpur, look no further and settle for this value for money space.',
-  },
-  {
-    name: 'Santanu Paul',
-    text: 'Wanna feel real vibes of Santiniketan - the best place to go for. Enjoyed the serenity in secured privacy where we remain ourselves only. Starting from the decor to support for anything, we had maximum satisfaction.',
-  },
-  {
-    name: 'Lipi Paul',
-    text: 'We spent a weekend at Sobujpotro. It was a great experience. The place is well furnished, clean, beautifully maintained. You can cook yourself or order from the canteen. The owner took very good care of us and regularly stayed in touch on call. Highly recommended.',
-  },
-  {
-    name: 'Kaushik Das',
-    text: 'Clean air, peaceful environment, lots of greenery in surrounding areas. Perfect place to detox from city life. Would highly recommend this place if you are looking for a nice relaxing vacation.',
-  },
-  {
-    name: 'Uday Sankar Chattopadhyay',
-    text: 'This is a quiet and serene place, ideal for those who want to stay away from city crowd for a while. This unit is comfortable, self sufficient. I loved this place.',
-  },
-  {
-    name: 'Sukanta Moule',
-    text: 'You can use the bungalow for your family of 6 to 7 and will get a good space of drawing room and a useful kitchen. Overall it was a nice experience and hope visit again.',
-  },
-];
-
-/*
-  One row of review cards that scrolls sideways. Native overflow with scroll
-  snapping, so a phone swipes it and a trackpad scrolls it with no library;
-  the arrow buttons are for mouse users and step one card at a time.
-*/
-function ReviewCarousel() {
-  const trackRef = useRef<HTMLDivElement | null>(null);
-
-  const step = (direction: 1 | -1) => {
-    const track = trackRef.current;
-    if (!track) return;
-    const card = track.querySelector<HTMLElement>('[data-review-card]');
-    const distance = card ? card.offsetWidth + 16 : track.clientWidth;
-    const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    track.scrollBy({ left: direction * distance, behavior: reduceMotion ? 'auto' : 'smooth' });
-  };
-
-  return (
-    <div>
-      <div className="flex flex-wrap items-end justify-between gap-5">
-        <div>
-          <p className="eyebrow mb-3 text-accent">From our guests</p>
-          <h2 id="reviews-title" className="font-journal text-4xl leading-none text-primary md:text-5xl">
-            Kind <em>words.</em>
-          </h2>
-        </div>
-        <div className="flex items-center gap-4">
-          <a href={CONFIG.leaveReviewUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-[.1em] text-primary underline decoration-accent decoration-2 underline-offset-4" data-testid="link-google-review">
-            Leave a Google review <ExternalLink size={14} />
-          </a>
-          <div className="hidden items-center gap-2 sm:flex">
-            <button type="button" onClick={() => step(-1)} className="grid h-9 w-9 place-items-center rounded-full border border-border text-primary transition-colors hover:border-primary" aria-label="Previous reviews" data-testid="button-reviews-previous"><ChevronLeft size={16} /></button>
-            <button type="button" onClick={() => step(1)} className="grid h-9 w-9 place-items-center rounded-full border border-border text-primary transition-colors hover:border-primary" aria-label="More reviews" data-testid="button-reviews-next"><ChevronRight size={16} /></button>
-          </div>
-        </div>
-      </div>
-
-      <div
-        ref={trackRef}
-        className="mt-8 flex snap-x snap-mandatory gap-4 overflow-x-auto pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
-        role="region"
-        aria-label="Guest reviews"
-        tabIndex={0}
-        data-testid="carousel-reviews"
-      >
-        {REVIEWS.map((review) => (
-          <figure
-            key={review.name}
-            data-review-card
-            className={`flex w-[85%] shrink-0 snap-start flex-col justify-between rounded-[1.25rem] border border-border bg-card sm:w-[calc(50%-8px)] lg:w-[calc((100%-32px)/3)] ${review.image ? 'p-2' : 'p-6'}`}
-          >
-            {review.image ? (
-              <img
-                src={review.image}
-                alt={`Google review by ${review.name}: “${review.text}”`}
-                width={1200}
-                height={900}
-                loading="lazy"
-                decoding="async"
-                className="aspect-[4/3] w-full rounded-[.9rem] object-cover"
-              />
-            ) : (
-              <>
-                <div>
-                  <div className="flex gap-0.5 text-accent" aria-label="5 out of 5 stars">
-                    {Array.from({ length: 5 }, (_, index) => <Star key={index} size={13} fill="currentColor" strokeWidth={0} />)}
-                  </div>
-                  <blockquote className="mt-4 text-sm leading-6 text-primary/85">“{review.text}”</blockquote>
-                </div>
-                <figcaption className="mt-5 text-xs font-bold text-primary">
-                  {review.name}
-                  <span className="font-normal text-muted-foreground"> · Google review</span>
-                </figcaption>
-              </>
-            )}
-          </figure>
-        ))}
-      </div>
-    </div>
-  );
-}
-
 const currency = (amount: number) =>
   new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(amount);
 
@@ -1501,6 +1367,9 @@ function Home() {
             <nav className="flex flex-wrap items-center gap-x-5 gap-y-2 text-sm text-[#f5eadb]/70" aria-label="Footer navigation">
               <a href={`${basePath}/our-story`} className="transition-colors hover:text-[#e4c9a4]" data-testid="link-footer-story">Our story</a>
               <a href={`${basePath}/places-to-visit-in-shantiniketan`} className="transition-colors hover:text-[#e4c9a4]" data-testid="link-footer-places">Places to visit</a>
+              <a href={`${basePath}/shantiniketan-weekend-trip-from-kolkata`} className="transition-colors hover:text-[#e4c9a4]" data-testid="link-footer-weekend">Weekend from Kolkata</a>
+              <a href={`${basePath}/homestay-near-visva-bharati`} className="transition-colors hover:text-[#e4c9a4]" data-testid="link-footer-visva-bharati">Near Visva-Bharati</a>
+              <a href={`${basePath}/homestay-near-sonajhuri-haat`} className="transition-colors hover:text-[#e4c9a4]" data-testid="link-footer-sonajhuri">Near Sonajhuri Haat</a>
               <a href={`${basePath}/gallery`} className="transition-colors hover:text-[#e4c9a4]" data-testid="link-footer-gallery">Photos</a>
               <a href={`${basePath}/pet-friendly-homestay-shantiniketan`} className="transition-colors hover:text-[#e4c9a4]" data-testid="link-footer-pet">Staying with a pet</a>
               <a href={`${basePath}/rates`} className="transition-colors hover:text-[#e4c9a4]" data-testid="link-footer-rates">Rates</a>
@@ -1552,6 +1421,140 @@ function Home() {
       </div>
 
       <div className="fixed inset-x-3 bottom-3 z-40 flex items-center gap-2 rounded-full border border-border bg-background/95 p-2 shadow-lg backdrop-blur-md md:hidden" data-testid="mobile-contact-bar"><a href={phoneHref(CONFIG.hostPhone)} className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-secondary text-primary" aria-label="Call host" data-testid="button-sticky-call"><Phone size={18} /></a><a href={whatsappUrl} target="_blank" rel="noreferrer" className="flex flex-1 items-center justify-center gap-2 rounded-full bg-primary py-3 text-xs font-bold uppercase tracking-[.1em] text-primary-foreground" data-testid="button-sticky-whatsapp"><MessageCircle size={16} /> Enquire on WhatsApp</a><button onClick={scrollToAvailability} className="grid h-11 w-11 shrink-0 place-items-center rounded-full border border-border text-primary" aria-label="Book now" data-testid="button-sticky-book"><CalendarDays size={18} /></button></div>
+    </div>
+  );
+}
+
+/*
+  Guest reviews, as written on Google. Quoted in the guest's own words —
+  trimmed with an ellipsis where a review runs long, capitals and spelling
+  tidied, never reworded. These used to be two tall image cards that filled
+  a screen and a half on a phone; as text they read in one strip, and a new
+  review is one more entry here.
+
+  `image` is optional: drop a rendered 4:3 review card into /public and set
+  it, and that card shows the image instead of the text. The quote stays as
+  the image's alt text, so it is still read out and still indexed.
+*/
+type GuestReview = { name: string; text: string; image?: string };
+
+const REVIEWS: readonly GuestReview[] = [
+  {
+    name: 'Roshni Chakraborty',
+    text: '…honestly our stay better than anywhere else we stayed. The host and caretaker were very helpful and caring, we had a very peaceful and luxurious stay… Literally the perfect break from everything.',
+  },
+  {
+    name: 'Angela Banerjee',
+    text: 'It was a serene experience staying at Raj Kuthir. The place is immaculate, the kitchen well furnished and the garden beautiful. The host, Mr Sourjyo, is a generous and amicable host. Overall, we would highly recommend Raj Kuthir homestays.',
+  },
+  {
+    name: 'Adrija Banerjee',
+    text: "Beautiful place! A little outside the City. Perfect for people who want to stay away from the noise. The owner was extremely helpful and friendly. The place is pet friendly too. Not only that my fur baby got lots of love from our caretaker as well :D So if you're planning a vacation to Shantiniketan soon with your fur baby, this is the spot!",
+  },
+  {
+    name: 'Swarup Banik',
+    text: 'This is an awe inspiring property amidst the green corridor of Bolpur, Shantiniketan. The place offers a plethora of options to sit back and relax while soaking in the rustic vibe… When in Bolpur, look no further and settle for this value for money space.',
+  },
+  {
+    name: 'Santanu Paul',
+    text: 'Wanna feel real vibes of Santiniketan - the best place to go for. Enjoyed the serenity in secured privacy where we remain ourselves only. Starting from the decor to support for anything, we had maximum satisfaction.',
+  },
+  {
+    name: 'Lipi Paul',
+    text: 'We spent a weekend at Sobujpotro. It was a great experience. The place is well furnished, clean, beautifully maintained. You can cook yourself or order from the canteen. The owner took very good care of us and regularly stayed in touch on call. Highly recommended.',
+  },
+  {
+    name: 'Kaushik Das',
+    text: 'Clean air, peaceful environment, lots of greenery in surrounding areas. Perfect place to detox from city life. Would highly recommend this place if you are looking for a nice relaxing vacation.',
+  },
+  {
+    name: 'Uday Sankar Chattopadhyay',
+    text: 'This is a quiet and serene place, ideal for those who want to stay away from city crowd for a while. This unit is comfortable, self sufficient. I loved this place.',
+  },
+  {
+    name: 'Sukanta Moule',
+    text: 'You can use the bungalow for your family of 6 to 7 and will get a good space of drawing room and a useful kitchen. Overall it was a nice experience and hope visit again.',
+  },
+];
+
+/*
+  One row of review cards that scrolls sideways. Native overflow with scroll
+  snapping, so a phone swipes it and a trackpad scrolls it with no library;
+  the arrow buttons are for mouse users and step one card at a time.
+*/
+function ReviewCarousel() {
+  const trackRef = useRef<HTMLDivElement | null>(null);
+
+  const step = (direction: 1 | -1) => {
+    const track = trackRef.current;
+    if (!track) return;
+    const card = track.querySelector<HTMLElement>('[data-review-card]');
+    const distance = card ? card.offsetWidth + 16 : track.clientWidth;
+    const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    track.scrollBy({ left: direction * distance, behavior: reduceMotion ? 'auto' : 'smooth' });
+  };
+
+  return (
+    <div>
+      <div className="flex flex-wrap items-end justify-between gap-5">
+        <div>
+          <p className="eyebrow mb-3 text-accent">From our guests</p>
+          <h2 id="reviews-title" className="font-journal text-4xl leading-none text-primary md:text-5xl">
+            Kind <em>words.</em>
+          </h2>
+        </div>
+        <div className="flex items-center gap-4">
+          <a href={CONFIG.leaveReviewUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-[.1em] text-primary underline decoration-accent decoration-2 underline-offset-4" data-testid="link-google-review">
+            Leave a Google review <ExternalLink size={14} />
+          </a>
+          <div className="hidden items-center gap-2 sm:flex">
+            <button type="button" onClick={() => step(-1)} className="grid h-9 w-9 place-items-center rounded-full border border-border text-primary transition-colors hover:border-primary" aria-label="Previous reviews" data-testid="button-reviews-previous"><ChevronLeft size={16} /></button>
+            <button type="button" onClick={() => step(1)} className="grid h-9 w-9 place-items-center rounded-full border border-border text-primary transition-colors hover:border-primary" aria-label="More reviews" data-testid="button-reviews-next"><ChevronRight size={16} /></button>
+          </div>
+        </div>
+      </div>
+
+      <div
+        ref={trackRef}
+        className="mt-8 flex snap-x snap-mandatory gap-4 overflow-x-auto pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        role="region"
+        aria-label="Guest reviews"
+        tabIndex={0}
+        data-testid="carousel-reviews"
+      >
+        {REVIEWS.map((review) => (
+          <figure
+            key={review.name}
+            data-review-card
+            className={`flex w-[85%] shrink-0 snap-start flex-col justify-between rounded-[1.25rem] border border-border bg-card sm:w-[calc(50%-8px)] lg:w-[calc((100%-32px)/3)] ${review.image ? 'p-2' : 'p-6'}`}
+          >
+            {review.image ? (
+              <img
+                src={review.image}
+                alt={`Google review by ${review.name}: “${review.text}”`}
+                width={1200}
+                height={900}
+                loading="lazy"
+                decoding="async"
+                className="aspect-[4/3] w-full rounded-[.9rem] object-cover"
+              />
+            ) : (
+              <>
+                <div>
+                  <div className="flex gap-0.5 text-accent" aria-label="5 out of 5 stars">
+                    {Array.from({ length: 5 }, (_, index) => <Star key={index} size={13} fill="currentColor" strokeWidth={0} />)}
+                  </div>
+                  <blockquote className="mt-4 text-sm leading-6 text-primary/85">“{review.text}”</blockquote>
+                </div>
+                <figcaption className="mt-5 text-xs font-bold text-primary">
+                  {review.name}
+                  <span className="font-normal text-muted-foreground"> · Google review</span>
+                </figcaption>
+              </>
+            )}
+          </figure>
+        ))}
+      </div>
     </div>
   );
 }

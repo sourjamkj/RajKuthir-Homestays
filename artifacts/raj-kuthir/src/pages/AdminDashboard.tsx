@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useLocation } from 'wouter';
-import { format, isAfter, parseISO, startOfToday } from 'date-fns';
+import { format, isAfter, isBefore, parseISO, startOfToday } from 'date-fns';
 import {
   AlertCircle,
   CalendarDays,
@@ -99,11 +99,17 @@ export default function AdminDashboard() {
     const upcoming = all
       .filter((event) => isAfter(parseISO(event.endDate), today))
       .sort((left, right) => left.startDate.localeCompare(right.startDate));
+    // Blocks are closed dates, not guests: they must not inflate the booking
+    // count or pose as the next arrival.
+    const stays = upcoming.filter((event) => !isBlock(event));
+    const nextArrival =
+      stays.find((event) => !isBefore(parseISO(event.startDate), today)) ?? null;
 
     return {
       total: all.length,
-      upcoming: upcoming.length,
-      nextArrival: upcoming[0] ?? null,
+      upcoming: stays.length,
+      blocked: upcoming.length - stays.length,
+      nextArrival,
     };
   }, [events.data?.events]);
 
@@ -127,6 +133,11 @@ export default function AdminDashboard() {
           <StatCard
             label="Upcoming bookings"
             value={events.isLoading ? '—' : String(stats.upcoming)}
+            hint={
+              !events.isLoading && stats.blocked > 0
+                ? `+ ${stats.blocked} blocked period${stats.blocked === 1 ? '' : 's'} (not bookings)`
+                : undefined
+            }
           />
           <StatCard
             label="Next arrival"
@@ -240,15 +251,27 @@ export default function AdminDashboard() {
   );
 }
 
-function StatCard({ label, value }: { label: string; value: string }) {
+function StatCard({ label, value, hint }: { label: string; value: string; hint?: string }) {
   return (
     <div className="rounded-2xl border border-border bg-card p-5">
       <p className="text-[10px] font-bold uppercase tracking-[.1em] text-muted-foreground">
         {label}
       </p>
       <p className="mt-2 font-journal text-2xl text-primary">{value}</p>
+      {hint ? <p className="mt-1 text-xs text-muted-foreground">{hint}</p> : null}
     </div>
   );
+}
+
+/**
+ * Closed dates rather than a guest: a host block, or an OTA feed entry that
+ * the channel itself labels unavailable (Airbnb "Not available", Booking.com
+ * "CLOSED - Not available"). Real OTA reservations come through as "Reserved"
+ * and ledger bookings as "Booked — name".
+ */
+function isBlock(event: CalendarEventDto): boolean {
+  if (event.source === 'manual') return true;
+  return /not available|unavailable|blocked|closed/i.test(event.title ?? '');
 }
 
 function SectionHeading({

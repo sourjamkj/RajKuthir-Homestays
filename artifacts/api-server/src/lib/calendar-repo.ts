@@ -113,6 +113,17 @@ export async function deleteOwnedEvent(id: string): Promise<boolean> {
   return deleted.length > 0;
 }
 
+/**
+ * Makes the stored rows for one OTA match its feed, touching only what changed.
+ *
+ * This used to delete every row for the source and insert the feed afresh on
+ * each poll. That kept the calendar right but gave every event a new id and a
+ * new created_at every two hours, so the activity bell announced the same
+ * Airbnb block as "new" all day long. Rows are now matched on the feed's UID
+ * (falling back to the date range for feeds without stable UIDs): a match is
+ * kept, id and created_at intact, with only its dates or title updated; an
+ * event no longer in the feed is deleted; only a genuinely new one is inserted.
+ */
 export async function replaceSourceEvents(
   source: Exclude<CalendarSource, "manual" | "direct">,
   events: Array<{
@@ -123,22 +134,71 @@ export async function replaceSourceEvents(
   }>,
 ): Promise<number> {
   return db.transaction(async (transaction) => {
-    await transaction
-      .delete(calendarEvents)
+    const existing = await transaction
+      .select()
+      .from(calendarEvents)
       .where(eq(calendarEvents.source, source));
 
-    if (events.length === 0) return 0;
+    const byUid = new Map(existing.map((row) => [row.externalUid, row]));
+    const byRange = new Map(
+      existing.map((row) => [`${row.startDate}:${row.endDate}`, row]),
+    );
+    const kept = new Set<string>();
+    const fresh: NewCalendarEvent[] = [];
 
-    const rows: NewCalendarEvent[] = events.map((event) => ({
-      source,
-      externalUid: event.externalUid,
-      startDate: event.startDate,
-      endDate: event.endDate,
-      title: event.title ?? "Reserved",
-      status: "confirmed",
-    }));
+    for (const event of events) {
+      const title = event.title ?? "Reserved";
+      const candidate =
+        byUid.get(event.externalUid) ??
+        byRange.get(`${event.startDate}:${event.endDate}`);
+      const match = candidate && !kept.has(candidate.id) ? candidate : null;
 
-    await transaction.insert(calendarEvents).values(rows);
-    return rows.length;
+      if (match) {
+        kept.add(match.id);
+        if (
+          match.externalUid !== event.externalUid ||
+          match.startDate !== event.startDate ||
+          match.endDate !== event.endDate ||
+          match.title !== title ||
+          match.status !== "confirmed"
+        ) {
+          await transaction
+            .update(calendarEvents)
+            .set({
+              externalUid: event.externalUid,
+              startDate: event.startDate,
+              endDate: event.endDate,
+              title,
+              status: "confirmed",
+            })
+            .where(eq(calendarEvents.id, match.id));
+        }
+        continue;
+      }
+
+      fresh.push({
+        source,
+        externalUid: event.externalUid,
+        startDate: event.startDate,
+        endDate: event.endDate,
+        title,
+        status: "confirmed",
+      });
+    }
+
+    const gone = existing
+      .filter((row) => !kept.has(row.id))
+      .map((row) => row.id);
+    if (gone.length > 0) {
+      await transaction
+        .delete(calendarEvents)
+        .where(inArray(calendarEvents.id, gone));
+    }
+
+    if (fresh.length > 0) {
+      await transaction.insert(calendarEvents).values(fresh);
+    }
+
+    return events.length;
   });
 }

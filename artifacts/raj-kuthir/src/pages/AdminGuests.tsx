@@ -1640,10 +1640,14 @@ function buildGuestWhatsAppMessage(stay: GuestStay, verificationUrl: string): st
   const nights = nightsBetween(stay.checkIn, stay.checkOut);
   const total = money(stay.grossPaise);
   const advance = money(stay.receivedPaise);
-  const balance = stay.grossPaise != null && stay.receivedPaise != null
-    ? money(Math.max(0, stay.grossPaise - stay.receivedPaise))
-    : 'To be confirmed';
-  return `Greetings from Raj Kuthir Homestays – Sobuj Potro, Shantiniketan! 🌿\n\nDear ${stay.guestName ?? 'Guest'},\n\nThank you for choosing Raj Kuthir Homestays – Sobuj Potro. We are pleased to confirm your booking.\n\n🔴 IMPORTANT – ACTION REQUIRED BEFORE ARRIVAL\n\n📄 Document Verification / Pre-Arrival Check-in:\n${verificationUrl}\n\nPlease complete the mandatory guest information and ID document verification at least 48 hours before your scheduled check-in time.\n\n⚠️ Failure to complete the mandatory verification within this timeframe may result in check-in being denied without refund, in accordance with the booking terms.\n\n📅 Check-in: ${prettyGuestDate(stay.checkIn)} – ${CHECK_IN_TIME} onwards\n📅 Check-out: ${prettyGuestDate(stay.checkOut)} – ${CHECK_OUT_TIME}\n👥 Guests: ${stay.guests ?? 'As booked'}\n🏡 Accommodation: Entire Two-Bedroom Villa${nights ? ` (${nights} Nights)` : ''}${stay.pets ? `\n🐾 Pets: ${stay.pets}` : ''}\n\n💰 Booking Details\n\n- Total Booking Amount: ₹${total}\n- Advance Received: ₹${advance} ✅\n- Balance Amount Due: ₹${balance} (Payable at the property during check-in)\n\n📍 Google Maps: https://maps.app.goo.gl/aEdaJaaeEy1DZ8Ps8?g_st=ac\n\n📞 Contact Numbers\n- Host: +91 62903 99165\n- Designated Caretaker: +91 78726 85558\n\nAdditional Information\n\n- High-speed Wi-Fi is available and suitable for work/staycations.\n- Cafe Soi, located within the premises, serves snacks and beverages.\n- Home-cooked meals can also be arranged after discussing the menu and charges directly with the caretaker.\n- Zomato is available in the area with multiple restaurant options. Delivery availability and timings may vary depending on weather and local conditions.\n- Basic cooking utensils are available for simple meals. Additional utensils for elaborate cooking can be arranged subject to availability. Guests are also welcome to bring their own induction/microwave-compatible cookware if required.\n\nWe look forward to hosting you and wish you a wonderful stay at Raj Kuthir Homestays – Sobuj Potro.\n\nWarm regards,\nTeam Raj Kuthir Homestays – Sobuj Potro`;
+  const due = guestBalancePaise(stay);
+  const balance = due != null ? money(due) : 'To be confirmed';
+  // A channel-prepaid guest sees only that they are paid up: our gross and
+  // payout figures are the channel's business with us, not the guest's.
+  const paymentLines = PREPAID_CHANNELS.has(stay.source)
+    ? `- Paid in full via ${SOURCE_LABELS[stay.source] ?? stay.source} ✅\n- Nothing further is due for the booking`
+    : `- Total Booking Amount: ₹${total}\n- Advance Received: ₹${advance} ✅\n- Balance Amount Due: ₹${balance} (Payable at the property during check-in)`;
+  return `Greetings from Raj Kuthir Homestays – Sobuj Potro, Shantiniketan! 🌿\n\nDear ${stay.guestName ?? 'Guest'},\n\nThank you for choosing Raj Kuthir Homestays – Sobuj Potro. We are pleased to confirm your booking.\n\n🔴 IMPORTANT – ACTION REQUIRED BEFORE ARRIVAL\n\n📄 Document Verification / Pre-Arrival Check-in:\n${verificationUrl}\n\nPlease complete the mandatory guest information and ID document verification at least 48 hours before your scheduled check-in time.\n\n⚠️ Failure to complete the mandatory verification within this timeframe may result in check-in being denied without refund, in accordance with the booking terms.\n\n📅 Check-in: ${prettyGuestDate(stay.checkIn)} – ${CHECK_IN_TIME} onwards\n📅 Check-out: ${prettyGuestDate(stay.checkOut)} – ${CHECK_OUT_TIME}\n👥 Guests: ${stay.guests ?? 'As booked'}\n🏡 Accommodation: Entire Two-Bedroom Villa${nights ? ` (${nights} Nights)` : ''}${stay.pets ? `\n🐾 Pets: ${stay.pets}` : ''}\n\n💰 Booking Details\n\n${paymentLines}\n\n📍 Google Maps: https://maps.app.goo.gl/aEdaJaaeEy1DZ8Ps8?g_st=ac\n\n📞 Contact Numbers\n- Host: +91 62903 99165\n- Designated Caretaker: +91 78726 85558\n\nAdditional Information\n\n- High-speed Wi-Fi is available and suitable for work/staycations.\n- Cafe Soi, located within the premises, serves snacks and beverages.\n- Home-cooked meals can also be arranged after discussing the menu and charges directly with the caretaker.\n- Zomato is available in the area with multiple restaurant options. Delivery availability and timings may vary depending on weather and local conditions.\n- Basic cooking utensils are available for simple meals. Additional utensils for elaborate cooking can be arranged subject to availability. Guests are also welcome to bring their own induction/microwave-compatible cookware if required.\n\nWe look forward to hosting you and wish you a wonderful stay at Raj Kuthir Homestays – Sobuj Potro.\n\nWarm regards,\nTeam Raj Kuthir Homestays – Sobuj Potro`;
 }
 
 /**
@@ -1655,12 +1659,27 @@ function buildGuestWhatsAppMessage(stay: GuestStay, verificationUrl: string): st
  * match the booking confirmation. Written so the automated check-in reminder
  * can send the same words later.
  */
+/**
+ * Channels where the guest pays the full price to the channel at booking.
+ *
+ * For these, gross minus what has reached us is the channel's commission and
+ * TDS — our cost, never the guest's. Showing it as "balance payable at
+ * check-in" asked a fully-paid MMT guest for ₹1,280 he did not owe.
+ * Booking.com is left out because it can be pay-at-property.
+ */
+const PREPAID_CHANNELS = new Set<string>(['airbnb', 'makeMyTrip']);
+
+/** What the guest still owes us at the door, or null when unknown. */
+function guestBalancePaise(stay: GuestStay): number | null {
+  if (PREPAID_CHANNELS.has(stay.source)) return 0;
+  if (stay.grossPaise == null || stay.receivedPaise == null) return null;
+  return Math.max(0, stay.grossPaise - stay.receivedPaise);
+}
+
 function buildCheckinWhatsAppMessage(stay: GuestStay, info: ArrivalInfo | null): string {
   const first = (stay.guestName ?? '').trim().split(/\s+/)[0] || 'there';
   const nights = nightsBetween(stay.checkIn, stay.checkOut);
-  const balancePaise = stay.grossPaise != null && stay.receivedPaise != null
-    ? Math.max(0, stay.grossPaise - stay.receivedPaise)
-    : null;
+  const balancePaise = guestBalancePaise(stay);
 
   const wifi = info && (info.wifiSsid || info.wifiPassword)
     ? [
