@@ -1142,7 +1142,7 @@ export default function AdminGuests() {
                           <button type="button" onClick={() => openManagementBoth(stay).catch((e) => window.alert(e instanceof Error ? e.message : 'Could not prepare management message.'))} disabled={prepareManagement.isPending} className="rounded-lg border border-border px-3 py-2 text-[10px] font-bold uppercase tracking-[.07em] text-primary hover:border-primary disabled:opacity-40" data-testid={`button-both-management-${stay.bookingId}`}>
                             Both
                           </button>
-                          {stayIsOver(stay) && (
+                          {canAskForReview(stay) && (
                             <a
                               href={reviewRequestUrl(stay)}
                               target="_blank"
@@ -1635,21 +1635,30 @@ function todayInIndia(): string {
   return new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
 }
 
-function stayIsOver(stay: GuestStay): boolean {
-  return stay.status !== 'cancelled' && stay.checkOut <= todayInIndia();
+/**
+ * Available from the day after check-in, so the owner can ask while the guest
+ * is still in the house and keep following up after they leave. It is a plain
+ * WhatsApp link: press it as often as a follow-up is worth sending.
+ */
+function canAskForReview(stay: GuestStay): boolean {
+  return stay.status !== 'cancelled' && stay.checkIn < todayInIndia();
 }
 
 function buildReviewMessage(stay: GuestStay): string {
   const first = (stay.guestName ?? '').trim().split(/\s+/)[0] || 'there';
-  return (
-    `Hello ${first}, we hope you got home well. If Sobuj Potro treated you kindly, ` +
-    `a short Google review helps other travellers find us: ${CONFIG.leaveReviewUrl}\n\n` +
-    `Thank you — you are welcome back any time.\n\nTeam Raj Kuthir Homestays – Sobuj Potro`
-  );
+  const stillHere = stay.checkOut > todayInIndia();
+  const opening = stillHere
+    ? `Hello ${first}, we hope you are enjoying your stay at Sobuj Potro. Whenever you have a minute, ` +
+      `a short Google review would mean a lot and helps other travellers find us: ${CONFIG.leaveReviewUrl}`
+    : `Hello ${first}, we hope you got home well. If Sobuj Potro treated you kindly, ` +
+      `a short Google review helps other travellers find us: ${CONFIG.leaveReviewUrl}`;
+  return `${opening}\n\nThank you — you are welcome back any time.\n\nTeam Raj Kuthir Homestays – Sobuj Potro`;
 }
 
 function reviewRequestUrl(stay: GuestStay): string {
-  const phone = (stay.guestPhone ?? '').replace(/\D/g, '').replace(/^0+/, '');
+  // Numbers are stored as the bare 10 digits; wa.me needs the country code.
+  const digits = (stay.guestPhone ?? '').replace(/\D/g, '').replace(/^0+/, '');
+  const phone = digits.length === 10 ? `91${digits}` : digits;
   return `https://wa.me/${phone}?text=${encodeURIComponent(buildReviewMessage(stay))}`;
 }
 
