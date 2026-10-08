@@ -223,6 +223,11 @@ const faqs = [
     answer: 'Cafe Soi is inside the premises, and Zomato availability makes it easy to order in when you prefer a slower evening at home.',
   },
   {
+    // Guests spell the name every way: say so in plain words, once.
+    question: 'Is it Raj Kuthir, Raj Kutir or Rajkuthir?',
+    answer: 'All three — you will see the name written each way. It is the same place: Raj Kuthir Homestays, Sobuj Potro, a private two-bedroom villa in Bolpur, Shantiniketan.',
+  },
+  {
     question: 'How do I confirm a booking?',
     answer: 'Send an enquiry with your preferred dates. The host will confirm availability and share the final booking details directly. The estimate below is for planning only and does not take payment.',
   },

@@ -609,7 +609,16 @@ const VILLA = {
  * 1200px on its long edge is left out, since Google ignores it anyway.
  */
 /** Variant spellings of the brand that people search with. */
-const BRAND_SPELLINGS = ["Raj Kutir Homestay", "Raj Kuthir Homestay", "Raj Kuthir"];
+const BRAND_SPELLINGS = [
+  "Raj Kuthir",
+  "Raj Kuthir Homestay",
+  "Rajkuthir",
+  "Rajkuthir Homestays",
+  "Raj Kutir",
+  "Raj Kutir Homestay",
+  "Rajkutir",
+  "Raj Kuthir Sobuj Potro",
+];
 
 function jsonLd(pathname: string): string {
   const path = normalisePath(pathname);
