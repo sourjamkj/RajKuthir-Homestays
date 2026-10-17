@@ -2,7 +2,8 @@ import { useQuery } from '@tanstack/react-query';
 
 /**
  * Nightly pricing, shared by the public availability calendar and the owner
- * console. Prices vary by occupancy, not by weekday.
+ * console. A weekday/weekend ladder by occupancy, peak periods tied to the
+ * Booking.com rate, a weekly discount and a hard floor — see pricing.ts.
  *
  * The resolution rules mirror the server's `rateForNight` exactly — if you
  * change one, change the other. Money is in paise throughout; format at the
@@ -48,8 +49,35 @@ export type RateExtras = {
   petPaise: number;
 };
 
+/** Mirrors the server's pricing.ts Ladder. */
+export type Ladder = {
+  weekdayBasePaise: number;
+  weekendBasePaise: number;
+  includedGuests: number;
+  extraGuestPaise: number;
+  floorPaise: number;
+  weeklyDiscountPercent: number;
+  weeklyMinNights: number;
+};
+
+/** Mirrors the server's pricing.ts PeakPeriod. endDate is exclusive. */
+export type PeakPeriod = {
+  id: string;
+  label: string;
+  startDate: string;
+  endDate: string;
+  bookingComPaise: number | null;
+  discountPercent: number;
+  minNights: number;
+};
+
 export type RatePlan = {
+  /** Weekday (Sun–Thu) price per occupancy. */
   rates: Record<string, number>;
+  /** Weekend (Fri–Sat) price per occupancy. */
+  weekendRates?: Record<string, number>;
+  ladder?: Ladder;
+  peaks?: PeakPeriod[];
   overrides: RateOverride[];
   maxGuests: number;
   extras?: RateExtras;
@@ -156,11 +184,28 @@ function clampGuests(plan: RatePlan, guests: number): number {
   return Math.min(Math.max(Math.round(guests) || 1, 1), max);
 }
 
+const wholeRupees = (paise: number) => Math.round(paise / 100) * 100;
+
+/** Friday and Saturday nights are the weekend. */
+export function isWeekendNight(isoDate: string): boolean {
+  const day = new Date(`${isoDate}T00:00:00Z`).getUTCDay();
+  return day === 5 || day === 6;
+}
+
+/** The peak period covering this night, if any. Later entries win. */
+export function peakFor(plan: RatePlan | undefined, isoDate: string): PeakPeriod | null {
+  let found: PeakPeriod | null = null;
+  for (const peak of plan?.peaks ?? []) {
+    if (isoDate >= peak.startDate && isoDate < peak.endDate) found = peak;
+  }
+  return found;
+}
+
 /**
- * Price for one night at a given occupancy, in paise. Later overrides win, so
- * a specific festival range added after a broad seasonal one takes precedence.
- * An override with no price for this occupancy falls through to the standing
- * rate rather than guessing.
+ * Price for one night at a given occupancy, in paise. Mirrors the server's
+ * rateForNight + pricing.ts exactly — change both together:
+ * peak (Booking.com rate less its discount) or weekday/weekend base, plus
+ * extra guests past the base; older rate rules on non-peak nights; floor last.
  */
 export function rateForNight(
   plan: RatePlan | undefined,
@@ -168,30 +213,85 @@ export function rateForNight(
   guests: number,
 ): number | null {
   if (!plan) return null;
-
   const occupancy = clampGuests(plan, guests);
-  let amount: number | null = null;
+  const ladder = plan.ladder;
 
-  for (const override of plan.overrides) {
-    if (isoDate >= override.startDate && isoDate < override.endDate) {
-      const candidate = override.amounts[String(occupancy)];
-      if (typeof candidate === 'number' && candidate > 0) amount = candidate;
+  // An older server without the ladder: read the occupancy card as before.
+  if (!ladder) {
+    const standing = plan.rates[String(occupancy)];
+    return typeof standing === 'number' ? standing : null;
+  }
+
+  const extra = Math.max(0, occupancy - ladder.includedGuests) * ladder.extraGuestPaise;
+  const peak = peakFor(plan, isoDate);
+
+  let price: number;
+  if (peak && peak.bookingComPaise !== null) {
+    price = wholeRupees(peak.bookingComPaise * (1 - peak.discountPercent / 100)) + extra;
+  } else {
+    price = (isWeekendNight(isoDate) ? ladder.weekendBasePaise : ladder.weekdayBasePaise) + extra;
+    if (!peak) {
+      let adjusted: number | null = null;
+      for (const override of plan.overrides) {
+        if (isoDate >= override.startDate && isoDate < override.endDate) {
+          const fixed = override.mode === 'fixed' ? override.amounts[String(occupancy)] : undefined;
+          if (typeof fixed === 'number' && fixed > 0) adjusted = fixed;
+          else if (typeof override.effectivePercent === 'number') {
+            adjusted = wholeRupees(price * (1 + override.effectivePercent / 100));
+          }
+        }
+      }
+      if (adjusted !== null) price = adjusted;
     }
   }
 
-  if (amount !== null) return amount;
-
-  const standing = plan.rates[String(occupancy)];
-  return typeof standing === 'number' ? standing : null;
+  return Math.max(ladder.floorPaise, price);
 }
 
-/** True when this night is priced by an override rather than the standing rate. */
+/** Weekly discount, night by night so the floor holds on each. */
+export function applyWeeklyDiscount(plan: RatePlan | undefined, nightly: number[]): number[] {
+  const ladder = plan?.ladder;
+  if (!ladder || nightly.length < ladder.weeklyMinNights || ladder.weeklyDiscountPercent <= 0) {
+    return nightly;
+  }
+  const factor = 1 - ladder.weeklyDiscountPercent / 100;
+  return nightly.map((paise) => Math.max(ladder.floorPaise, wholeRupees(paise * factor)));
+}
+
+function nightsBetween(checkIn: string, checkOut: string): string[] {
+  const start = Date.parse(`${checkIn}T00:00:00Z`);
+  const end = Date.parse(`${checkOut}T00:00:00Z`);
+  if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) return [];
+  const nights: string[] = [];
+  for (let time = start; time < end && nights.length < 366; time += 86_400_000) {
+    nights.push(new Date(time).toISOString().slice(0, 10));
+  }
+  return nights;
+}
+
+/** The strictest peak minimum stay a date range touches, or null. */
+export function minimumStayFor(
+  plan: RatePlan | undefined,
+  checkIn: string,
+  checkOut: string,
+): { minNights: number; label: string } | null {
+  let strictest: { minNights: number; label: string } | null = null;
+  for (const isoDate of nightsBetween(checkIn, checkOut)) {
+    const peak = peakFor(plan, isoDate);
+    if (peak && (!strictest || peak.minNights > strictest.minNights)) {
+      strictest = { minNights: peak.minNights, label: peak.label };
+    }
+  }
+  return strictest;
+}
+
+/** True when this night is in a peak period or an older price rule. */
 export function isPeakNight(
   plan: RatePlan | undefined,
   isoDate: string,
 ): boolean {
   if (!plan) return false;
-
+  if (peakFor(plan, isoDate)) return true;
   return plan.overrides.some(
     (override) => isoDate >= override.startDate && isoDate < override.endDate,
   );
@@ -199,34 +299,24 @@ export function isPeakNight(
 
 /**
  * Total for a stay, counting nights from check-in up to but not including
- * check-out — a Friday-to-Sunday stay is two nights.
+ * check-out — a Friday-to-Sunday stay is two nights. Weekly discount applied.
  */
 export function totalForStay(
   plan: RatePlan | undefined,
   checkIn: string,
   checkOut: string,
   guests: number,
-): { nights: number; totalPaise: number } {
-  if (!plan || !checkIn || !checkOut) return { nights: 0, totalPaise: 0 };
-
-  const start = Date.parse(`${checkIn}T00:00:00Z`);
-  const end = Date.parse(`${checkOut}T00:00:00Z`);
-
-  if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) {
-    return { nights: 0, totalPaise: 0 };
-  }
-
-  let nights = 0;
-  let totalPaise = 0;
-
-  for (let time = start; time < end; time += 86_400_000) {
-    const iso = new Date(time).toISOString().slice(0, 10);
-    totalPaise += rateForNight(plan, iso, guests) ?? 0;
-    nights += 1;
-    if (nights > 366) break;
-  }
-
-  return { nights, totalPaise };
+): { nights: number; totalPaise: number; discounted: boolean } {
+  if (!plan || !checkIn || !checkOut) return { nights: 0, totalPaise: 0, discounted: false };
+  const nights = nightsBetween(checkIn, checkOut);
+  const full = nights.map((isoDate) => rateForNight(plan, isoDate, guests) ?? 0);
+  const prices = applyWeeklyDiscount(plan, full);
+  const sum = (list: number[]) => list.reduce((a, b) => a + b, 0);
+  return {
+    nights: nights.length,
+    totalPaise: sum(prices),
+    discounted: sum(prices) < sum(full),
+  };
 }
 
 /** Full amount, e.g. ₹2,610 — used in the booking summary. */

@@ -153,3 +153,36 @@ test("quote · a malformed date is refused, not parsed loosely", () => {
   assert.equal(result.ok, false);
   assert.match((result as { reason: string }).reason, /not readable/i);
 });
+
+test("quote · uses the stay rules: weekly discount on the nights, peak minimum stay refused", async () => {
+  const { DEFAULT_LADDER, DEFAULT_PEAKS, applyWeeklyDiscount, minimumStayFor, nightPrice } =
+    await import("./pricing.ts");
+  const rules = {
+    nightPrices: (nights: string[], guests: number) =>
+      applyWeeklyDiscount(
+        DEFAULT_LADDER,
+        nights.map((iso) => nightPrice(DEFAULT_LADDER, DEFAULT_PEAKS, iso, guests)),
+      ),
+    minimumStay: (nights: string[]) => minimumStayFor(DEFAULT_PEAKS, nights),
+  };
+  const ladderRate: NightlyRate = (iso, guests) =>
+    nightPrice(DEFAULT_LADDER, DEFAULT_PEAKS, iso, guests);
+
+  // Mon 2 Nov – Mon 9 Nov 2026: 7 nights, 2 of them Fri/Sat.
+  const week = quoteForEnquiry(
+    { ...base, checkIn: "2026-11-02", checkOut: "2026-11-09" },
+    ladderRate,
+    rules,
+  );
+  assert.ok(week.ok);
+  // 5 × ₹3,200 → ₹2,900 floor (10% would be ₹2,880); 2 × ₹3,900 → ₹3,510.
+  assert.equal(week.roomPaise, 5 * 290_000 + 2 * 351_000);
+
+  const oneNight = quoteForEnquiry(
+    { ...base, checkIn: "2026-12-31", checkOut: "2027-01-01" },
+    ladderRate,
+    rules,
+  );
+  assert.equal(oneNight.ok, false);
+  assert.match(!oneNight.ok ? oneNight.reason : "", /2-night minimum/);
+});

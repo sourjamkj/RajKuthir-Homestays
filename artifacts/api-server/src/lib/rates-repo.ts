@@ -1,13 +1,21 @@
 import { and, asc, eq, gte, isNotNull, lt, sql } from "drizzle-orm";
 import {
+  appSettings,
   db,
   enquiries,
-  nightlyRates,
   rateOverrides,
-  DEFAULT_RATES_PAISE,
   MAX_GUESTS,
   type RateOverride,
 } from "@workspace/db";
+import {
+  DEFAULT_LADDER,
+  DEFAULT_PEAKS,
+  applyWeeklyDiscount,
+  minimumStayFor,
+  nightPrice,
+  type Ladder,
+  type PeakPeriod,
+} from "./pricing.ts";
 
 export type RateMode = "fixed" | "percent" | "demand";
 
@@ -29,28 +37,82 @@ export type ResolvedOverride = {
 };
 
 export type RatePlan = {
+  /** Weekday (Sun–Thu) price per occupancy, 1–5. Derived from the ladder. */
   rates: Record<number, number>;
+  /** Weekend (Fri–Sat) price per occupancy, 1–5. Derived from the ladder. */
+  weekendRates: Record<number, number>;
+  ladder: Ladder;
+  peaks: PeakPeriod[];
+  /** Older percentage / demand / fixed rules. Never apply on peak nights. */
   overrides: ResolvedOverride[];
   maxGuests: number;
 };
 
+/** app_settings keys. JSON values, so no table migration was needed. */
+const LADDER_KEY = "pricing.ladder";
+const PEAKS_KEY = "pricing.peaks";
+
+async function readJsonSetting<T>(key: string): Promise<T | null> {
+  const [row] = await db
+    .select({ value: appSettings.value })
+    .from(appSettings)
+    .where(eq(appSettings.key, key));
+  if (!row?.value) return null;
+  try {
+    return JSON.parse(row.value) as T;
+  } catch {
+    return null;
+  }
+}
+
+async function writeJsonSetting(key: string, value: unknown): Promise<void> {
+  const text = JSON.stringify(value);
+  await db
+    .insert(appSettings)
+    .values({ key, value: text, updatedAt: new Date() })
+    .onConflictDoUpdate({
+      target: appSettings.key,
+      set: { value: text, updatedAt: new Date() },
+    });
+}
+
+export async function getLadder(): Promise<Ladder> {
+  const saved = await readJsonSetting<Partial<Ladder>>(LADDER_KEY);
+  return { ...DEFAULT_LADDER, ...(saved ?? {}) };
+}
+
+export async function saveLadder(ladder: Ladder): Promise<void> {
+  await writeJsonSetting(LADDER_KEY, ladder);
+}
+
+/** Saved peak periods, or the two seeded ones until the owner first saves. */
+export async function getPeaks(): Promise<PeakPeriod[]> {
+  const saved = await readJsonSetting<PeakPeriod[]>(PEAKS_KEY);
+  const peaks = Array.isArray(saved) ? saved : DEFAULT_PEAKS;
+  return [...peaks].sort((a, b) => a.startDate.localeCompare(b.startDate));
+}
+
+export async function savePeaks(peaks: PeakPeriod[]): Promise<void> {
+  await writeJsonSetting(PEAKS_KEY, peaks);
+}
+
+/** The ladder read out per occupancy, for screens that show a rate card. */
+function ladderTable(ladder: Ladder, weekend: boolean): Record<number, number> {
+  const base = weekend ? ladder.weekendBasePaise : ladder.weekdayBasePaise;
+  const table: Record<number, number> = {};
+  for (let guests = 1; guests <= MAX_GUESTS; guests += 1) {
+    const extra = Math.max(0, guests - ladder.includedGuests) * ladder.extraGuestPaise;
+    table[guests] = Math.max(ladder.floorPaise, base + extra);
+  }
+  return table;
+}
+
 /** How far back enquiries still count as live demand. */
 const DEMAND_WINDOW_DAYS = 90;
 
+/** Weekday price per occupancy — kept for callers that want a single card. */
 export async function getStandardRates(): Promise<Record<number, number>> {
-  const rows = await db
-    .select()
-    .from(nightlyRates)
-    .orderBy(asc(nightlyRates.guests));
-
-  const rates: Record<number, number> = { ...DEFAULT_RATES_PAISE };
-  for (const row of rows) {
-    if (row.guests >= 1 && row.guests <= MAX_GUESTS) {
-      rates[row.guests] = row.amountPaise;
-    }
-  }
-
-  return rates;
+  return ladderTable(await getLadder(), false);
 }
 
 /**
@@ -177,50 +239,23 @@ async function resolveOverride(
  * renders prices, and cannot drift out of step with the server.
  */
 export async function getRatePlan(): Promise<RatePlan> {
-  const [standard, overrides] = await Promise.all([
-    getStandardRates(),
+  const [ladder, peaks, overrides] = await Promise.all([
+    getLadder(),
+    getPeaks(),
     db.select().from(rateOverrides).orderBy(asc(rateOverrides.startDate)),
   ]);
+  const standard = ladderTable(ladder, false);
 
   return {
     rates: standard,
+    weekendRates: ladderTable(ladder, true),
+    ladder,
+    peaks,
     overrides: await Promise.all(
       overrides.map((override) => resolveOverride(override, standard)),
     ),
     maxGuests: MAX_GUESTS,
   };
-}
-
-export async function setNightlyRates(
-  next: Record<number, number>,
-): Promise<void> {
-  const entries = Object.entries(next)
-    .map(([guests, amountPaise]) => ({
-      guests: Number(guests),
-      amountPaise,
-    }))
-    .filter(
-      (entry) =>
-        Number.isInteger(entry.guests) &&
-        entry.guests >= 1 &&
-        entry.guests <= MAX_GUESTS &&
-        Number.isInteger(entry.amountPaise) &&
-        entry.amountPaise > 0,
-    );
-
-  if (entries.length === 0) return;
-
-  await db.transaction(async (transaction) => {
-    for (const entry of entries) {
-      await transaction
-        .insert(nightlyRates)
-        .values({ ...entry, updatedAt: new Date() })
-        .onConflictDoUpdate({
-          target: nightlyRates.guests,
-          set: { amountPaise: entry.amountPaise, updatedAt: new Date() },
-        });
-    }
-  });
 }
 
 export async function createOverride(input: {
@@ -301,10 +336,10 @@ export async function deleteOverride(id: string): Promise<boolean> {
 }
 
 /**
- * Price for one night at a given occupancy, in paise. Later overrides win, so
- * a specific festival range added after a broad seasonal one takes precedence.
- * An override with no price for this occupancy falls through to the standing
- * rate rather than guessing.
+ * Price for one night at a given occupancy, in paise — the ladder in
+ * pricing.ts, with any older rule from rate_overrides applied on non-peak
+ * nights (later rules win; a fixed price replaces, a percentage scales), and
+ * the floor last.
  */
 export function rateForNight(
   plan: RatePlan,
@@ -316,16 +351,37 @@ export function rateForNight(
     plan.maxGuests,
   );
 
-  let amount: number | null = null;
-
+  let adjust: ((price: number) => number) | undefined;
   for (const override of plan.overrides) {
     if (isoDate >= override.startDate && isoDate < override.endDate) {
-      const candidate = override.amounts[String(occupancy)];
-      if (typeof candidate === "number" && candidate > 0) amount = candidate;
+      const fixed = override.mode === "fixed" ? override.amounts[String(occupancy)] : undefined;
+      if (typeof fixed === "number" && fixed > 0) {
+        adjust = () => fixed;
+      } else if (typeof override.effectivePercent === "number") {
+        const percent = override.effectivePercent;
+        adjust = (price) => price * (1 + percent / 100);
+      }
     }
   }
 
-  return amount ?? plan.rates[occupancy] ?? DEFAULT_RATES_PAISE[occupancy] ?? 0;
+  return nightPrice(plan.ladder, plan.peaks, isoDate, occupancy, adjust);
+}
+
+/** Each night's price for a stay, after the weekly discount. */
+export function stayNightPrices(
+  plan: RatePlan,
+  nights: string[],
+  guests: number,
+): number[] {
+  return applyWeeklyDiscount(
+    plan.ladder,
+    nights.map((isoDate) => rateForNight(plan, isoDate, guests)),
+  );
+}
+
+/** The minimum stay a set of nights must meet, if it touches a peak period. */
+export function minimumStay(plan: RatePlan, nights: string[]) {
+  return minimumStayFor(plan.peaks, nights);
 }
 
 /** Total for a stay, counting nights from check-in up to but not including check-out. */
@@ -342,15 +398,11 @@ export function totalForStay(
     return { nights: 0, totalPaise: 0 };
   }
 
-  let nights = 0;
-  let totalPaise = 0;
-
-  for (let time = start; time < end; time += 86_400_000) {
-    const iso = new Date(time).toISOString().slice(0, 10);
-    totalPaise += rateForNight(plan, iso, guests);
-    nights += 1;
-    if (nights > 366) break;
+  const nights: string[] = [];
+  for (let time = start; time < end && nights.length < 366; time += 86_400_000) {
+    nights.push(new Date(time).toISOString().slice(0, 10));
   }
 
-  return { nights, totalPaise };
+  const prices = stayNightPrices(plan, nights, guests);
+  return { nights: nights.length, totalPaise: prices.reduce((a, b) => a + b, 0) };
 }

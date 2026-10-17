@@ -25,7 +25,7 @@ import { quoteForEnquiry, type QuoteResult } from "../lib/enquiry-quote";
 import { holdExpiryOf, holdStateOf } from "../lib/enquiry-hold";
 import { firstConflict } from "../lib/availability";
 import { listPublicBlocks } from "../lib/calendar-repo";
-import { getRatePlan, rateForNight } from "../lib/rates-repo";
+import { getRatePlan, minimumStay, rateForNight, stayNightPrices } from "../lib/rates-repo";
 import {
   buildEnquiryQuoteTemplate,
   upiDetails,
@@ -236,6 +236,10 @@ router.get("/enquiries", requireAdmin, async (_req, res) => {
 
   const nightlyRate = (isoDate: string, guests: number) =>
     rateForNight(plan, isoDate, guests);
+  const rules = {
+    nightPrices: (nights: string[], guests: number) => stayNightPrices(plan, nights, guests),
+    minimumStay: (nights: string[]) => minimumStay(plan, nights),
+  };
 
   // One clock for the whole list, so two rows quoted in the same second can
   // never disagree about how long they have left.
@@ -244,7 +248,7 @@ router.get("/enquiries", requireAdmin, async (_req, res) => {
   res.json({
     enquiries: rows.map((row) => ({
       ...row,
-      quote: quoteForEnquiry(row, nightlyRate),
+      quote: quoteForEnquiry(row, nightlyRate, rules),
       hold: holdStateOf(row, now),
     })),
     /*
@@ -311,8 +315,13 @@ router.post("/enquiries/:id/quote", requireAdmin, async (req, res) => {
   }
 
   const plan = await getRatePlan();
-  const quote: QuoteResult = quoteForEnquiry(enquiry, (isoDate, guests) =>
-    rateForNight(plan, isoDate, guests),
+  const quote: QuoteResult = quoteForEnquiry(
+    enquiry,
+    (isoDate, guests) => rateForNight(plan, isoDate, guests),
+    {
+      nightPrices: (nights, guests) => stayNightPrices(plan, nights, guests),
+      minimumStay: (nights) => minimumStay(plan, nights),
+    },
   );
 
   if (!quote.ok) {

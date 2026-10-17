@@ -4,7 +4,6 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { format, parseISO } from 'date-fns';
 import {
   CalendarRange,
-  IndianRupee,
   Loader2,
   Pencil,
   Plus,
@@ -21,6 +20,7 @@ import {
   type RateOverride,
 } from '@/lib/rates';
 import { AdminHeader } from '@/components/AdminHeader';
+import { PeakPeriodsSection, RateLadderSection } from '@/components/AdminPricingLadder';
 
 const GUEST_COUNTS = [1, 2, 3, 4, 5];
 
@@ -76,49 +76,15 @@ export default function AdminRates() {
 
   const plan = useRatePlan({ fresh: true });
 
-  const [standing, setStanding] = useState<Record<string, string>>({});
-  const [touched, setTouched] = useState(false);
   const [peak, setPeak] = useState(emptyPeak);
   const [peakOpen, setPeakOpen] = useState(false);
   /** Set when the form is editing an existing period rather than creating one. */
   const [editingId, setEditingId] = useState<string | null>(null);
 
-  // Seed the form from the server, but never overwrite what is being typed.
-  useEffect(() => {
-    if (!plan.data || touched) return;
-
-    setStanding(
-      Object.fromEntries(
-        GUEST_COUNTS.map((n) => [
-          String(n),
-          plan.data.rates[String(n)]
-            ? String(plan.data.rates[String(n)] / 100)
-            : '',
-        ]),
-      ),
-    );
-  }, [plan.data, touched]);
-
   const invalidate = () => {
     // Matches both the public key and the admin's ['...','fresh'] variant.
     queryClient.invalidateQueries({ queryKey: RATES_KEY });
   };
-
-  const saveStanding = useMutation({
-    mutationFn: () =>
-      adminFetch('/api/rates', {
-        method: 'PUT',
-        body: JSON.stringify({
-          rates: Object.fromEntries(
-            Object.entries(standing).filter(([, value]) => value !== ''),
-          ),
-        }),
-      }),
-    onSuccess: () => {
-      setTouched(false);
-      invalidate();
-    },
-  });
 
   const addPeak = useMutation({
     mutationFn: () =>
@@ -222,8 +188,6 @@ export default function AdminRates() {
         )
       : [];
 
-  const standingError =
-    saveStanding.error instanceof Error ? saveStanding.error.message : null;
   const peakError = addPeak.error instanceof Error ? addPeak.error.message : null;
 
   return (
@@ -231,67 +195,14 @@ export default function AdminRates() {
       <AdminHeader eyebrow="Pricing" title="Nightly rates" />
 
       <main className="mx-auto max-w-[1180px] px-5 py-8 md:px-8 md:py-10">
-        <section aria-label="Standing rates">
-          <Heading
-            icon={<IndianRupee size={15} />}
-            title="Standard rates"
-            description="Price per night for the whole villa, by how many guests are staying. These apply on every date that isn't covered by a peak period below."
-          />
+        <RateLadderSection plan={plan.data} />
+        <PeakPeriodsSection plan={plan.data} />
 
-          <div className="mt-4 rounded-2xl border border-border bg-card p-5 md:p-6">
-            <div className="grid gap-4 sm:grid-cols-3 lg:grid-cols-5">
-              {GUEST_COUNTS.map((guests) => (
-                <label key={guests} className="block">
-                  <span className="mb-1.5 block text-[10px] font-bold uppercase tracking-[.08em] text-muted-foreground">
-                    {guests} {guests === 1 ? 'guest' : 'guests'}
-                  </span>
-                  <div className="flex items-center rounded-lg border border-border bg-background focus-within:border-primary">
-                    <span className="pl-3 text-sm text-muted-foreground">₹</span>
-                    <input
-                      type="number"
-                      inputMode="numeric"
-                      value={standing[String(guests)] ?? ''}
-                      onChange={(event) => {
-                        setTouched(true);
-                        setStanding((current) => ({
-                          ...current,
-                          [String(guests)]: event.target.value,
-                        }));
-                      }}
-                      className="w-full bg-transparent px-2 py-2.5 text-sm tabular-nums outline-none"
-                      data-testid={`input-rate-${guests}`}
-                    />
-                  </div>
-                </label>
-              ))}
-            </div>
-
-            {standingError && (
-              <p className="mt-3 text-xs text-[#A65E45]" role="alert">
-                {standingError}
-              </p>
-            )}
-
-            <button
-              type="button"
-              onClick={() => saveStanding.mutate()}
-              disabled={!touched || saveStanding.isPending}
-              className="mt-5 flex items-center gap-2 rounded-full bg-primary px-6 py-3 text-[11px] font-bold uppercase tracking-[.09em] text-primary-foreground transition-transform hover:-translate-y-0.5 disabled:translate-y-0 disabled:cursor-not-allowed disabled:opacity-40"
-              data-testid="button-save-rates"
-            >
-              {saveStanding.isPending && (
-                <Loader2 size={14} className="animate-spin" />
-              )}
-              Save rates
-            </button>
-          </div>
-        </section>
-
-        <section className="mt-8 pb-6" aria-label="Peak periods">
+        <section className="mt-8 pb-6" aria-label="Other price rules">
           <Heading
             icon={<CalendarRange size={15} />}
-            title="Peak periods"
-            description="Festival weeks, New Year, Poush Mela — a date range with its own prices. Leave an occupancy blank to keep the standard rate for it."
+            title="Other price rules"
+            description="Older percentage, demand and exact-price rules. They apply on top of the ladder on ordinary nights only — never on a peak period above — and the floor still holds."
             action={
               editingId ? (
                 <button

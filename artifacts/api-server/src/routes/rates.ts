@@ -10,11 +10,16 @@ import { requireAdmin } from "../lib/admin-auth";
 import {
   createOverride,
   deleteOverride,
+  getLadder,
+  getPeaks,
   getRatePlan,
-  setNightlyRates,
+  saveLadder,
+  savePeaks,
   updateOverride,
   type RateMode,
 } from "../lib/rates-repo";
+import { ladderProblem, peakProblem, type PeakPeriod } from "../lib/pricing.ts";
+import { randomUUID } from "node:crypto";
 
 const router: IRouter = Router();
 
@@ -95,23 +100,116 @@ router.get("/rates", async (_req, res) => {
   });
 });
 
-router.put("/rates", requireAdmin, async (req, res) => {
-  const amounts = parseAmounts(req.body?.rates);
+/** A whole-rupee amount from the console, as paise; null if missing or silly. */
+function rupeesToPaise(value: unknown, { allowZero = false } = {}): number | null {
+  if (value === "" || value === null || value === undefined) return null;
+  const rupees = Number(value);
+  if (!Number.isFinite(rupees) || rupees > MAX_RUPEES) return null;
+  if (rupees < 0 || (!allowZero && rupees === 0)) return null;
+  return Math.round(rupees) * 100;
+}
 
-  if (Object.keys(amounts).length === 0) {
-    res.status(400).json({
-      error: `Enter at least one nightly price, for 1 to ${MAX_GUESTS} guests.`,
-    });
+/**
+ * The rate ladder: weekday and weekend base for up to two guests, the
+ * per-guest charge beyond that, the floor and the weekly discount. Rupees in.
+ */
+router.put("/rates/ladder", requireAdmin, async (req, res) => {
+  const body = req.body ?? {};
+  const current = await getLadder();
+  const next = {
+    ...current,
+    weekdayBasePaise: rupeesToPaise(body.weekdayBase) ?? -1,
+    weekendBasePaise: rupeesToPaise(body.weekendBase) ?? -1,
+    extraGuestPaise: rupeesToPaise(body.extraGuest, { allowZero: true }) ?? -1,
+    floorPaise: rupeesToPaise(body.floor) ?? -1,
+    weeklyDiscountPercent: Math.round(Number(body.weeklyDiscountPercent)),
+  };
+
+  const problem = ladderProblem(next);
+  if (problem) {
+    res.status(400).json({ error: problem });
     return;
   }
 
-  const next: Record<number, number> = {};
-  for (const [guests, paise] of Object.entries(amounts)) {
-    next[Number(guests)] = paise;
+  await saveLadder(next);
+  res.json(await getRatePlan());
+});
+
+/**
+ * Peak periods arrive as first and last NIGHT, both inclusive, because that
+ * is how the owner thinks of them ("22 Dec to 1 Jan"). Stored half-open like
+ * every other range, so the end becomes the morning after the last night.
+ */
+function parsePeak(body: Record<string, unknown> | undefined, id: string):
+  | { error: string }
+  | { value: PeakPeriod } {
+  const firstNight = String(body?.firstNight ?? "");
+  const lastNight = String(body?.lastNight ?? "");
+  if (!ISO_DATE.test(firstNight) || !ISO_DATE.test(lastNight)) {
+    return { error: "Choose valid first and last nights." };
+  }
+  const end = new Date(`${lastNight}T00:00:00Z`);
+  end.setUTCDate(end.getUTCDate() + 1);
+
+  const rawRate = body?.bookingComRate;
+  const bookingComPaise =
+    rawRate === "" || rawRate === null || rawRate === undefined
+      ? null
+      : rupeesToPaise(rawRate);
+  if (bookingComPaise === null && !(rawRate === "" || rawRate === null || rawRate === undefined)) {
+    return { error: "The Booking.com rate must be a positive amount." };
   }
 
-  await setNightlyRates(next);
+  const value: PeakPeriod = {
+    id,
+    label: String(body?.label ?? "").slice(0, 120).trim(),
+    startDate: firstNight,
+    endDate: end.toISOString().slice(0, 10),
+    bookingComPaise,
+    discountPercent: Math.round(Number(body?.discountPercent ?? 10)),
+    minNights: Math.round(Number(body?.minNights ?? 2)),
+  };
+  const problem = peakProblem(value);
+  return problem ? { error: problem } : { value };
+}
+
+const PEAK_ID = /^[a-z0-9-]{1,80}$/i;
+
+router.post("/rates/peaks", requireAdmin, async (req, res) => {
+  const parsed = parsePeak(req.body, randomUUID());
+  if ("error" in parsed) {
+    res.status(400).json({ error: parsed.error });
+    return;
+  }
+  await savePeaks([...(await getPeaks()), parsed.value]);
+  res.status(201).json(await getRatePlan());
+});
+
+router.patch("/rates/peaks/:id", requireAdmin, async (req, res) => {
+  const id = Array.isArray(req.params.id) ? "" : req.params.id;
+  const peaks = await getPeaks();
+  if (!PEAK_ID.test(id) || !peaks.some((peak) => peak.id === id)) {
+    res.status(404).json({ error: "That peak period no longer exists." });
+    return;
+  }
+  const parsed = parsePeak(req.body, id);
+  if ("error" in parsed) {
+    res.status(400).json({ error: parsed.error });
+    return;
+  }
+  await savePeaks(peaks.map((peak) => (peak.id === id ? parsed.value : peak)));
   res.json(await getRatePlan());
+});
+
+router.delete("/rates/peaks/:id", requireAdmin, async (req, res) => {
+  const id = Array.isArray(req.params.id) ? "" : req.params.id;
+  const peaks = await getPeaks();
+  if (!PEAK_ID.test(id) || !peaks.some((peak) => peak.id === id)) {
+    res.status(404).json({ error: "That peak period no longer exists." });
+    return;
+  }
+  await savePeaks(peaks.filter((peak) => peak.id !== id));
+  res.status(204).end();
 });
 
 type OverrideInput = {

@@ -1,7 +1,6 @@
 import {
   breakdownOf,
   petCharge,
-  stayTotalPaise,
   surchargePerNight,
   type Party,
   type PartyBreakdown,
@@ -95,9 +94,21 @@ export function advanceOf(totalPaise: number): number {
   return Math.ceil(half / 100) * 100;
 }
 
+/**
+ * Stay-level pricing rules, injected like `nightlyRate` so this file stays
+ * pure: the weekly discount (which needs every night at once) and the
+ * minimum stay of a peak period. Both optional; without them each night is
+ * priced on its own and any length is accepted.
+ */
+export type StayRules = {
+  nightPrices?: (nights: string[], ratedGuests: number) => number[];
+  minimumStay?: (nights: string[]) => { minNights: number; label: string } | null;
+};
+
 export function quoteForEnquiry(
   input: QuoteInput,
   nightlyRate: NightlyRate,
+  rules: StayRules = {},
 ): QuoteResult {
   const { checkIn, checkOut } = input;
 
@@ -127,10 +138,18 @@ export function quoteForEnquiry(
     return { ok: false, reason: "That date range is not a stay." };
   }
 
-  const roomPaise = nights.reduce(
-    (total, isoDate) => total + nightlyRate(isoDate, breakdown.ratedGuests),
-    0,
-  );
+  const minimum = rules.minimumStay?.(nights) ?? null;
+  if (minimum && nights.length < minimum.minNights) {
+    return {
+      ok: false,
+      reason: `${minimum.label} has a ${minimum.minNights}-night minimum stay.`,
+    };
+  }
+
+  const perNight = rules.nightPrices
+    ? rules.nightPrices(nights, breakdown.ratedGuests)
+    : nights.map((isoDate) => nightlyRate(isoDate, breakdown.ratedGuests));
+  const roomPaise = perNight.reduce((total, paise) => total + paise, 0);
 
   if (roomPaise <= 0) {
     return {
@@ -139,7 +158,8 @@ export function quoteForEnquiry(
     };
   }
 
-  const totalPaise = stayTotalPaise({ nights, breakdown, nightlyRate });
+  const totalPaise =
+    roomPaise + surchargePerNight(breakdown) * nights.length + petCharge(breakdown);
   const advancePaise = advanceOf(totalPaise);
 
   return {

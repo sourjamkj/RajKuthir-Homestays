@@ -36,7 +36,7 @@ import { CONFIG, basePath, phoneHref, track } from '@/lib/site';
  *
  * WHAT IT DOES NOT SAY
  *
- * It shows the standing rate for each party size. Dated overrides (a festival,
+ * It shows the weekday and weekend rate for each party size. Dated overrides (a festival,
  * a busy weekend) are applied per night by the calendar, so they are pointed
  * to rather than repeated here, where a list of periods and prices would be a
  * second place for them to go stale.
@@ -68,7 +68,11 @@ export default function Rates() {
   const rows = useMemo(
     () =>
       Object.entries(plan.data?.rates ?? {})
-        .map(([guests, paise]) => ({ guests: Number(guests), paise }))
+        .map(([guests, paise]) => ({
+          guests: Number(guests),
+          paise,
+          weekendPaise: plan.data?.weekendRates?.[guests] ?? null,
+        }))
         .filter((row) => Number.isInteger(row.guests) && row.guests > 0 && row.paise > 0)
         .sort((a, b) => a.guests - b.guests),
     [plan.data],
@@ -156,9 +160,16 @@ export default function Rates() {
                 The rate card.
               </h2>
               <p className="mt-6 max-w-[380px] text-sm leading-6 text-muted-foreground">
-                The standing rate for each party size. Some dates may be priced
-                differently, so the availability calendar shows the exact rate
-                for every night before you ask.
+                The standing rate for each party size, Sunday to Thursday nights
+                and Friday to Saturday nights. Festival weeks are priced
+                differently and may need a minimum stay, so the availability
+                calendar shows the exact rate for every night before you ask.
+                {plan.data?.ladder && plan.data.ladder.weeklyDiscountPercent > 0 && (
+                  <>
+                    {' '}Stays of {plan.data.ladder.weeklyMinNights} nights or more
+                    are {plan.data.ladder.weeklyDiscountPercent}% off.
+                  </>
+                )}
               </p>
             </div>
 
@@ -179,11 +190,14 @@ export default function Rates() {
                 </div>
               ) : (
                 <table className="w-full border-collapse text-left" data-testid="table-rates">
-                  <caption className="sr-only">Standing nightly rate for the whole villa, by number of guests</caption>
+                  <caption className="sr-only">Nightly rate for the whole villa, by number of guests, weeknights and weekends</caption>
                   <thead>
                     <tr className="border-b border-border">
                       <th scope="col" className="py-3 font-mono-ui text-[10px] font-normal uppercase tracking-[.12em] text-muted-foreground">Guests</th>
-                      <th scope="col" className="py-3 text-right font-mono-ui text-[10px] font-normal uppercase tracking-[.12em] text-muted-foreground">Per night, whole villa</th>
+                      <th scope="col" className="py-3 text-right font-mono-ui text-[10px] font-normal uppercase tracking-[.12em] text-muted-foreground">Sun&ndash;Thu night</th>
+                      {plan.data?.weekendRates && (
+                        <th scope="col" className="py-3 text-right font-mono-ui text-[10px] font-normal uppercase tracking-[.12em] text-muted-foreground">Fri&ndash;Sat night</th>
+                      )}
                     </tr>
                   </thead>
                   <tbody>
@@ -193,6 +207,9 @@ export default function Rates() {
                           {row.guests} {row.guests === 1 ? 'guest' : 'guests'}
                         </th>
                         <td className="py-5 text-right font-journal text-2xl text-accent">{formatRupees(row.paise)}</td>
+                        {row.weekendPaise !== null && (
+                          <td className="py-5 text-right font-journal text-2xl text-accent">{formatRupees(row.weekendPaise)}</td>
+                        )}
                       </tr>
                     ))}
                   </tbody>
@@ -225,7 +242,7 @@ export default function Rates() {
               <li className="rounded-[1.4rem] border border-border bg-card p-7 text-sm leading-6 text-muted-foreground">
                 Children under {extras.childUnderAge} count as guests. Two adults
                 and two little ones are a party of four, at the four-guest price
-                &mdash; nothing extra.
+                &mdash; no separate child fee.
               </li>
               <li className="rounded-[1.4rem] border border-border bg-card p-7 text-sm leading-6 text-muted-foreground">
                 Above {maxGuests} guests, each extra person is{' '}
