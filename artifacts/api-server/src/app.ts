@@ -7,7 +7,7 @@ import { fileURLToPath } from "node:url";
 import { existsSync, readFileSync } from "node:fs";
 import router from "./routes";
 import { logger } from "./lib/logger";
-import { injectMeta, isKnownPath, isPrivatePath, sitemapXml } from "./lib/seo";
+import { injectMeta, isKnownPath, isPrivatePath, llmsTxt, sitemapXml } from "./lib/seo";
 
 const app: Express = express();
 
@@ -132,6 +132,11 @@ if (clientDist) {
   app.get("/sitemap.xml", (_req, res) => {
     res.setHeader("Cache-Control", "public, max-age=3600");
     res.type("application/xml").send(sitemapXml());
+  });
+
+  app.get("/llms.txt", (_req, res) => {
+    res.setHeader("Cache-Control", "public, max-age=3600");
+    res.type("text/plain; charset=utf-8").send(llmsTxt());
   });
 
   app.use((req, res, next) => {

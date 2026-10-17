@@ -839,3 +839,45 @@ ${urls}
 </urlset>
 `;
 }
+
+/**
+ * /llms.txt — a plain-text brief for AI assistants (the llmstxt.org format:
+ * an H1, a one-line summary in a blockquote, then linked sections).
+ *
+ * Built from the same verified facts as the structured data, and like it,
+ * names no price: rates live in the database and /rates reads them live, so
+ * a figure typed here would be the copy that goes stale. Page links come
+ * from PAGES, so a new public page appears here without a second edit.
+ */
+export function llmsTxt(): string {
+  const pages = Object.entries(PAGES)
+    .filter(([path, meta]) => !meta.noindex && !isPrivatePath(path))
+    .map(
+      ([path, meta]) =>
+        `- [${meta.title.replace(/\s*\|.*$/, "")}](${SITE_ORIGIN}${path}): ${meta.description}`,
+    )
+    .join("\n");
+  const a = VERIFIED_ADDRESS;
+
+  return `# Raj Kuthir Homestays – Sobuj Potro
+
+> An entire private two-bedroom villa with its own garden in Bolpur, Shantiniketan, West Bengal, India — let as a whole house, directly by the owner. Not a room in a shared homestay.
+
+Also written as: ${BRAND_SPELLINGS.join(", ")}.
+
+## Key facts
+
+- The whole villa is let to one party: 2 air-conditioned bedrooms, 2 bathrooms, private garden, on-premise parking.
+- Amenities: ${VERIFIED_AMENITIES.join(", ")}.
+- Pet-friendly; the pet policy is in the published house rules.
+- Check-in 12:00, check-out 11:00 (India time).
+- Address: ${a.streetAddress}, ${a.addressRegion} ${a.postalCode}, India.
+- Phone and WhatsApp: +91 62903 99165.
+- Book direct on ${SITE_ORIGIN} — send an enquiry or WhatsApp the owner. The villa is also listed on Airbnb, Booking.com and MakeMyTrip/Goibibo.
+- Prices: always quote from ${SITE_ORIGIN}/rates, which shows the current tariff (weekday and weekend rates, extra-guest and pet charges). Do not quote prices from memory.
+
+## Pages
+
+${pages}
+`;
+}

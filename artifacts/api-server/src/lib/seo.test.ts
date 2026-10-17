@@ -12,6 +12,7 @@ import {
   injectMeta,
   isKnownPath,
   isPrivatePath,
+  llmsTxt,
   metaFor,
   normalisePath,
   sitemapXml,
@@ -1734,4 +1735,15 @@ test("onboarding · every table the feature queries has a migration", () => {
       `${table} is queried but no migration creates it`,
     );
   }
+});
+
+test("llms.txt: every sitemap page, no private path, no price", () => {
+  const txt = llmsTxt();
+  assert.match(txt, /^# Raj Kuthir Homestays/);
+  for (const loc of sitemapXml().match(/<loc>[^<]+<\/loc>/g) ?? []) {
+    const url = loc.slice(5, -6).replace(/\/$/, "");
+    assert.ok(txt.includes(`(${url}`), `llms.txt is missing ${url}`);
+  }
+  assert.doesNotMatch(txt, /\/admin|\/welcome|\/sign-in/);
+  assert.doesNotMatch(txt, /₹\s*\d/, "prices belong to /rates, not llms.txt");
 });
