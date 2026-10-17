@@ -222,6 +222,61 @@ const waLink = (phone: string, name: string | null) =>
     ),
   )}`;
 
+/** Stored numbers are often the bare 10 digits; wa.me needs the country code. */
+function waNumber(phone: string): string {
+  const digits = phone.replace(/\D/g, '').replace(/^0+/, '');
+  return digits.length === 10 ? `91${digits}` : digits;
+}
+
+/**
+ * The WhatsApp follow-up for a website enquiry.
+ *
+ * Status picks the message: a "new" enquiry gets a proper first reply (with
+ * an apology if it has waited more than a day), a "contacted" one gets a
+ * short nudge. What the guest gave us shapes the wording: their dates if they
+ * sent any, the quote if one has gone out. No availability is promised here,
+ * because the calendar is checked when the quote is made, not now.
+ */
+function buildEnquiryFollowUp(row: Enquiry): string {
+  const first = row.name.trim().split(/\s+/)[0] || 'there';
+  const dates =
+    row.checkIn && row.checkOut
+      ? `${format(parseISO(row.checkIn), 'd MMM')} – ${format(parseISO(row.checkOut), 'd MMM')}`
+      : null;
+  const sign = '\n\nWarm regards,\nTeam Raj Kuthir Homestays – Sobuj Potro';
+
+  if (row.status === 'contacted') {
+    if (row.quoteSentAt) {
+      return (
+        `Hi ${first}, just following up on the quote we sent${dates ? ` for ${dates}` : ''}. ` +
+        `Happy to answer any questions or adjust the dates. Shall I confirm it for you?${sign}`
+      );
+    }
+    return (
+      `Hi ${first}, just checking in — happy to hold dates for you if you are still thinking about ` +
+      `Shantiniketan this season. Send me your dates whenever you are ready 🙂${sign}`
+    );
+  }
+
+  const waited = Date.now() - new Date(row.createdAt).getTime() > 24 * 60 * 60 * 1000;
+  const ask = dates
+    ? `You had asked about ${dates}. Let me know if those dates still work and how many of you are coming, and I will send you the best direct rate.`
+    : `Are you still planning a trip? Share your dates and number of guests, and I will check availability and send you the best direct rate.`;
+  return (
+    `Hi ${first}, this is Raj Kuthir Homestays – Sobuj Potro, Shantiniketan. ` +
+    `Thank you for enquiring on our website${waited ? ' — and sorry we did not get back sooner' : ''}!\n\n` +
+    `${ask}\n\n` +
+    `• The entire 2-bedroom villa is yours: 2 AC bedrooms, private garden, parking\n` +
+    `• Pets welcome\n` +
+    `• Booking direct costs less than the booking apps\n\n` +
+    `Photos and availability: https://rajkuthirhomestays.casa${sign}`
+  );
+}
+
+function enquiryFollowUpUrl(row: Enquiry): string {
+  return `https://wa.me/${waNumber(row.phone)}?text=${encodeURIComponent(buildEnquiryFollowUp(row))}`;
+}
+
 export default function AdminGuests() {
   const [, navigate] = useLocation();
   const session = useAdminSession();
@@ -1008,6 +1063,27 @@ export default function AdminGuests() {
                   <span className="text-[10px] font-bold uppercase tracking-[.07em] text-muted-foreground">
                     {row.phone}
                   </span>
+                  {(row.status === 'new' || row.status === 'contacted') && (
+                    <a
+                      href={enquiryFollowUpUrl(row)}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      onClick={() => {
+                        // Sending the first follow-up is what "contacted" means.
+                        if (row.status === 'new') setStatus.mutate({ id: row.id, status: 'contacted' });
+                      }}
+                      title={
+                        row.status === 'new'
+                          ? 'Opens WhatsApp with a first reply and marks this enquiry Contacted'
+                          : 'Opens WhatsApp with a short follow-up nudge — send as often as it is worth it'
+                      }
+                      className="flex items-center gap-1.5 rounded-lg bg-primary px-3 py-2 text-[10px] font-bold uppercase tracking-[.07em] text-primary-foreground transition-transform hover:-translate-y-0.5"
+                      data-testid={`button-follow-up-${row.id}`}
+                    >
+                      <MessageCircle size={12} />
+                      {row.status === 'new' ? 'Reply on WhatsApp' : 'Follow up'}
+                    </a>
+                  )}
                   <span className="ml-auto flex flex-wrap gap-1.5">
                     {STATUSES.map((status) => (
                       <button
