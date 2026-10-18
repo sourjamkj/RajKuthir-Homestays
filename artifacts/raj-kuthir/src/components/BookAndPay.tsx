@@ -77,9 +77,16 @@ export function BookAndPay({ id = 'book-online' }: { id?: string }) {
   const [guest, setGuest] = useState({ name: '', phone: '', email: '', requests: '' });
   const [quote, setQuote] = useState<QuoteOk | QuoteNo | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [busy, setBusy] = useState<'quote' | 'start' | null>(null);
+  const [busy, setBusy] = useState<'quote' | 'start' | 'enquiry' | null>(null);
+  const [enquirySent, setEnquirySent] = useState(false);
 
   const totalGuests = Number(stay.adults || 0) + Number(stay.children || 0);
+  const stayNights =
+    stay.checkIn && stay.checkOut && stay.checkOut > stay.checkIn
+      ? Math.round((Date.parse(stay.checkOut) - Date.parse(stay.checkIn)) / 86_400_000)
+      : 0;
+  // Larger parties and long stays are confirmed by message, not paid online.
+  const enquiryOnly = totalGuests > 5 || stayNights > 30;
   const upcomingPeaks = useMemo(
     () => (ratePlan.data?.peaks ?? []).filter((peak) => peak.endDate > today),
     [ratePlan.data?.peaks, today],
@@ -89,6 +96,39 @@ export function BookAndPay({ id = 'book-online' }: { id?: string }) {
     setStay((current) => ({ ...current, [field]: value }));
     setQuote(null);
     setError(null);
+    setEnquirySent(false);
+  };
+
+  const sendEnquiry = async () => {
+    if (!guest.name.trim() || !guest.phone.trim()) {
+      setError('Add your name and mobile number so we can reply.');
+      return;
+    }
+    setBusy('enquiry');
+    setError(null);
+    try {
+      const { ok, data } = await postJson<{ error?: string }>('/api/enquiries', {
+        name: guest.name,
+        phone: guest.phone,
+        email: guest.email || null,
+        requests: guest.requests || null,
+        checkIn: stay.checkIn || null,
+        checkOut: stay.checkOut || null,
+        adults: stay.adults,
+        children: stay.children,
+        pets: stay.pets,
+      });
+      if (ok) {
+        setEnquirySent(true);
+        track('book_pay_enquiry');
+      } else {
+        setError(data.error ?? 'Could not send the enquiry.');
+      }
+    } catch {
+      setError('Could not reach the server. Please check your connection.');
+    } finally {
+      setBusy(null);
+    }
   };
 
   const checkPrice = async (event?: FormEvent, override?: { checkIn: string; checkOut: string }) => {
@@ -201,7 +241,7 @@ export function BookAndPay({ id = 'book-online' }: { id?: string }) {
                 id={`${id}-${key}`}
                 type="number"
                 min={key === 'adults' ? 1 : 0}
-                max={key === 'pets' ? 4 : 5}
+                max={key === 'pets' ? 4 : 20}
                 required
                 value={stay[key]}
                 onChange={(e) => update(key, e.target.value)}
@@ -211,12 +251,14 @@ export function BookAndPay({ id = 'book-online' }: { id?: string }) {
             </label>
           ))}
         </div>
-        {totalGuests > 5 && (
-          <p className="text-[12px] text-[#A65E45]">Online booking is for up to 5 guests. For a larger party, please send an enquiry.</p>
+        {enquiryOnly && (
+          <p className="rounded-xl bg-secondary/60 px-4 py-3 text-[12px] leading-5 text-primary" data-testid="text-book-enquiry-only">
+            {totalGuests > 5 ? `For ${totalGuests} guests` : 'For stays over 30 nights'} we confirm by message — fill in your details below and send an enquiry.
+          </p>
         )}
         <button
           type="submit"
-          disabled={busy !== null || totalGuests > 5 || totalGuests < 1}
+          disabled={busy !== null || enquiryOnly || totalGuests < 1}
           className="flex w-full items-center justify-center gap-2 rounded-full border border-primary/25 px-5 py-3.5 text-xs font-bold uppercase tracking-[.11em] text-primary transition-colors hover:bg-primary/5 disabled:opacity-40"
           data-testid="button-book-quote"
         >
@@ -255,7 +297,7 @@ export function BookAndPay({ id = 'book-online' }: { id?: string }) {
       )}
 
       {quote && quote.available && (
-        <div className="mt-6 space-y-6" data-testid="panel-book-quote">
+        <div className="mt-6" data-testid="panel-book-quote">
           <div className="rounded-xl bg-background p-4">
             <ul className="divide-y divide-border text-[13px]" data-testid="list-book-nights">
               {quote.perNight.map((night) => (
@@ -280,9 +322,15 @@ export function BookAndPay({ id = 'book-online' }: { id?: string }) {
               <span>At check-in: {formatRupees(quote.balancePaise)}</span>
             </div>
           </div>
+        </div>
+      )}
 
-          {quote.onlineBooking ? (
-            <form onSubmit={start} className="space-y-5" data-testid="form-book-start">
+      {enquirySent ? (
+        <p className="mt-6 rounded-xl bg-secondary p-4 text-[13px] leading-6 text-primary" role="status" data-testid="text-book-enquiry-sent">
+          Enquiry received — we'll reply on WhatsApp shortly with availability and a quote.
+        </p>
+      ) : ((quote && quote.available) || (enquiryOnly && stayNights > 0)) ? (
+        <form onSubmit={start} className="mt-6 space-y-5" data-testid="form-book-start">
               <div className="grid gap-5 sm:grid-cols-2">
                 <label className="block sm:col-span-2">
                   <span className="eyebrow text-muted-foreground">Your name *</span>
@@ -301,26 +349,41 @@ export function BookAndPay({ id = 'book-online' }: { id?: string }) {
                   <textarea id={`${id}-requests`} rows={2} maxLength={1000} value={guest.requests} onChange={(e) => setGuest({ ...guest, requests: e.target.value })} className={`${field} resize-none`} data-testid="input-book-requests" />
                 </label>
               </div>
-              <button
-                type="submit"
-                disabled={busy !== null}
-                className="flex w-full items-center justify-center gap-2 rounded-full bg-primary px-5 py-4 text-xs font-bold uppercase tracking-[.11em] text-primary-foreground transition-transform hover:-translate-y-0.5 active:scale-95 disabled:opacity-40"
-                data-testid="button-book-start"
-              >
-                {busy === 'start' ? <Loader2 size={15} className="animate-spin" /> : null}
-                Hold dates &amp; pay {formatRupees(quote.advancePaise)} <ArrowRight size={15} />
-              </button>
-              <p className="flex items-start gap-2 text-[11px] leading-5 text-muted-foreground">
-                <ShieldCheck size={14} className="mt-0.5 shrink-0 text-accent" />
-                We hold these dates for {quote.holdMinutes} minutes while you pay by UPI. Your booking is confirmed once we see the payment — usually within a few hours. By booking you agree to our{' '}
-                <a href={`${basePath}/house-rules`} className="underline decoration-accent underline-offset-2">house rules</a>.
-              </p>
-            </form>
-          ) : (
-            <p className="text-[13px] text-muted-foreground">Online payment is not switched on yet — please send an enquiry or WhatsApp us with these dates.</p>
+          {quote && quote.available && quote.onlineBooking && !enquiryOnly && (
+            <button
+              type="submit"
+              disabled={busy !== null}
+              className="flex w-full items-center justify-center gap-2 rounded-full bg-primary px-5 py-4 text-xs font-bold uppercase tracking-[.11em] text-primary-foreground transition-transform hover:-translate-y-0.5 active:scale-95 disabled:opacity-40"
+              data-testid="button-book-start"
+            >
+              {busy === 'start' ? <Loader2 size={15} className="animate-spin" /> : null}
+              Hold dates &amp; pay {formatRupees(quote.advancePaise)} <ArrowRight size={15} />
+            </button>
           )}
-        </div>
-      )}
+          <button
+            type="button"
+            onClick={sendEnquiry}
+            disabled={busy !== null}
+            className={
+              quote && quote.available && quote.onlineBooking && !enquiryOnly
+                ? 'flex w-full items-center justify-center gap-2 rounded-full border border-primary/25 px-5 py-3 text-xs font-bold uppercase tracking-[.11em] text-primary hover:bg-primary/5 disabled:opacity-40'
+                : 'flex w-full items-center justify-center gap-2 rounded-full bg-primary px-5 py-4 text-xs font-bold uppercase tracking-[.11em] text-primary-foreground disabled:opacity-40'
+            }
+            data-testid="button-book-enquiry"
+          >
+            {busy === 'enquiry' ? <Loader2 size={15} className="animate-spin" /> : null}
+            {quote && quote.available && quote.onlineBooking && !enquiryOnly ? 'Just send an enquiry' : 'Send enquiry'}
+          </button>
+          <p className="flex items-start gap-2 text-[11px] leading-5 text-muted-foreground">
+            <ShieldCheck size={14} className="mt-0.5 shrink-0 text-accent" />
+            {quote && quote.available && quote.onlineBooking && !enquiryOnly
+              ? `Paying holds these dates for ${quote.holdMinutes} minutes; we confirm as soon as we see the payment. `
+              : 'We reply on WhatsApp with availability and a quote. '}
+            By booking or enquiring you agree to our{' '}
+            <a href={`${basePath}/house-rules`} className="underline decoration-accent underline-offset-2">house rules</a>.
+          </p>
+        </form>
+      ) : null}
     </section>
   );
 }

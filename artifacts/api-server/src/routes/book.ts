@@ -66,7 +66,8 @@ const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 const MAX_GUESTS = 5;
 const HOUR = 60 * 60 * 1000;
 
-const quoteLimiter = createLimiter(20, HOUR);
+// Generous: the home-page form re-prices as the guest changes dates.
+const quoteLimiter = createLimiter(120, HOUR);
 const startLimiter = createLimiter(20, HOUR);
 const payLimiter = createLimiter(60, HOUR);
 const utrLimiter = createLimiter(10, HOUR);
