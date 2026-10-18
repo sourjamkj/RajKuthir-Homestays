@@ -6,7 +6,6 @@ import {
   createEnquiry,
   deleteEnquiry,
   getEnquiry,
-  linkEnquiryToBooking,
   listContacts,
   listEnquiries,
   clearQuoteSent,
@@ -16,11 +15,8 @@ import {
   updateContact,
   type EnquiryStatus,
 } from "../lib/enquiries-repo";
-import {
-  CONVERSION_MESSAGES,
-  draftBookingFromEnquiry,
-} from "../lib/enquiry-conversion";
-import { createBooking, findClashes } from "../lib/ledger-repo";
+import { convertEnquiry } from "../lib/enquiry-convert-service";
+import { findByEnquiryId, holdDeadlinesByEnquiry } from "../lib/book-pay-repo";
 import { quoteForEnquiry, type QuoteResult } from "../lib/enquiry-quote";
 import { holdExpiryOf, holdStateOf } from "../lib/enquiry-hold";
 import { firstConflict } from "../lib/availability";
@@ -244,12 +240,14 @@ router.get("/enquiries", requireAdmin, async (_req, res) => {
   // One clock for the whole list, so two rows quoted in the same second can
   // never disagree about how long they have left.
   const now = new Date();
+  // Book & Pay holds run on their own deadline (minutes, extended on UTR).
+  const deadlines = await holdDeadlinesByEnquiry();
 
   res.json({
     enquiries: rows.map((row) => ({
       ...row,
       quote: quoteForEnquiry(row, nightlyRate, rules),
-      hold: holdStateOf(row, now),
+      hold: holdStateOf({ ...row, holdExpiresAt: deadlines.get(row.id) ?? null }, now),
     })),
     /*
       The screen disables the send button and explains itself rather than
@@ -437,80 +435,26 @@ router.post("/enquiries/:id/convert", requireAdmin, async (req, res) => {
     return;
   }
 
-  const drafted = draftBookingFromEnquiry(enquiry);
+  // A Book & Pay enquiry already has its RK- reference: it went to the guest
+  // as the UPI transaction note, so the booking must keep it.
+  const paymentRequest = await findByEnquiryId(id);
+  const outcome = await convertEnquiry(enquiry, { reference: paymentRequest?.reference ?? null });
 
-  if (!drafted.ok) {
-    // 409 for the one that is a state problem rather than a data problem:
-    // the caller asked for something that has already happened.
-    const status = drafted.reason === "already_converted" ? 409 : 422;
-    res.status(status).json({
-      error: CONVERSION_MESSAGES[drafted.reason],
-      reason: drafted.reason,
-      ...(drafted.reason === "already_converted"
-        ? { bookingId: enquiry.convertedBookingId }
-        : {}),
-    });
+  if (!outcome.ok) {
+    const { ok: _ok, status, ...body } = outcome;
+    res.status(status).json(body);
     return;
   }
-
-  /*
-    Re-check the dates NOW, not as they were when the enquiry arrived.
-
-    An enquiry can sit for days between the form and the advance landing, and
-    an OTA booking may have taken the same nights in between. findClashes only
-    counts confirmed bookings, so a pending row does not stand in the way.
-  */
-  const clashes = await findClashes({
-    checkIn: drafted.draft.checkIn,
-    checkOut: drafted.draft.checkOut,
-    guestName: drafted.draft.guestName,
-  });
-
-  if (clashes.length > 0) {
-    const clash = clashes[0]!;
-    logger.warn(
-      { enquiryId: id, kind: clash.kind, bookingId: clash.booking.id },
-      "Refused to convert an enquiry over existing dates",
-    );
-    res.status(409).json({
-      error:
-        clash.kind === "duplicate"
-          ? "There is already a booking for this guest on these exact dates."
-          : `Those dates now clash with an existing booking (${clash.booking.checkIn} to ${clash.booking.checkOut}). Move the dates or cancel the other booking first.`,
-      reason: clash.kind,
-      clashes: clashes.map((item) => ({
-        id: item.booking.id,
-        kind: item.kind,
-        reference: item.booking.reference,
-        checkIn: item.booking.checkIn,
-        checkOut: item.booking.checkOut,
-      })),
-    });
-    return;
-  }
-
-  // createBooking issues the RK- reference, retrying on the astronomically
-  // unlikely collision.
-  const booking = await createBooking(drafted.draft);
-
-  const updated = await linkEnquiryToBooking(id, booking.id);
-
-  // No guest name or phone in this line — it is a log, and logs get shipped,
-  // read and kept.
-  logger.info(
-    { enquiryId: id, bookingId: booking.id, status: booking.status },
-    "Enquiry converted to a booking",
-  );
 
   res.status(201).json({
     booking: {
-      id: booking.id,
-      reference: booking.reference,
-      status: booking.status,
-      checkIn: booking.checkIn,
-      checkOut: booking.checkOut,
+      id: outcome.booking.id,
+      reference: outcome.booking.reference,
+      status: outcome.booking.status,
+      checkIn: outcome.booking.checkIn,
+      checkOut: outcome.booking.checkOut,
     },
-    enquiry: updated,
+    enquiry: outcome.enquiry,
   });
 });
 

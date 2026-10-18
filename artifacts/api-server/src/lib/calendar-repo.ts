@@ -10,6 +10,8 @@ import {
   mergeByDate,
   type MergedEvent,
 } from "./calendar-bookings";
+import { readLiveHolds } from "./book-pay-repo";
+import { holdsAsEvents } from "./book-pay-rules";
 
 export type CalendarSource = CalendarEvent["source"];
 
@@ -43,7 +45,14 @@ export async function listPublicBlocks(): Promise<
     .where(eq(calendarEvents.status, "confirmed"))
     .orderBy(asc(calendarEvents.startDate));
 
-  return mergeByDate(events, await bookingsAsEvents(events)).map((entry) => ({
+  // Live Book & Pay holds too: a guest paying right now must not see the
+  // same nights offered to someone else. readLiveHolds never throws.
+  const derived = [
+    ...(await bookingsAsEvents(events)),
+    ...holdsAsEvents(await readLiveHolds()),
+  ];
+
+  return mergeByDate(events, derived).map((entry) => ({
     startDate: entry.startDate,
     endDate: entry.endDate,
   }));
@@ -74,7 +83,15 @@ export async function listFeedEvents(
     .where(where)
     .orderBy(asc(calendarEvents.startDate));
 
-  return mergeByDate(events, await bookingsAsEvents(events, excludeSource));
+  // Live Book & Pay holds go to every OTA: while a guest is paying, Airbnb
+  // and Booking.com must not sell the same nights. They are "direct", so no
+  // channel ever has them excluded as its own echo.
+  const derived = [
+    ...(await bookingsAsEvents(events, excludeSource)),
+    ...holdsAsEvents(await readLiveHolds()),
+  ];
+
+  return mergeByDate(events, derived);
 }
 
 export async function createManualBlock(input: {

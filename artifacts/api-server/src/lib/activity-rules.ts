@@ -11,7 +11,8 @@ export type ActivityKind =
   | "booking_cancelled"
   | "ota_block"
   | "enquiry_new"
-  | "documents_uploaded";
+  | "documents_uploaded"
+  | "payment";
 
 export type ActivityItem = {
   /** Stable across requests, so the client can key and de-duplicate on it. */
@@ -94,6 +95,26 @@ export type ActivityRows = {
   otaBlocks: Array<{ id: string; source: string; startDate: string; endDate: string; createdAt: Date }>;
   enquiries: Array<{ id: string; name: string; checkIn: string | null; checkOut: string | null; createdAt: Date }>;
   uploads: Array<{ bookingId: string; guestName: string | null; checkIn: string; completedAt: Date }>;
+  /** Book & Pay state changes, from payment_events. Optional: absent before the migration. */
+  payments?: Array<{
+    id: string;
+    kind: string;
+    detail: string | null;
+    at: Date;
+    paymentRequestId: string;
+    guestName: string;
+    checkIn: string | null;
+    checkOut: string | null;
+  }>;
+};
+
+const PAYMENT_TITLES: Record<string, string> = {
+  held: "Online booking — dates held",
+  utr_submitted: "Payment to verify",
+  confirmed: "Online booking confirmed",
+  rejected: "Online payment rejected",
+  expired: "Online hold expired",
+  expiry_notified: "Guest told their hold expired",
 };
 
 /** Turns the raw rows into one newest-first list. */
@@ -154,6 +175,17 @@ export function buildActivity(rows: ActivityRows): ActivityItem[] {
       title: "Guest ID documents uploaded",
       detail: `${u.guestName ?? "Unnamed guest"} · arriving ${shortDate(u.checkIn)}`,
       href: `/admin/guests#stay-${u.bookingId}`,
+    });
+  }
+
+  for (const p of rows.payments ?? []) {
+    items.push({
+      id: `payment:${p.id}`,
+      kind: "payment",
+      at: p.at.toISOString(),
+      title: PAYMENT_TITLES[p.kind] ?? "Online booking update",
+      detail: `${p.guestName} · ${stay(p.checkIn, p.checkOut)}${p.detail ? ` · ${p.detail}` : ""}`,
+      href: `/admin/guests#payment-${p.paymentRequestId}`,
     });
   }
 

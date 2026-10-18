@@ -27,6 +27,7 @@ import { adminFetch, useAdminSession, useLogout } from '@/lib/admin-api';
 import { SOURCE_LABELS, formatRupees, type BookingSource } from '@/lib/ledger-api';
 import { CONFIG, asset } from '@/lib/site';
 import { useFocusTarget } from '@/hooks/use-focus-target';
+import { AdminBookPay } from '@/components/AdminBookPay';
 import { AdminHeader } from '@/components/AdminHeader';
 
 const ENQUIRIES_KEY = ['/api/enquiries'];
@@ -483,7 +484,7 @@ export default function AdminGuests() {
   // Deep links from the dashboard tile (#stays) and the activity bell
   // (#stay-<id>, #enquiry-<id>) land on the exact row.
   useFocusTarget((id) =>
-    id.startsWith('stay-') ? 'stays' : id.startsWith('enquiry-') ? 'enquiries' : null,
+    id.startsWith('stay-') ? 'stays' : id.startsWith('enquiry-') ? 'enquiries' : id.startsWith('payment-') ? 'payments' : null,
   );
   const sortBy = (key: StaySortKey) =>
     setStayOrder((current) =>
@@ -700,7 +701,9 @@ export default function AdminGuests() {
       <AdminHeader eyebrow="Guests" title="Enquiries & contacts" />
 
       <main className="mx-auto max-w-[1180px] px-5 py-8 md:px-8 md:py-10">
-        <section id="enquiries" className="scroll-mt-6" aria-label="Enquiries">
+        <AdminBookPay />
+
+        <section id="enquiries" className="mt-10 scroll-mt-6" aria-label="Enquiries">
           <Heading
             icon={<Inbox size={15} />}
             title={`Enquiries${newCount ? ` · ${newCount} new` : ''}`}

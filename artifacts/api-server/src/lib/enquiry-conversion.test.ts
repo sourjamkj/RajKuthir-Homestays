@@ -173,28 +173,41 @@ test("refusal · every reason has a message the owner can act on", () => {
 
 // ===================================================== THE ROUTE'S GUARANTEES
 
-test("route · re-checks availability at conversion time, not enquiry time", () => {
-  // An enquiry can sit for days between the form and the advance landing, and
-  // an OTA booking may have taken the same nights in between.
+/*
+  The conversion body lives in enquiry-convert-service.ts so the Book & Pay
+  "Confirm" button runs the same code. The route must still go through it,
+  and the guarantees below are checked where the code now is.
+*/
+const CONVERT_SERVICE_TS = readFileSync(
+  path.join(path.dirname(fileURLToPath(import.meta.url)), "enquiry-convert-service.ts"),
+  "utf8",
+);
+
+test("route · converts through the shared service", () => {
   const body = ENQUIRY_ROUTES_TS.slice(
     ENQUIRY_ROUTES_TS.indexOf('router.post("/enquiries/:id/convert"'),
   ).slice(0, 4000);
+  assert.match(body, /await convertEnquiry\(enquiry/, "the convert route bypasses the shared service");
+});
 
-  assert.ok(body.length > 0, "the convert route was not found");
-  assert.match(body, /await findClashes\(\{/, "the convert route does not re-check the dates");
+test("route · re-checks availability at conversion time, not enquiry time", () => {
+  // An enquiry can sit for days between the form and the advance landing, and
+  // an OTA booking may have taken the same nights in between.
+  const body = CONVERT_SERVICE_TS.slice(CONVERT_SERVICE_TS.indexOf("export async function convertEnquiry"));
+
+  assert.ok(body.length > 0, "the conversion was not found");
+  assert.match(body, /await findClashes\(\{/, "the conversion does not re-check the dates");
   assert.ok(
     body.indexOf("findClashes") < body.indexOf("createBooking"),
     "the clash check must happen before the booking is created",
   );
-  assert.match(body, /res\.status\(409\)/, "a clash must refuse, not overwrite");
+  assert.match(body, /status: 409/, "a clash must refuse, not overwrite");
 });
 
 test("route · links the enquiry to the booking so it cannot convert twice", () => {
-  const body = ENQUIRY_ROUTES_TS.slice(
-    ENQUIRY_ROUTES_TS.indexOf('router.post("/enquiries/:id/convert"'),
-  ).slice(0, 4000);
+  const body = CONVERT_SERVICE_TS.slice(CONVERT_SERVICE_TS.indexOf("export async function convertEnquiry"));
 
-  assert.match(body, /await linkEnquiryToBooking\(id, booking\.id\)/);
+  assert.match(body, /await linkEnquiryToBooking\(enquiry\.id, booking\.id\)/);
   assert.ok(
     body.indexOf("createBooking") < body.indexOf("linkEnquiryToBooking"),
     "the link must be written after the booking exists",

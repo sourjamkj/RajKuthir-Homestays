@@ -27,6 +27,13 @@ const HOUR_MS = 3_600_000;
 export type HoldInput = {
   quoteSentAt: Date | string | null;
   advancePaidAt: Date | string | null;
+  /**
+   * An explicit deadline, when the hold is not the standard HOLD_HOURS from
+   * the quote — the self-serve Book & Pay flow holds for minutes, not a day,
+   * and extends when the guest submits a UTR. Still derived at read time:
+   * the deadline is stored, the "is it held" answer never is.
+   */
+  holdExpiresAt?: Date | string | null;
 };
 
 export type HoldState =
@@ -60,7 +67,7 @@ export function holdStateOf(input: HoldInput, now: Date): HoldState {
   const sentAt = asDate(input.quoteSentAt);
   if (!sentAt) return { state: "none" };
 
-  const expiresAt = holdExpiryOf(sentAt);
+  const expiresAt = asDate(input.holdExpiresAt ?? null) ?? holdExpiryOf(sentAt);
 
   if (now >= expiresAt) return { state: "released", expiresAt };
 

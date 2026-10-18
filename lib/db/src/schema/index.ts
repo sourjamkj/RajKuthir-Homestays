@@ -27,3 +27,4 @@ export * from "./messages";
 export * from "./mail";
 
 export * from "./guests";
+export * from "./payments";

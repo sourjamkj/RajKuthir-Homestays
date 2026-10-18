@@ -89,9 +89,10 @@ export function nightsOf(checkIn: string, checkOut: string): string[] {
  * nearest keeps the balance honest: the guest is never asked for more in
  * total than the stay costs, because the balance is whatever is left.
  */
-export function advanceOf(totalPaise: number): number {
-  const half = (totalPaise * ADVANCE_PERCENT) / 100;
-  return Math.ceil(half / 100) * 100;
+export function advanceOf(totalPaise: number, percent: number = ADVANCE_PERCENT): number {
+  const share = (totalPaise * percent) / 100;
+  // Never more than the stay costs, whatever percentage is configured.
+  return Math.min(totalPaise, Math.ceil(share / 100) * 100);
 }
 
 /**
@@ -103,6 +104,8 @@ export function advanceOf(totalPaise: number): number {
 export type StayRules = {
   nightPrices?: (nights: string[], ratedGuests: number) => number[];
   minimumStay?: (nights: string[]) => { minNights: number; label: string } | null;
+  /** Share of the total asked up front. Defaults to ADVANCE_PERCENT. */
+  advancePercent?: number;
 };
 
 export function quoteForEnquiry(
@@ -160,7 +163,7 @@ export function quoteForEnquiry(
 
   const totalPaise =
     roomPaise + surchargePerNight(breakdown) * nights.length + petCharge(breakdown);
-  const advancePaise = advanceOf(totalPaise);
+  const advancePaise = advanceOf(totalPaise, rules.advancePercent ?? ADVANCE_PERCENT);
 
   return {
     ok: true,

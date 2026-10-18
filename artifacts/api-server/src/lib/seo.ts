@@ -409,6 +409,16 @@ export const PAGES: Record<string, PageMeta> = {
     noindex: true,
   },
 
+  /**
+   * The Book & Pay payment page. Like /pre-arrival, the bearer token is in the
+   * URL fragment, so the bare path is all a server or crawler ever sees.
+   */
+  "/pay": {
+    title: "Complete your booking | Raj Kuthir Homestays",
+    description: "Pay the advance to confirm your held dates.",
+    noindex: true,
+  },
+
   /** Management's view of a guest's uploaded identity documents. */
   "/management-documents": {
     title: "Guest document access | Raj Kuthir Homestays",
@@ -431,6 +441,7 @@ const PRIVATE_PREFIXES = [
   "/welcome",
   "/pre-arrival",
   "/management-documents",
+  "/pay",
 ];
 
 /**
@@ -461,6 +472,7 @@ const CLIENT_ROUTES = new Set([
   "/admin/guest-info",
   "/pre-arrival",
   "/management-documents",
+  "/pay",
 ]);
 
 const CLIENT_ROUTE_PREFIXES = ["/sign-in"];

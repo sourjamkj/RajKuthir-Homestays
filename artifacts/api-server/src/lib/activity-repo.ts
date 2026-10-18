@@ -13,6 +13,7 @@ import {
   buildActivity,
   type ActivityItem,
 } from "./activity-rules";
+import { paymentEventsSince } from "./book-pay-repo";
 
 /**
  * The owner's "last looked at the activity panel" marker.
@@ -58,7 +59,7 @@ export async function listActivity(now = new Date()): Promise<{
   */
   const after = new Date(since.getTime() + 1);
 
-  const [newBookings, cancelledBookings, otaBlocks, newEnquiries, uploads] = await Promise.all([
+  const [newBookings, cancelledBookings, otaBlocks, newEnquiries, uploads, payments] = await Promise.all([
     db
       .select({
         id: bookings.id,
@@ -135,6 +136,8 @@ export async function listActivity(now = new Date()): Promise<{
       .innerJoin(bookings, eq(bookings.id, guestOnboarding.bookingId))
       .where(and(isNotNull(guestOnboarding.completedAt), gte(guestOnboarding.completedAt, after)))
       .limit(MAX_ITEMS),
+
+    paymentEventsSince(after, MAX_ITEMS),
   ]);
 
   return {
@@ -145,6 +148,7 @@ export async function listActivity(now = new Date()): Promise<{
       otaBlocks,
       enquiries: newEnquiries,
       uploads: uploads.filter((u): u is typeof u & { completedAt: Date } => u.completedAt !== null),
+      payments,
     }),
   };
 }

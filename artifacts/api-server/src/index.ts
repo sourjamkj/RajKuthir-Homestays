@@ -3,6 +3,7 @@ import { logger } from "./lib/logger";
 import { startCalendarCron } from "./lib/calendar-cron";
 import { startNotificationsCron } from "./lib/notifications-cron";
 import { startMailCron } from "./lib/mail-cron";
+import { startBookPayCron } from "./lib/book-pay-cron";
 import { runSchemaCheck } from "./lib/schema-check";
 
 const rawPort = process.env["PORT"];
@@ -44,6 +45,10 @@ app.listen(port, (err) => {
   // MAIL_ENCRYPTION_KEY is unset, since the stored passwords cannot be
   // opened without it.
   startMailCron();
+
+  // Releases unpaid Book & Pay holds and tells the guest. The dates free
+  // themselves without it (holds are derived); this tidies and notifies.
+  startBookPayCron();
 
   // Says in the log whether the database still matches the Drizzle schema.
   // Four production 500s in one day came from that drift, each invisible until

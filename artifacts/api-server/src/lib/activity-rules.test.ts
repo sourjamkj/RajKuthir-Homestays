@@ -15,6 +15,28 @@ const NOW = new Date("2026-09-20T10:00:00.000Z");
 const DAY = 86_400_000;
 const empty = (): ActivityRows => ({ newBookings: [], cancelledBookings: [], otaBlocks: [], enquiries: [], uploads: [] });
 
+test("activity · a Book & Pay UTR lands in the bell and links to the exact payment", () => {
+  const items = buildActivity({
+    ...empty(),
+    payments: [
+      {
+        id: "ev1",
+        kind: "utr_submitted",
+        detail: "UTR 412356789012",
+        at: new Date("2026-09-20T09:00:00.000Z"),
+        paymentRequestId: "pr1",
+        guestName: "Asha",
+        checkIn: "2026-11-21",
+        checkOut: "2026-11-23",
+      },
+    ],
+  });
+  assert.equal(items.length, 1);
+  assert.equal(items[0]!.title, "Payment to verify");
+  assert.equal(items[0]!.href, "/admin/guests#payment-pr1");
+  assert.match(items[0]!.detail, /Asha · 21 Nov → 23 Nov · UTR 412356789012/);
+});
+
 test("activity · first ever sign-in looks back one week", () => {
   assert.equal(activityWindowStart(null, NOW).getTime(), NOW.getTime() - FIRST_VISIT_LOOKBACK_DAYS * DAY);
 });

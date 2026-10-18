@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 
 import { formatRupees, useRatePlan } from '@/lib/rates';
+import { BookAndPay } from '@/components/BookAndPay';
 import { CONFIG, basePath, phoneHref, track } from '@/lib/site';
 
 /**
@@ -227,6 +228,11 @@ export default function Rates() {
             </div>
           </div>
         </section>
+
+        {/* Book straight from the rate card: same server prices, held while you pay. */}
+        <div className="section-shell py-16 md:py-20">
+          <BookAndPay id="rates-book-online" />
+        </div>
 
         {/* ------------------------------------------------------- extras
             The same three sentences the booking section shows, from the same
