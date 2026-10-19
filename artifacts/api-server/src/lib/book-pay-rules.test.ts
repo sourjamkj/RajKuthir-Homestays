@@ -318,3 +318,13 @@ test("missing tables read as 'not set up yet', not as a crash", () => {
   assert.equal(isNotMigrated({ cause: { code: "42704" } }), true);
   assert.equal(isNotMigrated(new Error("boom")), false);
 });
+
+test("the boot-time migration is exactly src/db/book-and-pay.sql", () => {
+  const sql = readFileSync(path.join(here, "../db/book-and-pay.sql"), "utf8");
+  const ts = readFileSync(path.join(here, "book-pay-migrate.ts"), "utf8");
+  const start = ts.indexOf("BOOK_PAY_MIGRATION_SQL = `") + "BOOK_PAY_MIGRATION_SQL = `".length;
+  const embedded = ts.slice(start, ts.indexOf("`;", start));
+  assert.equal(embedded, sql);
+  // Additive only: nothing that could touch existing data.
+  assert.doesNotMatch(sql, /^\s*(DROP|ALTER|DELETE|TRUNCATE|UPDATE)\b/im);
+});

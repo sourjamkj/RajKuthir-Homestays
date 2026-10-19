@@ -4,6 +4,7 @@ import { startCalendarCron } from "./lib/calendar-cron";
 import { startNotificationsCron } from "./lib/notifications-cron";
 import { startMailCron } from "./lib/mail-cron";
 import { startBookPayCron } from "./lib/book-pay-cron";
+import { ensureBookPayTables } from "./lib/book-pay-migrate";
 import { runSchemaCheck } from "./lib/schema-check";
 
 const rawPort = process.env["PORT"];
@@ -48,6 +49,9 @@ app.listen(port, (err) => {
 
   // Releases unpaid Book & Pay holds and tells the guest. The dates free
   // themselves without it (holds are derived); this tidies and notifies.
+  // Creates the Book & Pay tables if they are missing (additive, idempotent),
+  // so online booking switches itself on with no hand-run SQL.
+  void ensureBookPayTables();
   startBookPayCron();
 
   // Says in the log whether the database still matches the Drizzle schema.
