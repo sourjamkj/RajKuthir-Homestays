@@ -35,6 +35,7 @@ import {
   type SyncSourceStatus,
 } from '@/lib/admin-api';
 import { AdminHeader } from '@/components/AdminHeader';
+import { AdminCaretaker } from '@/components/AdminCaretaker';
 import { useFocusTarget } from '@/hooks/use-focus-target';
 
 type CalendarEventDto = {
@@ -139,6 +140,7 @@ export default function AdminDashboard() {
       <AdminHeader eyebrow="Owner console" title="Raj Kuthir — Sobuj Potro" />
 
       <main className="mx-auto max-w-[1180px] px-5 py-8 md:px-8 md:py-10">
+        <AdminCaretaker />
         <section
           className="grid gap-4 sm:grid-cols-3"
           aria-label="Booking summary"

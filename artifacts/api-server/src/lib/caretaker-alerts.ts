@@ -5,8 +5,12 @@ import { logger } from "./logger";
 import { dueAlerts, istDate, toE164, type AlertBooking } from "./caretaker-rules";
 
 /**
- * Sends caretaker alerts over WhatsApp, from the owner's own number, through
- * Blueticks (https://api.blueticks.co). The rules are in caretaker-rules.ts.
+ * Caretaker alerts. Two ways out:
+ *
+ *  - MANUAL (default, free): caretakerQueue() lists what is due in the
+ *    console with a one-tap WhatsApp button; see the bottom of this file.
+ *  - AUTOMATIC (optional, paid): sent from the owner's own number through
+ *    Blueticks (https://api.blueticks.co) when BLUETICKS_API_KEY is set. The rules are in caretaker-rules.ts.
  *
  * Environment:
  *   BLUETICKS_API_KEY        required; without it this whole feature is idle
@@ -173,11 +177,100 @@ export function startCaretakerAlerts(): void {
   if (started) return;
   started = true;
   if (!caretakerAlertsEnabled()) {
-    logger.info("Caretaker WhatsApp alerts are off — set BLUETICKS_API_KEY to turn them on.");
+    logger.info("Caretaker alerts are in manual mode (console queue); set BLUETICKS_API_KEY to send automatically.");
     return;
   }
   const interval = setInterval(() => void runCaretakerAlerts(), INTERVAL_MS);
   interval.unref?.();
   setTimeout(() => void runCaretakerAlerts(), 90_000).unref?.();
   logger.info({ intervalMs: INTERVAL_MS, recipients: caretakerRecipients().length }, "Caretaker WhatsApp alerts scheduled");
+}
+
+/* ------------------------------------------------------------------ *
+ * Manual mode — the default while there is no paid WhatsApp sender.
+ *
+ * The same rules produce a queue in the console. The owner taps "Send on
+ * WhatsApp", which opens WhatsApp with the message ready for the caretaker,
+ * and the item is marked sent (or skipped). Recorded under the recipient
+ * "manual", so the automatic sender above, if it is ever switched on,
+ * keeps its own record and the two never confuse each other.
+ * ------------------------------------------------------------------ */
+
+const MANUAL = "manual";
+export type ManualKind = "new_booking" | "checkin_eve" | "checkout_eve" | "cancelled";
+const KINDS: ManualKind[] = ["new_booking", "checkin_eve", "checkout_eve", "cancelled"];
+
+export type CaretakerQueueItem = {
+  bookingId: string;
+  kind: ManualKind;
+  guestName: string | null;
+  checkIn: string;
+  checkOut: string;
+  text: string;
+  whatsappUrl: string | null;
+};
+
+export async function caretakerQueue(now = new Date()): Promise<CaretakerQueueItem[]> {
+  await ensureTable();
+  const yesterday = istDate(new Date(now.getTime() - 86_400_000));
+  const rows = (await db
+    .select({
+      id: bookings.id,
+      source: bookings.source,
+      status: bookings.status,
+      guestName: bookings.guestName,
+      guestPhone: bookings.guestPhone,
+      checkIn: bookings.checkIn,
+      checkOut: bookings.checkOut,
+      guests: bookings.guests,
+      pets: bookings.pets,
+      grossPaise: bookings.grossPaise,
+      receivedPaise: bookings.receivedPaise,
+      createdAt: bookings.createdAt,
+    })
+    .from(bookings)
+    .where(gte(bookings.checkOut, yesterday))) as AlertBooking[];
+
+  const done = new Set(
+    (await pool.query<{ booking_id: string; kind: string }>(
+      "select booking_id, kind from caretaker_alerts where recipient = $1",
+      [MANUAL],
+    )).rows.map((r) => `${r.booking_id}:${r.kind}`),
+  );
+
+  const caretaker = caretakerRecipients()[0] ?? null;
+  const byId = new Map(rows.map((b) => [b.id, b]));
+
+  return dueAlerts(rows, done, now, { manual: true }).map((alert) => {
+    const b = byId.get(alert.bookingId)!;
+    return {
+      bookingId: alert.bookingId,
+      kind: alert.kind,
+      guestName: b.guestName,
+      checkIn: b.checkIn,
+      checkOut: b.checkOut,
+      text: alert.text,
+      whatsappUrl: caretaker
+        ? `https://wa.me/${caretaker.replace(/\D/g, "")}?text=${encodeURIComponent(alert.text)}`
+        : null,
+    };
+  });
+}
+
+/** Marks a queue item done: sent by the owner, or skipped on purpose. */
+export async function markCaretakerItem(
+  bookingId: string,
+  kind: string,
+  outcome: "sent" | "skipped",
+  now = new Date(),
+): Promise<boolean> {
+  if (!(KINDS as string[]).includes(kind)) return false;
+  await ensureTable();
+  const result = await pool.query(
+    `insert into caretaker_alerts (booking_id, kind, recipient, status, attempts, sent_at)
+     values ($1, $2, $3, $4, 1, $5)
+     on conflict (booking_id, kind, recipient) do update set status = excluded.status, sent_at = excluded.sent_at`,
+    [bookingId, kind, MANUAL, outcome, now],
+  );
+  return (result.rowCount ?? 0) > 0;
 }

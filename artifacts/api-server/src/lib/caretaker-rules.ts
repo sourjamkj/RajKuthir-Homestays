@@ -139,8 +139,18 @@ export function alertText(kind: AlertKind, b: AlertBooking): string {
  *    new-booking alert just told them
  *  - "cancelled" only if the caretaker was told about the booking
  */
-export function dueAlerts(bookings: AlertBooking[], sent: ReadonlySet<string>, now: Date): DueAlert[] {
-  if (isQuietHour(now)) return [];
+export function dueAlerts(
+  bookings: AlertBooking[],
+  sent: ReadonlySet<string>,
+  now: Date,
+  options: { manual?: boolean } = {},
+): DueAlert[] {
+  // Manual mode is the owner's own queue in the console: no quiet hours (they
+  // choose when to tap send) and a new booking stays listed for a week, not a
+  // day, in case the console is not opened for a while.
+  const manual = options.manual === true;
+  if (!manual && isQuietHour(now)) return [];
+  const newWindow = (manual ? 7 * 24 : 24) * HOUR;
   const today = istDate(now);
   const due: DueAlert[] = [];
   const push = (b: AlertBooking, kind: AlertKind) => {
@@ -155,7 +165,7 @@ export function dueAlerts(bookings: AlertBooking[], sent: ReadonlySet<string>, n
     }
     if (b.status !== "confirmed") continue;
 
-    if (now.getTime() - b.createdAt.getTime() < 24 * HOUR && b.checkOut > today) {
+    if (now.getTime() - b.createdAt.getTime() < newWindow && b.checkOut > today) {
       push(b, "new_booking");
     }
 

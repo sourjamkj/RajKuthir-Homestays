@@ -11,6 +11,7 @@ import guestOnboardingRouter from "./guest-onboarding";
 import mailRouter from "./mail";
 import activityRouter from "./activity";
 import bookRouter from "./book";
+import caretakerRouter from "./caretaker";
 
 const router: IRouter = Router();
 
@@ -26,5 +27,6 @@ router.use(guestOnboardingRouter);
 router.use(mailRouter);
 router.use(activityRouter);
 router.use(bookRouter);
+router.use(caretakerRouter);
 
 export default router;

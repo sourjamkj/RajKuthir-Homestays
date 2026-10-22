@@ -77,3 +77,12 @@ test("caretaker · numbers normalise to E.164", () => {
   assert.equal(toE164("07872685558"), "+917872685558");
   assert.equal(toE164("123"), null);
 });
+
+test("caretaker · manual queue ignores quiet hours and keeps a new booking for a week", () => {
+  const late = istAt("2026-10-22", 23);
+  assert.deepEqual(kinds(dueAlerts([booking()], none, late, { manual: true })), ["new_booking"]);
+  const b = booking({ checkIn: "2026-11-20", checkOut: "2026-11-22", createdAt: new Date("2026-10-20T06:00:00Z") });
+  const threeDaysLater = new Date("2026-10-23T06:00:00Z");
+  assert.deepEqual(kinds(dueAlerts([b], none, threeDaysLater)), []);
+  assert.deepEqual(kinds(dueAlerts([b], none, threeDaysLater, { manual: true })), ["new_booking"]);
+});
