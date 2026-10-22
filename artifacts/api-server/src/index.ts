@@ -3,6 +3,7 @@ import { logger } from "./lib/logger";
 import { startCalendarCron } from "./lib/calendar-cron";
 import { startNotificationsCron } from "./lib/notifications-cron";
 import { startMailCron } from "./lib/mail-cron";
+import { startCaretakerAlerts } from "./lib/caretaker-alerts";
 import { scheduleBookingComBackfill } from "./lib/mail-runner";
 import { startBookPayCron } from "./lib/book-pay-cron";
 import { ensureBookPayTables } from "./lib/book-pay-migrate";
@@ -47,6 +48,10 @@ app.listen(port, (err) => {
   // MAIL_ENCRYPTION_KEY is unset, since the stored passwords cannot be
   // opened without it.
   startMailCron();
+
+  // WhatsApp alerts to the caretaker (and the owner): new booking, the day
+  // before check-in, the day before check-out. Idle without BLUETICKS_API_KEY.
+  startCaretakerAlerts();
 
   // One-off: import every Booking.com email already in the mailbox (bookings,
   // guest names, cancellations). Skips itself once it has completed.
