@@ -123,3 +123,56 @@ export async function readMailbox(
     await client.logout().catch(() => client.close());
   }
 }
+
+/**
+ * Every message in the folder from one sender's domain, oldest first — for a
+ * one-off backfill when a new parser is added. Uses IMAP SEARCH so only the
+ * matching messages are downloaded, never the whole mailbox.
+ */
+export async function readBySender(
+  account: SyncableAccount,
+  senderDomain: string,
+  limit = 1000,
+): Promise<MailMessage[]> {
+  const client = new ImapFlow({
+    host: account.host,
+    port: account.port,
+    secure: account.secure,
+    auth: { user: account.username, pass: account.password },
+    logger: false,
+    socketTimeout: CONNECT_TIMEOUT_MS,
+  });
+
+  await client.connect();
+
+  try {
+    const lock = await client.getMailboxLock(account.folder);
+    try {
+      const found = await client.search({ from: senderDomain }, { uid: true });
+      const uids = (Array.isArray(found) ? found : []).sort((a, b) => a - b).slice(-limit);
+      if (uids.length === 0) return [];
+
+      const messages: MailMessage[] = [];
+      for await (const message of client.fetch(
+        uids,
+        { uid: true, envelope: true, source: true },
+        { uid: true },
+      )) {
+        if (typeof message.uid !== "number") continue;
+        messages.push({
+          uid: message.uid,
+          from: addressOf(message.envelope?.from),
+          subject: message.envelope?.subject ?? "",
+          body: await readableBody(message.source),
+        });
+      }
+
+      logger.info({ account: account.label, senderDomain, fetched: messages.length }, "Mailbox backfill read");
+      return messages.sort((a, b) => a.uid - b.uid);
+    } finally {
+      lock.release();
+    }
+  } finally {
+    await client.logout().catch(() => client.close());
+  }
+}

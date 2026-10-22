@@ -1,5 +1,9 @@
 import { logger } from "./logger";
-import { upsertImportedBooking } from "./ledger-repo";
+import {
+  applyChannelDetails,
+  applyChannelNotice,
+  upsertImportedBooking,
+} from "./ledger-repo";
 import { listForSync, saveProgress } from "./mail-repo";
 import { encryptionProblem } from "./secret-box";
 import {
@@ -8,7 +12,9 @@ import {
   type MailSyncResult,
   type SyncableAccount,
 } from "./mail-sync";
-import type { ParsedVoucher } from "./mail-parsers/index";
+import { parseMessage, type ParsedVoucher } from "./mail-parsers/index";
+import { appSettings, db } from "@workspace/db";
+import { eq } from "drizzle-orm";
 
 /**
  * The live wiring: real mailboxes, the real database, the real clock.
@@ -69,6 +75,30 @@ async function readMailbox(
  * what makes re-reading a mailbox safe after a parser fix.
  */
 async function saveBooking(voucher: ParsedVoucher): Promise<void> {
+  // Booking.com sends the stay in pieces; each piece updates only what it knows.
+  if (voucher.kind === "notice") {
+    await applyChannelNotice({
+      source: voucher.source,
+      externalRef: voucher.externalRef,
+      status: voucher.status,
+      checkIn: voucher.checkIn,
+      importedFromEmail: voucher.sourceSubject,
+    });
+    return;
+  }
+  if (voucher.kind === "details") {
+    await applyChannelDetails({
+      source: voucher.source,
+      externalRef: voucher.externalRef,
+      guestName: voucher.guestName,
+      checkIn: voucher.checkIn,
+      checkOut: voucher.checkOut,
+      guests: voucher.guests,
+      importedFromEmail: voucher.sourceSubject,
+    });
+    return;
+  }
+
   await upsertImportedBooking({
     source: voucher.source,
     externalRef: voucher.externalRef,
@@ -132,4 +162,110 @@ export async function runMailSync(): Promise<MailSyncResult> {
   } finally {
     inFlight = null;
   }
+}
+
+
+/* ------------------------------------------------------------------ *
+ * One-off backfill: every Booking.com email already in the mailbox.
+ *
+ * The normal sync only reads mail above its high-water mark, so emails that
+ * arrived before the Booking.com parser existed were passed over. This reads
+ * just the Booking.com messages (IMAP SEARCH, not the whole folder), oldest
+ * first, and saves them through the same saveBooking. Idempotent: bookings
+ * are keyed on the reservation number, so a second run changes nothing. The
+ * high-water mark is not touched, and Go-MMT mail is not re-read.
+ * ------------------------------------------------------------------ */
+
+const BACKFILL_KEY = "mail.backfill.bookingCom";
+
+export type BackfillResult = {
+  ranAt: string;
+  mailboxes: number;
+  scanned: number;
+  saved: number;
+  failed: number;
+  errors: string[];
+};
+
+export async function getBookingComBackfill(): Promise<BackfillResult | null> {
+  const [row] = await db.select({ value: appSettings.value }).from(appSettings).where(eq(appSettings.key, BACKFILL_KEY));
+  try {
+    return row?.value ? (JSON.parse(row.value) as BackfillResult) : null;
+  } catch {
+    return null;
+  }
+}
+
+export async function backfillBookingCom(): Promise<BackfillResult> {
+  const result: BackfillResult = {
+    ranAt: new Date().toISOString(),
+    mailboxes: 0,
+    scanned: 0,
+    saved: 0,
+    failed: 0,
+    errors: [],
+  };
+
+  if (encryptionProblem()) {
+    result.errors.push("Mailbox passwords cannot be opened (MAIL_ENCRYPTION_KEY).");
+    return result;
+  }
+
+  const { readBySender } = await import("./mail-imap");
+
+  for (const account of await listForSync()) {
+    result.mailboxes += 1;
+    let messages;
+    try {
+      messages = await readBySender(account, "booking.com");
+    } catch (error) {
+      result.errors.push(`${account.label}: ${error instanceof Error ? error.message.slice(0, 200) : "could not read"}`);
+      continue;
+    }
+
+    for (const message of messages) {
+      result.scanned += 1;
+      const hit = parseMessage(message);
+      if (!hit || hit.parser.name !== "Booking.com") continue;
+      try {
+        await saveBooking(hit.voucher);
+        result.saved += 1;
+      } catch (error) {
+        result.failed += 1;
+        if (result.errors.length < 10) {
+          result.errors.push(`${hit.voucher.externalRef}: ${error instanceof Error ? error.message.slice(0, 160) : "save failed"}`);
+        }
+      }
+    }
+  }
+
+  // Remembered only when every mailbox was read, so a failed attempt retries
+  // on the next boot instead of being marked done.
+  if (result.mailboxes > 0 && result.errors.length === 0) {
+    const value = JSON.stringify(result);
+    await db
+      .insert(appSettings)
+      .values({ key: BACKFILL_KEY, value, updatedAt: new Date() })
+      .onConflictDoUpdate({ target: appSettings.key, set: { value, updatedAt: new Date() } });
+  }
+
+  logger.info(
+    { mailboxes: result.mailboxes, scanned: result.scanned, saved: result.saved, failed: result.failed },
+    "Booking.com email backfill finished",
+  );
+  return result;
+}
+
+/** Runs the backfill once, a minute after boot, if it has never completed. */
+export function scheduleBookingComBackfill(): void {
+  setTimeout(() => {
+    void (async () => {
+      try {
+        if (await getBookingComBackfill()) return;
+        await backfillBookingCom();
+      } catch (error) {
+        logger.error({ err: error }, "Booking.com email backfill failed");
+      }
+    })();
+  }, 60_000).unref?.();
 }

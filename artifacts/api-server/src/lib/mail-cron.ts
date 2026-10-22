@@ -4,15 +4,15 @@ import { runMailSync } from "./mail-runner";
 /**
  * Reads the mailboxes on a timer, in step with the calendar poller beside it.
  *
- * Two hours rather than minutes: OTA vouchers arrive within seconds of a
- * booking, but nothing downstream is time-critical — the calendar already
- * blocks the dates from the iCal feeds, and this is what fills in the money
- * and the guest name. Hammering an IMAP server every few minutes is how a
- * provider starts rate-limiting the connection.
+ * Every 15 minutes. This used to be two hours on the reasoning that the iCal
+ * feeds block the dates anyway — but Booking.com's feed lags its emails by
+ * hours, and its "New booking!" email is now parsed into a booking that
+ * blocks the night on the website. One IMAP check every 15 minutes is well
+ * inside what Gmail and Yahoo tolerate; a few minutes would not be.
  */
 
 let started = false;
-const POLL_INTERVAL_MS = 2 * 60 * 60 * 1000;
+const POLL_INTERVAL_MS = 15 * 60 * 1000;
 
 export function startMailCron(): void {
   if (started) return;

@@ -3,6 +3,7 @@ import { logger } from "./lib/logger";
 import { startCalendarCron } from "./lib/calendar-cron";
 import { startNotificationsCron } from "./lib/notifications-cron";
 import { startMailCron } from "./lib/mail-cron";
+import { scheduleBookingComBackfill } from "./lib/mail-runner";
 import { startBookPayCron } from "./lib/book-pay-cron";
 import { ensureBookPayTables } from "./lib/book-pay-migrate";
 import { runSchemaCheck } from "./lib/schema-check";
@@ -46,6 +47,10 @@ app.listen(port, (err) => {
   // MAIL_ENCRYPTION_KEY is unset, since the stored passwords cannot be
   // opened without it.
   startMailCron();
+
+  // One-off: import every Booking.com email already in the mailbox (bookings,
+  // guest names, cancellations). Skips itself once it has completed.
+  scheduleBookingComBackfill();
 
   // Releases unpaid Book & Pay holds and tells the guest. The dates free
   // themselves without it (holds are derived); this tidies and notifies.

@@ -1,5 +1,9 @@
 import { handlesSender as handlesGoMmt, parseGoMmtVoucher } from "./gomt.ts";
 import type { ParsedVoucher } from "./gomt.ts";
+import {
+  handlesSender as handlesBookingCom,
+  parseBookingComEmail,
+} from "./bookingcom.ts";
 
 export type { ParsedVoucher };
 
@@ -28,6 +32,11 @@ export const PARSERS: MailParser[] = [
     name: "Go-MMT (MakeMyTrip / Goibibo)",
     handlesSender: handlesGoMmt,
     parse: ({ from, subject, body }) => parseGoMmtVoucher(subject, from, body),
+  },
+  {
+    name: "Booking.com",
+    handlesSender: handlesBookingCom,
+    parse: ({ from, subject, body }) => parseBookingComEmail(subject, from, body),
   },
 ];
 

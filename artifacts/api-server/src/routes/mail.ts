@@ -9,7 +9,13 @@ import {
   rewind,
   updateAccount,
 } from "../lib/mail-repo";
-import { getLastMailSync, isMailSyncInFlight, runMailSync } from "../lib/mail-runner";
+import {
+  backfillBookingCom,
+  getBookingComBackfill,
+  getLastMailSync,
+  isMailSyncInFlight,
+  runMailSync,
+} from "../lib/mail-runner";
 import { encryptionAvailable, encryptionProblem } from "../lib/secret-box";
 
 /**
@@ -191,6 +197,20 @@ router.post("/mail/sync", async (_req, res) => {
     logger.error({ err: error }, "Manual mailbox sync failed");
     res.status(500).json({ error: "The mailbox check could not be completed." });
   }
+});
+
+/** Re-reads every Booking.com email in the mailbox. Safe to repeat. */
+router.post("/mail/backfill/booking-com", async (_req, res) => {
+  try {
+    res.json({ result: await backfillBookingCom() });
+  } catch (error) {
+    logger.error({ err: error }, "Booking.com backfill failed");
+    res.status(500).json({ error: "The Booking.com import could not be completed." });
+  }
+});
+
+router.get("/mail/backfill/booking-com", async (_req, res) => {
+  res.json({ result: await getBookingComBackfill() });
 });
 
 export default router;

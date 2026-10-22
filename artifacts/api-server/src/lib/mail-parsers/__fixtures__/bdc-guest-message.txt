@@ -1,0 +1,38 @@
+   ##- Please type your reply above this line -##
+
+                       Confirmation number: 5400000002
+
+                     You have a new message from a guest
+
+                            Ghosh Anita said:
+
+                     For 5 guests how much i need to pay
+
+   Reply
+
+                                     -->
+   https://admin.booking.com/hotel/hoteladmin/extranet_ng/manage/messaging
+   /inbox.html?product_type=POST_BOOKING&lang=en&res_id=5400000002
+
+   Reservation details
+
+   Guest name:
+   Ghosh Anita
+
+   Check-in:
+   Fri 2 Oct 2026
+
+   Check-out:
+   Sun 4 Oct 2026
+
+   Property name:
+   Raj Kuthir Homestays,Peaceful Pet Friendly Bungalow in Shantiniketan
+
+   Booking number:
+   5400000002
+
+   Total guests:
+   5
+
+   Total rooms:
+   1

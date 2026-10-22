@@ -9,6 +9,11 @@ import {
   type Payout,
 } from "@workspace/db";
 import { buildReference } from "./booking-reference";
+import { calendarEvents } from "@workspace/db";
+import {
+  ASSUMED_CHECKOUT_NOTE,
+  resolveNoticeCheckOut,
+} from "./mail-parsers/bookingcom";
 
 /**
  * Money crosses this boundary in rupees (what the owner types and reads) and
@@ -467,4 +472,197 @@ export async function getLedgerSummary(): Promise<LedgerSummary> {
     ),
     totals,
   };
+}
+
+/* ------------------------------------------------------------------ *
+ * Channel emails that only know part of a stay (Booking.com).
+ * ------------------------------------------------------------------ */
+
+type ChannelSource = BookingInput["source"];
+
+/**
+ * The booking this email is about. By reservation number first; failing
+ * that, a row for the same channel and check-in that has no number yet —
+ * one typed in by hand or from a spreadsheet — which then adopts the number
+ * instead of a duplicate being created beside it.
+ */
+async function findByExternalRef(
+  source: ChannelSource,
+  externalRef: string,
+  checkIn?: string,
+) {
+  const [row] = await db
+    .select()
+    .from(bookings)
+    .where(and(eq(bookings.source, source), eq(bookings.externalRef, externalRef)))
+    .limit(1);
+  if (row) return row;
+  if (!checkIn) return null;
+
+  const [unnumbered] = await db
+    .select()
+    .from(bookings)
+    .where(
+      and(
+        eq(bookings.source, source),
+        isNull(bookings.externalRef),
+        eq(bookings.checkIn, checkIn),
+        sql`${bookings.status} <> 'cancelled'`,
+      ),
+    )
+    .limit(1);
+  if (!unnumbered) return null;
+
+  const [adopted] = await db
+    .update(bookings)
+    .set({ externalRef, updatedAt: new Date() })
+    .where(eq(bookings.id, unnumbered.id))
+    .returning();
+  return adopted ?? null;
+}
+
+/**
+ * A "New / Modified / Cancelled booking" notice: number, check-in, status.
+ * The check-out comes from the calendar feed or what is on file, else one
+ * night flagged as assumed (see resolveNoticeCheckOut).
+ */
+export async function applyChannelNotice(input: {
+  source: ChannelSource;
+  externalRef: string;
+  status: "confirmed" | "cancelled";
+  checkIn: string;
+  importedFromEmail: string;
+}): Promise<void> {
+  const existing = await findByExternalRef(input.source, input.externalRef, input.checkIn);
+
+  if (input.status === "cancelled" && existing) {
+    // A cancellation says nothing new about dates; leave them as they were.
+    await db
+      .update(bookings)
+      .set({ status: "cancelled", updatedAt: new Date() })
+      .where(eq(bookings.id, existing.id));
+    return;
+  }
+
+  const [event] = await db
+    .select({ endDate: calendarEvents.endDate })
+    .from(calendarEvents)
+    .where(
+      and(
+        eq(calendarEvents.source, input.source),
+        eq(calendarEvents.status, "confirmed"),
+        eq(calendarEvents.startDate, input.checkIn),
+      ),
+    )
+    .limit(1);
+
+  const { checkOut, assumed } = resolveNoticeCheckOut({
+    checkIn: input.checkIn,
+    calendarEnd: event?.endDate ?? null,
+    existingCheckOut: existing && existing.checkIn === input.checkIn ? existing.checkOut : null,
+  });
+
+  if (existing) {
+    await db
+      .update(bookings)
+      .set({
+        status: input.status,
+        checkIn: input.checkIn,
+        checkOut,
+        note: assumed
+          ? sql`coalesce(${bookings.note}, ${ASSUMED_CHECKOUT_NOTE})`
+          : sql`nullif(${bookings.note}, ${ASSUMED_CHECKOUT_NOTE})`,
+        updatedAt: new Date(),
+      })
+      .where(eq(bookings.id, existing.id));
+    return;
+  }
+
+  await createBooking({
+    source: input.source,
+    externalRef: input.externalRef,
+    status: input.status,
+    checkIn: input.checkIn,
+    checkOut,
+    note: assumed ? ASSUMED_CHECKOUT_NOTE : null,
+    importedFromEmail: input.importedFromEmail,
+  });
+}
+
+/**
+ * A guest message's "Reservation details": authoritative dates, name and
+ * party size — but never the status, so a message sent after a cancellation
+ * cannot revive the booking. A new row starts as confirmed, since a guest
+ * writing about a reservation means one exists.
+ */
+export async function applyChannelDetails(input: {
+  source: ChannelSource;
+  externalRef: string;
+  guestName: string | null;
+  checkIn: string;
+  checkOut: string;
+  guests: number | null;
+  importedFromEmail: string;
+}): Promise<void> {
+  const existing = await findByExternalRef(input.source, input.externalRef, input.checkIn);
+
+  if (existing) {
+    await db
+      .update(bookings)
+      .set({
+        checkIn: input.checkIn,
+        checkOut: input.checkOut,
+        guestName: sql`coalesce(${bookings.guestName}, ${input.guestName})`,
+        guests: sql`coalesce(${input.guests}, ${bookings.guests})`,
+        note: sql`nullif(${bookings.note}, ${ASSUMED_CHECKOUT_NOTE})`,
+        updatedAt: new Date(),
+      })
+      .where(eq(bookings.id, existing.id));
+    return;
+  }
+
+  await createBooking({
+    source: input.source,
+    externalRef: input.externalRef,
+    status: "confirmed",
+    guestName: input.guestName,
+    checkIn: input.checkIn,
+    checkOut: input.checkOut,
+    guests: input.guests,
+    importedFromEmail: input.importedFromEmail,
+  });
+}
+
+/**
+ * After a calendar sync: any Booking.com booking whose check-out was assumed
+ * takes the real one from a feed event starting the same day. Returns how
+ * many were corrected.
+ */
+export async function reconcileAssumedCheckouts(source: ChannelSource): Promise<number> {
+  const assumedRows = await db
+    .select({ id: bookings.id, checkIn: bookings.checkIn, checkOut: bookings.checkOut })
+    .from(bookings)
+    .where(and(eq(bookings.source, source), eq(bookings.note, ASSUMED_CHECKOUT_NOTE)));
+
+  let fixed = 0;
+  for (const row of assumedRows) {
+    const [event] = await db
+      .select({ endDate: calendarEvents.endDate })
+      .from(calendarEvents)
+      .where(
+        and(
+          eq(calendarEvents.source, source),
+          eq(calendarEvents.status, "confirmed"),
+          eq(calendarEvents.startDate, row.checkIn),
+        ),
+      )
+      .limit(1);
+    if (!event || event.endDate <= row.checkIn) continue;
+    await db
+      .update(bookings)
+      .set({ checkOut: event.endDate, note: null, updatedAt: new Date() })
+      .where(eq(bookings.id, row.id));
+    fixed += 1;
+  }
+  return fixed;
 }

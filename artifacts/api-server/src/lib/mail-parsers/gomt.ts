@@ -16,7 +16,14 @@
 export type ParsedVoucher = {
   /** The channel's own reservation number, e.g. GH75081277131254. */
   externalRef: string;
-  source: "makeMyTrip";
+  source: "makeMyTrip" | "bookingCom";
+  /**
+   * How much of the stay this email can vouch for. Absent means "full": the
+   * Go-MMT voucher, which carries everything. Booking.com sends "notice"
+   * (subject only: number, check-in, status) and "details" (dates, name,
+   * party size, but no status). See mail-parsers/bookingcom.ts.
+   */
+  kind?: "full" | "notice" | "details";
   status: "confirmed" | "cancelled";
   guestName: string | null;
   /** ISO dates. Check-out is exclusive, matching the rest of the codebase. */

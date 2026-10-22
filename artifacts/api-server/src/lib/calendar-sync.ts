@@ -1,6 +1,7 @@
 import { logger } from "./logger";
 import { fetchFeed, parseIcs, type ImportSource } from "./ics-utils";
 import { replaceSourceEvents } from "./calendar-repo";
+import { reconcileAssumedCheckouts } from "./ledger-repo";
 import { getFeedUrls } from "./settings-repo";
 
 export const SOURCE_DEFINITIONS: Array<{
@@ -122,6 +123,12 @@ async function runSync(
       );
     }
   }
+
+  // Booking.com bookings first seen in a notice email had to guess their
+  // check-out; the feed now knows it.
+  await reconcileAssumedCheckouts("bookingCom").catch((error) => {
+    logger.warn({ err: error instanceof Error ? error.message : error }, "Could not reconcile Booking.com check-outs");
+  });
 
   const result = { syncedAt, totalEvents, sources };
   lastSyncResult = result;
