@@ -77,6 +77,181 @@ export type SendResult =
  * messages first. Everything this app sends is business-initiated, so
  * everything here is a template.
  */
+/* ------------------------------------------------------------------ *
+ * Free-form text — allowed only inside the 24-hour customer-service
+ * window (the guest messaged us within the last 24 hours).
+ * ------------------------------------------------------------------ */
+
+export async function sendText(input: {
+  to: string;
+  text: string;
+}): Promise<SendResult> {
+  if (!isWhatsappEnabled()) {
+    return { ok: false, error: "WhatsApp sending is disabled or not configured.", retryable: false };
+  }
+
+  const url = `https://graph.facebook.com/${GRAPH_VERSION}/${PHONE_NUMBER_ID}/messages`;
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 15_000);
+
+  try {
+    const response = await fetch(url, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${ACCESS_TOKEN}`,
+        "Content-Type": "application/json",
+      },
+      signal: controller.signal,
+      body: JSON.stringify({
+        messaging_product: "whatsapp",
+        recipient_type: "individual",
+        to: input.to,
+        type: "text",
+        text: { body: input.text },
+      }),
+    });
+
+    const body = (await response.json().catch(() => ({}))) as {
+      messages?: Array<{ id?: string }>;
+      error?: { message?: string; code?: number };
+    };
+
+    if (!response.ok) {
+      const message = body.error?.message ?? `HTTP ${response.status}`;
+      const retryable = response.status === 429 || response.status >= 500;
+      logger.warn({ status: response.status, code: body.error?.code, message }, "WhatsApp text send rejected");
+      return { ok: false, error: message, retryable };
+    }
+
+    const providerMessageId = body.messages?.[0]?.id;
+    if (!providerMessageId) {
+      return { ok: false, error: "Provider returned no message id.", retryable: true };
+    }
+    return { ok: true, providerMessageId };
+  } catch (error) {
+    return { ok: false, error: error instanceof Error ? error.message : "Network error.", retryable: true };
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+/* ------------------------------------------------------------------ *
+ * Interactive messages — buttons and lists, the bot's main UX.
+ * ------------------------------------------------------------------ */
+
+export type InteractiveButton = { id: string; title: string };
+export type InteractiveListRow = { id: string; title: string; description?: string };
+export type InteractiveListSection = { title: string; rows: InteractiveListRow[] };
+
+export type InteractiveMessage =
+  | { type: "button"; body: string; buttons: InteractiveButton[] }
+  | { type: "list"; body: string; buttonText: string; sections: InteractiveListSection[] };
+
+export async function sendInteractive(input: {
+  to: string;
+  message: InteractiveMessage;
+}): Promise<SendResult> {
+  if (!isWhatsappEnabled()) {
+    return { ok: false, error: "WhatsApp sending is disabled or not configured.", retryable: false };
+  }
+
+  const url = `https://graph.facebook.com/${GRAPH_VERSION}/${PHONE_NUMBER_ID}/messages`;
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 15_000);
+
+  let interactive: Record<string, unknown>;
+  if (input.message.type === "button") {
+    interactive = {
+      type: "button",
+      body: { text: input.message.body },
+      action: {
+        buttons: input.message.buttons.map((b) => ({
+          type: "reply",
+          reply: { id: b.id, title: b.title },
+        })),
+      },
+    };
+  } else {
+    interactive = {
+      type: "list",
+      body: { text: input.message.body },
+      action: {
+        button: input.message.buttonText,
+        sections: input.message.sections,
+      },
+    };
+  }
+
+  try {
+    const response = await fetch(url, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${ACCESS_TOKEN}`,
+        "Content-Type": "application/json",
+      },
+      signal: controller.signal,
+      body: JSON.stringify({
+        messaging_product: "whatsapp",
+        recipient_type: "individual",
+        to: input.to,
+        type: "interactive",
+        interactive,
+      }),
+    });
+
+    const body = (await response.json().catch(() => ({}))) as {
+      messages?: Array<{ id?: string }>;
+      error?: { message?: string; code?: number };
+    };
+
+    if (!response.ok) {
+      const message = body.error?.message ?? `HTTP ${response.status}`;
+      const retryable = response.status === 429 || response.status >= 500;
+      logger.warn({ status: response.status, code: body.error?.code, message }, "WhatsApp interactive send rejected");
+      return { ok: false, error: message, retryable };
+    }
+
+    const providerMessageId = body.messages?.[0]?.id;
+    if (!providerMessageId) {
+      return { ok: false, error: "Provider returned no message id.", retryable: true };
+    }
+    return { ok: true, providerMessageId };
+  } catch (error) {
+    return { ok: false, error: error instanceof Error ? error.message : "Network error.", retryable: true };
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+/* ------------------------------------------------------------------ *
+ * Mark a message as read — cosmetic but polite.
+ * ------------------------------------------------------------------ */
+
+export async function markRead(messageId: string): Promise<void> {
+  if (!isWhatsappEnabled()) return;
+  const url = `https://graph.facebook.com/${GRAPH_VERSION}/${PHONE_NUMBER_ID}/messages`;
+  try {
+    await fetch(url, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${ACCESS_TOKEN}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        messaging_product: "whatsapp",
+        status: "read",
+        message_id: messageId,
+      }),
+    });
+  } catch {
+    // Best effort; if it fails, we don't care.
+  }
+}
+
+/* ------------------------------------------------------------------ *
+ * Templates — business-initiated, outside the 24-hour window.
+ * ------------------------------------------------------------------ */
+
 export async function sendTemplate(input: {
   to: string;
   templateName: string;

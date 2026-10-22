@@ -8,6 +8,7 @@ import { scheduleBookingComBackfill } from "./lib/mail-runner";
 import { startBookPayCron } from "./lib/book-pay-cron";
 import { ensureBookPayTables } from "./lib/book-pay-migrate";
 import { runSchemaCheck } from "./lib/schema-check";
+import { ensureWaInboundTables } from "./lib/wa-webhook";
 
 const rawPort = process.env["PORT"];
 
@@ -63,6 +64,10 @@ app.listen(port, (err) => {
   // so online booking switches itself on with no hand-run SQL.
   void ensureBookPayTables();
   startBookPayCron();
+
+  // WhatsApp inbound: creates wa_inbound_messages and wa_conversations
+  // tables if missing. Additive, idempotent — like caretaker_alerts.
+  void ensureWaInboundTables();
 
   // Says in the log whether the database still matches the Drizzle schema.
   // Four production 500s in one day came from that drift, each invisible until

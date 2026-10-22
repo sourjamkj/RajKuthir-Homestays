@@ -6,6 +6,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { existsSync, readFileSync } from "node:fs";
 import router from "./routes";
+import waWebhookRouter from "./routes/wa-webhook";
 import { logger } from "./lib/logger";
 import { injectMeta, isKnownPath, isPrivatePath, llmsTxt, sitemapXml } from "./lib/seo";
 
@@ -89,8 +90,24 @@ app.use((_req, res, next) => {
 });
 
 app.use(cookieParser());
-app.use(express.json({ limit: "12mb" }));
+app.use(
+  express.json({
+    limit: "12mb",
+    // Stash the raw body for the WhatsApp webhook's HMAC signature check.
+    // The verify callback fires before parsing; we save the raw bytes on req
+    // so the webhook route can compute the HMAC without re-serialising.
+    verify(req, _res, buf) {
+      if (req.url === "/webhooks/whatsapp" || req.url?.startsWith("/webhooks/whatsapp?")) {
+        (req as unknown as { rawBody: Buffer }).rawBody = buf;
+      }
+    },
+  }),
+);
 app.use(express.urlencoded({ extended: true }));
+
+// WhatsApp Cloud API webhook — outside /api because Meta's verification
+// handshake is a plain GET that must return hub.challenge directly.
+app.use(waWebhookRouter);
 
 app.use("/api", router);
 
