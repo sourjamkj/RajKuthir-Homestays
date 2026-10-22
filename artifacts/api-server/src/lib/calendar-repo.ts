@@ -1,6 +1,7 @@
 import { and, asc, eq, gt, inArray, lt, ne } from "drizzle-orm";
 import { db } from "@workspace/db";
 import {
+  bookings,
   calendarEvents,
   type CalendarEvent,
   type NewCalendarEvent,
@@ -8,6 +9,7 @@ import {
 import {
   bookingsAsEvents,
   mergeByDate,
+  rangesOverlap,
   type MergedEvent,
 } from "./calendar-bookings";
 import { readLiveHolds } from "./book-pay-repo";
@@ -20,6 +22,12 @@ export const OWNED_SOURCES: CalendarSource[] = ["manual", "direct"];
 /**
  * Everything occupying a night, from either table. Confirmed ledger bookings
  * are folded in here rather than stored as calendar rows — see calendar-bookings.
+ *
+ * Calendar events that correspond to a confirmed booking (same source and
+ * overlapping dates) get their title overridden to "Booked — GuestName" so the
+ * admin dashboard counts them as stays, not blocked periods.  Without this,
+ * OTA feeds that label reservations "Not available" or "Closed" would cause
+ * the dashboard to show 0 upcoming bookings.
  */
 export async function listAllEvents(): Promise<MergedEvent[]> {
   const events = await db
@@ -28,7 +36,39 @@ export async function listAllEvents(): Promise<MergedEvent[]> {
     .where(eq(calendarEvents.status, "confirmed"))
     .orderBy(asc(calendarEvents.startDate));
 
-  return mergeByDate(events, await bookingsAsEvents(events));
+  const merged = mergeByDate(events, await bookingsAsEvents(events));
+
+  // Calendar events whose dates are already covered by a ledger booking were
+  // NOT emitted by bookingsAsEvents (dedup). Their OTA-assigned title ("Not
+  // available", "Closed") makes the frontend's isBlock() hide them from the
+  // booking count.  Fix that here by cross-referencing the bookings table and
+  // stamping the guest name on any match.
+  const confirmedBookings = await db
+    .select({
+      source: bookings.source,
+      checkIn: bookings.checkIn,
+      checkOut: bookings.checkOut,
+      guestName: bookings.guestName,
+    })
+    .from(bookings)
+    .where(eq(bookings.status, "confirmed"));
+
+  for (const entry of merged) {
+    if (entry.origin !== "event") continue;
+    const match = confirmedBookings.find(
+      (b) =>
+        b.source === entry.source &&
+        rangesOverlap(entry.startDate, entry.endDate, b.checkIn, b.checkOut),
+    );
+    if (match) {
+      entry.title = match.guestName
+        ? `Booked — ${match.guestName}`
+        : "Booked";
+      entry.origin = "booking";
+    }
+  }
+
+  return merged;
 }
 
 /**
