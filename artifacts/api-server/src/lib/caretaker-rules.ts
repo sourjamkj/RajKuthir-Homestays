@@ -90,19 +90,29 @@ export function balancePaise(b: AlertBooking): number | null {
   return Math.max(0, b.grossPaise - (b.receivedPaise ?? 0));
 }
 
-function lines(b: AlertBooking, extra: string[] = []): string {
-  const party = [
-    b.guests ? `${b.guests} guest${b.guests === 1 ? "" : "s"}` : null,
-    b.pets ? `${b.pets} pet${b.pets === 1 ? "" : "s"}` : null,
-  ].filter(Boolean).join(", ");
+/** Channels where the guest pays the OTA, so nothing is collected on site. */
+const PREPAID = new Set(["airbnb", "makeMyTrip"]);
+
+/**
+ * Payment as the caretaker sees it: "Paid" or "Due", never an amount. The
+ * owner keeps the figures; the caretaker only needs to know whether to ask.
+ */
+export function paymentStatus(b: AlertBooking): "Paid" | "Due" {
+  if (PREPAID.has(b.source)) return "Paid";
   const balance = balancePaise(b);
+  return balance === 0 ? "Paid" : "Due";
+}
+
+function lines(b: AlertBooking, extra: string[] = []): string {
+  const pets = b.pets && b.pets > 0 ? `Yes, ${b.pets}` : "No";
   return [
-    `• Guest: ${b.guestName ?? "Name not known yet"}${party ? ` (${party})` : ""}`,
+    `• Guest: ${b.guestName ?? "Name not known yet"}${b.guests ? ` (${b.guests} guest${b.guests === 1 ? "" : "s"})` : ""}`,
+    `• Pets: ${pets}`,
     `• Check-in: ${day(b.checkIn)}, from 12 noon`,
     `• Check-out: ${day(b.checkOut)}, by 11 am (${nights(b)} night${nights(b) === 1 ? "" : "s"})`,
     `• Booked via: ${SOURCE_LABEL[b.source] ?? b.source}`,
     b.guestPhone ? `• Guest phone: ${b.guestPhone}` : null,
-    balance !== null ? (balance > 0 ? `• Collect at check-in: ₹${rupees(balance)}` : "• Fully paid") : null,
+    `• Payment: ${paymentStatus(b)}`,
     ...extra,
   ].filter((line): line is string => Boolean(line)).join("\n");
 }
@@ -117,7 +127,7 @@ export function alertText(kind: AlertKind, b: AlertBooking): string {
       ])}`;
     case "checkout_eve":
       return `Raj Kuthir – Sobuj Potro: guest CHECKS OUT TOMORROW\n${lines(b, [
-        "• Check-out by 11 am. Please check the rooms, collect the keys and any balance, and report any damage.",
+        "• Check-out by 11 am. Please check the rooms, collect the keys, and report any damage.",
       ])}`;
     case "cancelled":
       return `Raj Kuthir – Sobuj Potro: booking CANCELLED\n• Guest: ${b.guestName ?? "Name not known"}\n• Was: ${day(b.checkIn)} to ${day(b.checkOut)} (${SOURCE_LABEL[b.source] ?? b.source})\n• No need to prepare for these dates.`;

@@ -26,7 +26,10 @@ test("caretaker · a new booking alerts at once, with the balance to collect", (
   assert.deepEqual(kinds(due), ["new_booking"]);
   assert.match(due[0]!.text, /NEW BOOKING/);
   assert.match(due[0]!.text, /Ayush Dhar \(4 guests\)/);
-  assert.match(due[0]!.text, /Collect at check-in: ₹5,103/);
+  assert.match(due[0]!.text, /• Pets: No/);
+  assert.match(due[0]!.text, /• Payment: Due/);
+  // The caretaker never sees an amount.
+  assert.doesNotMatch(due[0]!.text, /₹|\d,\d{3}|5103/);
   assert.match(due[0]!.text, /98339 42336/);
 });
 
@@ -68,7 +71,10 @@ test("caretaker · a cancellation is sent only if they were told about the booki
 
 test("caretaker · pending bookings wait; fully paid says so", () => {
   assert.deepEqual(dueAlerts([booking({ status: "pending" })], none, new Date("2026-10-22T08:00:00Z")), []);
-  assert.match(alertText("new_booking", booking({ receivedPaise: 510_300 })), /Fully paid/);
+  assert.match(alertText("new_booking", booking({ receivedPaise: 510_300 })), /• Payment: Paid/);
+  assert.match(alertText("new_booking", booking({ source: "makeMyTrip", grossPaise: null })), /• Payment: Paid/);
+  assert.match(alertText("new_booking", booking({ grossPaise: null })), /• Payment: Due/);
+  assert.match(alertText("checkin_eve", booking({ pets: 2 })), /• Pets: Yes, 2/);
 });
 
 test("caretaker · numbers normalise to E.164", () => {
