@@ -1,7 +1,7 @@
 import { Router, type IRouter, type Request } from "express";
 import QRCode from "qrcode";
 import { and, eq, gt, inArray, lt } from "drizzle-orm";
-import { calendarEvents, db } from "@workspace/db";
+import { bookings, calendarEvents, db } from "@workspace/db";
 
 import { requireAdmin } from "../lib/admin-auth";
 import { logger } from "../lib/logger";
@@ -557,62 +557,92 @@ router.post("/admin/book-pay/:id/confirm", requireAdmin, async (req, res) => {
     return;
   }
   const { request } = found;
-  if (request.status !== "submitted" && request.status !== "awaiting_payment") {
+
+  // Confirmable: waiting, submitted, or EXPIRED — a guest who paid after the
+  // hold ran out has still paid. A confirmed one re-sends its message.
+  const confirmable = ["submitted", "awaiting_payment", "expired"].includes(request.status);
+  if (!confirmable && request.status !== "confirmed") {
     res.status(409).json({ error: `This payment is already ${request.status}.` });
     return;
   }
 
-  // An OTA may have sold the nights before its next sync picked up the hold.
-  // The ledger check inside convert would miss that; look at the calendar.
-  if (req.body?.force !== true && found.enquiry.checkIn && found.enquiry.checkOut) {
-    const otaClash = await db
-      .select({ id: calendarEvents.id, source: calendarEvents.source, startDate: calendarEvents.startDate, endDate: calendarEvents.endDate })
-      .from(calendarEvents)
-      .where(
-        and(
-          eq(calendarEvents.status, "confirmed"),
-          inArray(calendarEvents.source, ["bookingCom", "airbnb", "makeMyTrip", "manual"]),
-          lt(calendarEvents.startDate, found.enquiry.checkOut),
-          gt(calendarEvents.endDate, found.enquiry.checkIn),
-        ),
-      )
+  let enquiry = found.enquiry;
+  let booking: { id: string; reference: string | null; status: string; receivedPaise: number | null } | null = null;
+
+  // Already turned into a booking (an earlier confirm, or the enquiry's own
+  // Convert button): use that booking rather than refusing.
+  if (enquiry.convertedBookingId) {
+    const [existing] = await db
+      .select({ id: bookings.id, reference: bookings.reference, status: bookings.status, receivedPaise: bookings.receivedPaise })
+      .from(bookings)
+      .where(eq(bookings.id, enquiry.convertedBookingId))
       .limit(1);
-    if (otaClash[0]) {
-      res.status(409).json({
-        error: `The calendar shows ${otaClash[0].source} holding ${otaClash[0].startDate} to ${otaClash[0].endDate}. Check for a double booking before confirming.`,
-        reason: "calendar_clash",
-      });
+    booking = existing ?? null;
+  }
+
+  if (!booking && request.status === "confirmed") {
+    res.status(409).json({ error: "This payment is confirmed but its booking could not be found." });
+    return;
+  }
+
+  if (!booking) {
+    // An OTA may have sold the nights before its next sync picked up the hold.
+    // The ledger check inside convert would miss that; look at the calendar.
+    if (req.body?.force !== true && enquiry.checkIn && enquiry.checkOut) {
+      const otaClash = await db
+        .select({ id: calendarEvents.id, source: calendarEvents.source, startDate: calendarEvents.startDate, endDate: calendarEvents.endDate })
+        .from(calendarEvents)
+        .where(
+          and(
+            eq(calendarEvents.status, "confirmed"),
+            inArray(calendarEvents.source, ["bookingCom", "airbnb", "makeMyTrip", "manual"]),
+            lt(calendarEvents.startDate, enquiry.checkOut),
+            gt(calendarEvents.endDate, enquiry.checkIn),
+          ),
+        )
+        .limit(1);
+      if (otaClash[0]) {
+        res.status(409).json({
+          error: `The calendar shows ${otaClash[0].source} holding ${otaClash[0].startDate} to ${otaClash[0].endDate}. Check for a double booking before confirming.`,
+          reason: "calendar_clash",
+        });
+        return;
+      }
+    }
+
+    // Step 1 — the same mark as POST /enquiries/:id/advance-received.
+    await setAdvancePaid(request.enquiryId, true);
+    const fresh = await getEnquiry(request.enquiryId);
+    if (!fresh) {
+      res.status(404).json({ error: "The enquiry behind this payment no longer exists." });
       return;
     }
+    enquiry = fresh;
+
+    // Step 2 — the same conversion as POST /enquiries/:id/convert.
+    const outcome = await convertEnquiry(enquiry, { reference: request.reference });
+    if (!outcome.ok) {
+      // Leave nothing half-done: the advance mark goes back off.
+      await setAdvancePaid(request.enquiryId, false);
+      const { ok: _ok, status, ...body } = outcome;
+      res.status(status).json(body);
+      return;
+    }
+    booking = outcome.booking;
   }
 
-  // Step 1 — the same mark as POST /enquiries/:id/advance-received.
-  await setAdvancePaid(request.enquiryId, true);
-  const enquiry = await getEnquiry(request.enquiryId);
-  if (!enquiry) {
-    res.status(404).json({ error: "The enquiry behind this payment no longer exists." });
-    return;
+  if (request.status !== "confirmed") {
+    await setDecision(request.id, "confirmed");
+    await setEnquiryStatus(request.enquiryId, "converted").catch(() => undefined);
+    await logPaymentEvent(request.id, "confirmed", `Booking ${booking.reference ?? request.reference}`);
   }
-
-  // Step 2 — the same conversion as POST /enquiries/:id/convert.
-  const outcome = await convertEnquiry(enquiry, { reference: request.reference });
-  if (!outcome.ok) {
-    // Leave nothing half-done: the advance mark goes back off.
-    await setAdvancePaid(request.enquiryId, false);
-    const { ok: _ok, status, ...body } = outcome;
-    res.status(status).json(body);
-    return;
-  }
-
-  await setDecision(request.id, "confirmed");
-  await logPaymentEvent(request.id, "confirmed", `Booking ${outcome.booking.reference}`);
 
   // Guest message: reference, dates, balance, pre-arrival link.
-  const onboarding = await createOrRefreshOnboarding(outcome.booking.id).catch(() => null);
+  const onboarding = await createOrRefreshOnboarding(booking.id).catch(() => null);
   const preArrivalUrl = onboarding ? `${SITE_ORIGIN}/pre-arrival#${encodeURIComponent(onboarding.token)}` : null;
   const message = confirmedMessage({
     guestName: enquiry.name,
-    reference: outcome.booking.reference ?? request.reference,
+    reference: booking.reference ?? request.reference,
     checkIn: enquiry.checkIn,
     checkOut: enquiry.checkOut,
     advancePaise: request.advancePaise,
@@ -623,10 +653,10 @@ router.post("/admin/book-pay/:id/confirm", requireAdmin, async (req, res) => {
 
   res.json({
     booking: {
-      id: outcome.booking.id,
-      reference: outcome.booking.reference,
-      status: outcome.booking.status,
-      receivedPaise: outcome.booking.receivedPaise,
+      id: booking.id,
+      reference: booking.reference ?? request.reference,
+      status: booking.status,
+      receivedPaise: booking.receivedPaise,
     },
     emailed,
     // Today's delivery path for WhatsApp: the owner presses send.

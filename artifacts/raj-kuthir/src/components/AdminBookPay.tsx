@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { AlertTriangle, Check, Image as ImageIcon, Loader2, MessageCircle, Settings2, Wallet, X } from 'lucide-react';
 
-import { adminFetch } from '@/lib/admin-api';
+import { AdminApiError, adminFetch } from '@/lib/admin-api';
 import { formatRupees } from '@/lib/rates';
 
 /**
@@ -84,22 +84,41 @@ export function AdminBookPay() {
     void queryClient.invalidateQueries({ queryKey: ['/api/enquiries'] });
   };
 
+  // The WhatsApp message stays on screen as a link, so a blocked pop-up
+  // never leaves the owner with nothing to send.
+  const [sendLink, setSendLink] = useState<{ url: string; preview: string } | null>(null);
+
+  type ConfirmResult = { whatsappUrl: string | null; emailed: boolean; preview: string; booking: { reference: string } };
+  const postConfirm = (row: Row, force: boolean) =>
+    adminFetch<ConfirmResult>(`/api/admin/book-pay/${row.id}/confirm`, {
+      method: 'POST',
+      body: JSON.stringify(force ? { force: true } : {}),
+    });
+
   const confirm = useMutation({
     mutationFn: async (row: Row) => {
-      // Opened before the await so mobile browsers do not block it.
-      const tab = window.open('', '_blank');
+      setSendLink(null);
+      let result: ConfirmResult;
       try {
-        const result = await adminFetch<{ whatsappUrl: string | null; emailed: boolean; booking: { reference: string } }>(
-          `/api/admin/book-pay/${row.id}/confirm`,
-          { method: 'POST', body: JSON.stringify({}) },
-        );
-        if (tab && result.whatsappUrl) tab.location.href = result.whatsappUrl;
-        else tab?.close();
-        setMessage(`Confirmed ${result.booking.reference}.${result.emailed ? ' Confirmation emailed to the guest.' : ''} Send the WhatsApp message that just opened.`);
+        result = await postConfirm(row, false);
       } catch (error) {
-        tab?.close();
-        throw error;
+        const clash = error instanceof AdminApiError && error.status === 409 && /double booking/i.test(error.message);
+        if (!clash) throw error;
+        if (!window.confirm(`${error.message}\n\nIf that block is this same guest (or you are sure there is no double booking), press OK to confirm anyway.`)) {
+          throw new Error('Not confirmed. Check the calendar first.');
+        }
+        result = await postConfirm(row, true);
       }
+      if (result.whatsappUrl) {
+        setSendLink({ url: result.whatsappUrl, preview: result.preview });
+        window.open(result.whatsappUrl, '_blank');
+      }
+      setMessage(
+        `${row.status === 'confirmed' ? 'Confirmation ready again for' : 'Confirmed'} ${result.booking.reference}.` +
+          (result.emailed ? ' Confirmation emailed to the guest.' : '') +
+          (result.whatsappUrl ? ' Tap "Send confirmation on WhatsApp" below if WhatsApp did not open.' : ' No WhatsApp number on file — copy the message below.'),
+      );
+      if (!result.whatsappUrl) setSendLink({ url: '', preview: result.preview });
     },
     onSuccess: refresh,
     onError: (error) => setMessage(error instanceof Error ? error.message : 'Could not confirm.'),
@@ -168,13 +187,14 @@ export function AdminBookPay() {
       )}
       {row.rejectReason && <p className="mt-2 text-[12px] text-muted-foreground">Reason: {row.rejectReason}</p>}
 
-      {(row.status === 'submitted' || row.status === 'awaiting_payment') && (
+      {(row.status === 'submitted' || row.status === 'awaiting_payment' || row.status === 'expired') && (
         <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:items-center">
           <button
             type="button"
             disabled={confirm.isPending}
             onClick={() => {
               if (row.status === 'awaiting_payment' && !window.confirm('No UTR yet. Confirm only if you have seen this money in your bank.')) return;
+              if (row.status === 'expired' && !window.confirm('This hold had expired. Confirm only if you have seen this money in your bank — the dates will be booked if they are still free.')) return;
               confirm.mutate(row);
             }}
             className="flex items-center justify-center gap-1.5 rounded-full bg-primary px-4 py-2 text-[11px] font-bold uppercase tracking-[.08em] text-primary-foreground disabled:opacity-40"
@@ -199,6 +219,18 @@ export function AdminBookPay() {
             <X size={13} /> Reject
           </button>
         </div>
+      )}
+
+      {row.status === 'confirmed' && (
+        <button
+          type="button"
+          disabled={confirm.isPending}
+          onClick={() => confirm.mutate(row)}
+          className="mt-3 inline-flex items-center gap-1.5 rounded-full border border-primary/25 px-4 py-2 text-[11px] font-bold uppercase tracking-[.08em] text-primary disabled:opacity-40"
+          data-testid="button-payment-resend"
+        >
+          <MessageCircle size={13} /> Send confirmation to guest again
+        </button>
       )}
 
       {row.rebookWhatsappUrl && (
@@ -270,6 +302,29 @@ export function AdminBookPay() {
       )}
 
       {message && <p className="mt-4 rounded-xl bg-secondary p-3 text-[13px] text-primary" role="status">{message}</p>}
+      {sendLink && (
+        <div className="mt-3 rounded-2xl border border-primary/25 bg-card p-4">
+          {sendLink.url && (
+            <a
+              href={sendLink.url}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex items-center gap-1.5 rounded-full bg-primary px-4 py-2 text-[11px] font-bold uppercase tracking-[.08em] text-primary-foreground"
+              data-testid="link-payment-whatsapp"
+            >
+              <MessageCircle size={13} /> Send confirmation on WhatsApp
+            </a>
+          )}
+          <button
+            type="button"
+            onClick={() => void navigator.clipboard?.writeText(sendLink.preview).then(() => setMessage('Message copied.'))}
+            className="ml-2 mt-2 inline-flex items-center rounded-full border border-border px-4 py-2 text-[11px] font-bold uppercase tracking-[.08em] text-primary"
+          >
+            Copy message
+          </button>
+          <pre className="mt-3 whitespace-pre-wrap font-sans text-[12px] text-primary/80">{sendLink.preview}</pre>
+        </div>
+      )}
 
       {query.isLoading && <p className="mt-4 text-sm text-muted-foreground">Loading…</p>}
       {data && rows.length === 0 && !data.migrationNeeded && <p className="mt-4 text-sm text-muted-foreground">No online bookings yet.</p>}

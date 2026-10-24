@@ -332,7 +332,9 @@ export async function setDecision(
     .where(
       and(
         eq(paymentRequests.id, id),
-        inArray(paymentRequests.status, ["awaiting_payment", "submitted"]),
+        // "expired" too: a guest who paid after the hold ran out can still be
+        // confirmed (or rejected) by the owner.
+        inArray(paymentRequests.status, ["awaiting_payment", "submitted", "expired"]),
       ),
     )
     .returning();

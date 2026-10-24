@@ -216,7 +216,7 @@ const STATUS_STYLE: Record<EnquiryStatus, string> = {
 const STATUSES: EnquiryStatus[] = ['new', 'contacted', 'converted', 'closed'];
 
 const waLink = (phone: string, name: string | null) =>
-  `https://wa.me/${phone.replace(/\D/g, '').replace(/^0+/, '')}?text=${encodeURIComponent(
+  `https://wa.me/${waNumber(phone)}?text=${encodeURIComponent(
     `Hello ${name ?? ''}, this is Raj Kuthir Homestays – Sobuj Potro.`.replace(
       /\s+/g,
       ' ',
@@ -324,7 +324,7 @@ export default function AdminGuests() {
       const message = buildGuestWhatsAppMessage(stay, result.url);
       if (!stay.guestPhone) throw new Error('This booking has no guest mobile number.');
       window.open(
-        `https://wa.me/${stay.guestPhone.replace(/\D/g, '')}?text=${encodeURIComponent(message)}`,
+        `https://wa.me/${waNumber(stay.guestPhone)}?text=${encodeURIComponent(message)}`,
         '_blank',
         'noopener,noreferrer',
       );
@@ -359,7 +359,7 @@ export default function AdminGuests() {
     }
 
     const message = buildCheckinWhatsAppMessage(stay, info);
-    const url = `https://wa.me/${stay.guestPhone.replace(/\D/g, '')}?text=${encodeURIComponent(message)}`;
+    const url = `https://wa.me/${waNumber(stay.guestPhone)}?text=${encodeURIComponent(message)}`;
     if (chat) {
       chat.opener = null;
       chat.location.href = url;
