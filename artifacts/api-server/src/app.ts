@@ -210,14 +210,20 @@ if (clientDist) {
  * Four parameters, and registered last: Express identifies error handlers by
  * arity, and only ones mounted after every route can catch anything.
  */
-const errorHandler: ErrorRequestHandler = (error, _req, res, _next) => {
-  logger.error({ error }, "Unhandled error");
+const errorHandler: ErrorRequestHandler = (error, req, res, _next) => {
+  logger.error({ error, path: req.path }, "Unhandled error");
 
   if (res.headersSent) return;
 
+  // Owner-console routes say what actually failed: only the signed-in owner
+  // reaches code under /api/admin (requireAdmin answers everyone else first),
+  // and "Something went wrong" leaves them nothing to report.
+  const detail =
+    req.originalUrl.startsWith("/api/admin") && error instanceof Error ? ` (${error.message.slice(0, 200)})` : "";
+
   res
     .status(500)
-    .json({ error: "Something went wrong. Please try again in a moment." });
+    .json({ error: `Something went wrong. Please try again in a moment.${detail}` });
 };
 
 app.use(errorHandler);

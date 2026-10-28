@@ -148,3 +148,15 @@ test("the booking confirmation renders with a QR for the balance", async () => {
   assert.match(email.subject, /RK-18NOV-AB12C/);
   assert.match(email.text, /Balance at check-in: Rs\. 2,800/);
 });
+
+test("PDFs never fail on names the standard fonts cannot draw", async () => {
+  const { pdfSafe } = await import("./invoice-pdf.ts");
+  assert.equal(pdfSafe("Rs. ₹5,600"), "Rs. Rs. 5,600");
+  assert.equal(pdfSafe("Śrīmatī Dās"), "Srimati Das");
+  assert.equal(pdfSafe("অমিত 🙂"), "???? ??");
+  for (const guestName of ["অমিত দাস", "José Ñúñez 🙂", "Ananya “Annie” Roy"]) {
+    const content = invoiceContent({ booking: booking({ guestName }), number: "RK/2026-27/0003", issuedOn: "2026-11-20", email: null });
+    const bytes = await renderInvoicePdf(content);
+    assert.equal(Buffer.from(bytes.slice(0, 5)).toString(), "%PDF-", guestName);
+  }
+});
