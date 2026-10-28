@@ -1,5 +1,7 @@
 import { Router, type IRouter } from "express";
 import { requireAdmin } from "../lib/admin-auth";
+import { bookings, db } from "@workspace/db";
+import { eq } from "drizzle-orm";
 import { logger } from "../lib/logger";
 import { parseBookingSheet } from "../lib/booking-import";
 import {
@@ -381,13 +383,32 @@ router.patch("/bookings/:id", async (req, res) => {
       patch.checkOut = String(body.checkOut);
     }
 
-    if (
-      typeof patch.checkIn === "string" &&
-      typeof patch.checkOut === "string" &&
-      patch.checkOut <= patch.checkIn
-    ) {
-      res.status(400).json({ error: "Check-out must be after check-in." });
-      return;
+    // Dates are checked against the booking as it will be, not only against
+    // what this request sent: changing just the check-out must still leave
+    // it after the existing check-in, and must not run into another stay.
+    if (patch.checkIn !== undefined || patch.checkOut !== undefined || patch.status === "confirmed") {
+      const [current] = await db.select().from(bookings).where(eq(bookings.id, id)).limit(1);
+      if (!current) {
+        res.status(404).json({ error: "That booking no longer exists." });
+        return;
+      }
+      const checkIn = (patch.checkIn as string | undefined) ?? current.checkIn;
+      const checkOut = (patch.checkOut as string | undefined) ?? current.checkOut;
+      if (checkOut <= checkIn) {
+        res.status(400).json({ error: "Check-out must be after check-in." });
+        return;
+      }
+      const status = (patch.status as string | undefined) ?? current.status;
+      if (status === "confirmed") {
+        const clashes = await findClashes({ checkIn, checkOut, excludeId: id });
+        if (clashes.length) {
+          const other = clashes[0]!.booking;
+          res.status(409).json({
+            error: `Those dates run into another booking: ${other.guestName ?? "a guest"} (${other.reference ?? other.source}), ${other.checkIn} to ${other.checkOut}.`,
+          });
+          return;
+        }
+      }
     }
 
     const assign = (key: string, value: unknown) => {

@@ -495,7 +495,7 @@ export default function AdminGuests() {
     );
 
   const [editingStay, setEditingStay] = useState<string | null>(null);
-  const [details, setDetails] = useState({ guestName: '', guestPhone: '', guests: '', pets: '' });
+  const [details, setDetails] = useState({ guestName: '', guestPhone: '', guests: '', pets: '', checkIn: '', checkOut: '', gross: '', received: '' });
 
   const startEditing = (stay: GuestStay) => {
     setDetails({
@@ -503,6 +503,10 @@ export default function AdminGuests() {
       guestPhone: stay.guestPhone ?? '',
       guests: stay.guests === null ? '' : String(stay.guests),
       pets: stay.pets === null ? '' : String(stay.pets),
+      checkIn: stay.checkIn,
+      checkOut: stay.checkOut,
+      gross: stay.grossPaise === null ? '' : String(stay.grossPaise / 100),
+      received: stay.receivedPaise === null ? '' : String(stay.receivedPaise / 100),
     });
     setEditingStay(stay.bookingId);
   };
@@ -511,7 +515,17 @@ export default function AdminGuests() {
     mutationFn: (bookingId: string) =>
       adminFetch(`/api/bookings/${bookingId}`, {
         method: 'PATCH',
-        body: JSON.stringify(details),
+        // An amount left empty is left as it was, never cleared.
+        body: JSON.stringify({
+          guestName: details.guestName,
+          guestPhone: details.guestPhone,
+          guests: details.guests,
+          pets: details.pets,
+          checkIn: details.checkIn,
+          checkOut: details.checkOut,
+          ...(details.gross.trim() ? { gross: details.gross } : {}),
+          ...(details.received.trim() ? { received: details.received } : {}),
+        }),
       }),
     onSuccess: () => {
       setEditingStay(null);
@@ -1270,7 +1284,7 @@ export default function AdminGuests() {
                               event.preventDefault();
                               saveDetails.mutate(stay.bookingId);
                             }}
-                            className="grid gap-3 sm:grid-cols-[1.4fr_1.2fr_.6fr_.6fr_auto] sm:items-end"
+                            className="grid gap-3 sm:grid-cols-4 sm:items-end"
                           >
                             <label className="block">
                               <span className="mb-1 block text-[10px] font-bold uppercase tracking-[.08em] text-muted-foreground">Guest name</span>
@@ -1288,6 +1302,27 @@ export default function AdminGuests() {
                               <span className="mb-1 block text-[10px] font-bold uppercase tracking-[.08em] text-muted-foreground">Pets</span>
                               <input id={`edit-pets-${stay.bookingId}`} type="number" min={0} max={100} value={details.pets} onChange={(e) => setDetails({ ...details, pets: e.target.value })} className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary" data-testid={`input-edit-pets-${stay.bookingId}`} />
                             </label>
+                            <label className="block">
+                              <span className="mb-1 block text-[10px] font-bold uppercase tracking-[.08em] text-muted-foreground">Check-in</span>
+                              <input id={`edit-checkin-${stay.bookingId}`} type="date" required value={details.checkIn} onChange={(e) => setDetails({ ...details, checkIn: e.target.value })} className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary" />
+                            </label>
+                            <label className="block">
+                              <span className="mb-1 block text-[10px] font-bold uppercase tracking-[.08em] text-muted-foreground">Check-out (day they leave)</span>
+                              <input id={`edit-checkout-${stay.bookingId}`} type="date" required value={details.checkOut} onChange={(e) => setDetails({ ...details, checkOut: e.target.value })} className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary" />
+                            </label>
+                            <label className="block">
+                              <span className="mb-1 block text-[10px] font-bold uppercase tracking-[.08em] text-muted-foreground">Total (₹)</span>
+                              <input id={`edit-gross-${stay.bookingId}`} type="number" min={0} value={details.gross} onChange={(e) => setDetails({ ...details, gross: e.target.value })} className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary" />
+                            </label>
+                            <label className="block">
+                              <span className="mb-1 block text-[10px] font-bold uppercase tracking-[.08em] text-muted-foreground">Received (₹)</span>
+                              <input id={`edit-received-${stay.bookingId}`} type="number" min={0} value={details.received} onChange={(e) => setDetails({ ...details, received: e.target.value })} className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary" />
+                            </label>
+                            {stay.source !== 'direct' && stay.source !== 'manual' && (
+                              <p className="text-[11px] text-[#8a6320] sm:col-span-2">
+                                Changing dates here updates your records and your own calendar only — change them on the channel too.
+                              </p>
+                            )}
                             <button type="submit" disabled={saveDetails.isPending} className="flex items-center justify-center gap-1.5 rounded-lg bg-primary px-4 py-2.5 text-[10px] font-bold uppercase tracking-[.07em] text-primary-foreground disabled:opacity-40" data-testid={`button-save-guest-${stay.bookingId}`}>
                               {saveDetails.isPending ? <Loader2 size={12} className="animate-spin" /> : <Check size={12} />} Save
                             </button>
