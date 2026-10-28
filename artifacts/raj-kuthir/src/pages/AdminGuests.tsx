@@ -29,6 +29,7 @@ import { CONFIG, asset } from '@/lib/site';
 import { useFocusTarget } from '@/hooks/use-focus-target';
 import { AdminBookPay } from '@/components/AdminBookPay';
 import { EnquiryBookForm } from '@/components/EnquiryBookForm';
+import { preferredWhatsappUrl } from '@/lib/whatsapp-link';
 import { StayInvoice, useInvoiceStatuses } from '@/components/StayInvoice';
 import { AdminHeader } from '@/components/AdminHeader';
 
@@ -367,7 +368,7 @@ export default function AdminGuests() {
     const url = `https://wa.me/${waNumber(stay.guestPhone)}?text=${encodeURIComponent(message)}`;
     if (chat) {
       chat.opener = null;
-      chat.location.href = url;
+      chat.location.href = preferredWhatsappUrl(url);
     } else {
       window.open(url, '_blank', 'noopener,noreferrer');
     }

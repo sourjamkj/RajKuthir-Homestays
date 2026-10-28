@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Check, FileText, Loader2, Mail, MessageCircle, Share2 } from 'lucide-react';
 
 import { adminFetch } from '@/lib/admin-api';
+import { preferredWhatsappUrl } from '@/lib/whatsapp-link';
 
 /**
  * The invoice line on a stay in Guests: its number and what the automatic
@@ -95,7 +96,7 @@ export function StayInvoice({ bookingId, status }: { bookingId: string; status: 
           { method: 'POST', body: '{}' },
         );
         if (result.sent) tab?.close();
-        else if (tab && result.whatsappUrl) tab.location.href = result.whatsappUrl;
+        else if (tab && result.whatsappUrl) tab.location.href = preferredWhatsappUrl(result.whatsappUrl);
         else tab?.close();
         return result;
       } catch (error) {

@@ -1,8 +1,10 @@
+import { useEffect, useState } from 'react';
 import { useLocation } from 'wouter';
 import { ArrowUpRight, LogOut } from 'lucide-react';
 
 import { useLogout } from '@/lib/admin-api';
 import { AdminActivity } from '@/components/AdminActivity';
+import { getWhatsappApp, installWhatsappLinks, setWhatsappApp, type WhatsappApp } from '@/lib/whatsapp-link';
 
 /**
  * The owner console header, on every admin screen.
@@ -46,6 +48,10 @@ export function AdminHeader({
 }) {
   const [location, navigate] = useLocation();
   const logout = useLogout();
+  const [whatsappApp, setApp] = useState<WhatsappApp>(() => getWhatsappApp());
+
+  // Every WhatsApp link in the console opens the app chosen below.
+  useEffect(() => installWhatsappLinks(), []);
 
   // /admin/guests and /admin/guests/ are the same screen; /admin must not
   // match every page that merely starts with it.
@@ -93,6 +99,25 @@ export function AdminHeader({
           >
             View site <ArrowUpRight size={13} />
           </a>
+
+          <label className="flex items-center gap-1.5 rounded-full border border-border px-3 py-1.5 text-[10px] font-bold uppercase tracking-[.09em] text-primary" title="Which WhatsApp app the console opens on this phone (Android)">
+            WhatsApp
+            <select
+              id="admin-whatsapp-app"
+              value={whatsappApp}
+              onChange={(event) => {
+                const app = event.target.value as WhatsappApp;
+                setWhatsappApp(app);
+                setApp(app);
+              }}
+              className="bg-transparent text-[11px] font-bold normal-case tracking-normal text-primary outline-none"
+              data-testid="select-whatsapp-app"
+            >
+              <option value="business">Business</option>
+              <option value="personal">Personal</option>
+              <option value="default">Phone default</option>
+            </select>
+          </label>
 
           <AdminActivity />
 
