@@ -24,6 +24,7 @@ import {
   type HoldRow,
 } from "./book-pay-rules";
 import type { HoldRecord, StartStore } from "./book-pay-start";
+import type { OwnHold } from "./booking-dedupe-rules";
 import { logger } from "./logger";
 
 /**
@@ -176,6 +177,61 @@ export const pgStartStore: StartStore<Tx> = {
     });
 
     return { enquiryId: enquiry!.id, paymentRequestId: request!.id };
+  },
+
+  async ownLiveHolds(tx, phone, now) {
+    const rows = await tx
+      .select({ request: paymentRequests, enquiry: enquiries })
+      .from(paymentRequests)
+      .innerJoin(enquiries, eq(enquiries.id, paymentRequests.enquiryId))
+      .where(
+        and(
+          eq(enquiries.phone, phone),
+          inArray(paymentRequests.status, ["awaiting_payment", "submitted"]),
+          gte(paymentRequests.holdExpiresAt, now),
+        ),
+      );
+    return rows
+      .filter(({ enquiry }) => enquiry.checkIn && enquiry.checkOut)
+      .map(({ request, enquiry }): OwnHold => ({
+        paymentRequestId: request.id,
+        enquiryId: enquiry.id,
+        reference: request.reference,
+        status: request.status as OwnHold["status"],
+        checkIn: enquiry.checkIn!,
+        checkOut: enquiry.checkOut!,
+        adults: enquiry.adults ?? 0,
+        children: enquiry.children ?? 0,
+        pets: enquiry.pets ?? 0,
+        holdExpiresAt: request.holdExpiresAt,
+        totalPaise: request.totalPaise,
+        advancePaise: request.advancePaise,
+      }));
+  },
+
+  async resumeHold(tx, paymentRequestId, tokenHash) {
+    // A new link for the same hold; the old link stops working. Same
+    // reference, same price, same deadline.
+    await tx
+      .update(paymentRequests)
+      .set({ tokenHash, updatedAt: new Date() })
+      .where(eq(paymentRequests.id, paymentRequestId));
+    await tx.insert(paymentEvents).values({ paymentRequestId, kind: "resumed", detail: "Guest started again; same hold, new link" });
+  },
+
+  async releaseHold(tx, hold, now) {
+    // Released, not expired by time: no "your hold expired" message goes out
+    // (expiry_notified_at is set), because the guest is booking right now.
+    await tx
+      .update(paymentRequests)
+      .set({ status: "expired", decidedAt: now, expiryNotifiedAt: now, updatedAt: now })
+      .where(and(eq(paymentRequests.id, hold.paymentRequestId), eq(paymentRequests.status, "awaiting_payment")));
+    await tx.update(enquiries).set({ status: "closed" }).where(eq(enquiries.id, hold.enquiryId));
+    await tx.insert(paymentEvents).values({
+      paymentRequestId: hold.paymentRequestId,
+      kind: "released",
+      detail: "Guest started a new booking for different dates",
+    });
   },
 };
 

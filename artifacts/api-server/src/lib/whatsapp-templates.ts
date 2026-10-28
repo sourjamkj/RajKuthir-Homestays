@@ -2,6 +2,13 @@ import type { Booking } from "@workspace/db";
 
 import type { Quote } from "./enquiry-quote.ts";
 import { formatDeadline, HOLD_HOURS } from "./enquiry-hold.ts";
+import {
+  LEAVE_REVIEW_URL,
+  REVIEW_TEMPLATE_NAMES,
+  pickReviewVariant,
+  reviewRequestText,
+  type ReviewVariant,
+} from "./review-rules.ts";
 
 /**
  * The four message templates, and how a booking fills them in.
@@ -112,19 +119,27 @@ export function buildTemplate(
       };
 
     case "review_request":
-      return {
-        name: "rk_review_request",
-        category: "marketing",
-        languageCode: "en",
-        params: [guest, CONTACT.leaveReviewUrl],
-        preview:
-          `Hello ${guest}, we hope you got home well. If Sobuj Potro treated you kindly, ` +
-          `a short Google review helps other travellers find us: ${CONTACT.leaveReviewUrl} ` +
-          `Thank you — you are welcome back any time.`,
-      };
+      // Three variants since Oct 2026 — see review-rules.ts for the choice.
+      return reviewTemplate(pickReviewVariant({ pets: booking.pets, nights }).variant, booking);
   }
 }
 
+
+/**
+ * One review-request variant for a booking. All three take the same two
+ * params as the old rk_review_request — first name, review link — so the
+ * outbox can fall back to the old template until Meta approves the new ones.
+ */
+export function reviewTemplate(variant: ReviewVariant, booking: Pick<Booking, "guestName">): TemplateSpec {
+  const guest = firstName(booking.guestName);
+  return {
+    name: REVIEW_TEMPLATE_NAMES[variant],
+    category: "marketing",
+    languageCode: "en",
+    params: [guest, LEAVE_REVIEW_URL],
+    preview: reviewRequestText(variant, guest, LEAVE_REVIEW_URL),
+  };
+}
 
 /* ---------------------------------------------------------------------- *
  * The enquiry quote

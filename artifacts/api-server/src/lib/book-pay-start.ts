@@ -9,6 +9,7 @@ import {
   type BookPaySettings,
 } from "./book-pay-rules.ts";
 import type { QuoteResult } from "./enquiry-quote.ts";
+import { planStart, type OwnHold } from "./booking-dedupe-rules.ts";
 
 /**
  * Starting a self-serve hold: the one step where two guests can race.
@@ -49,6 +50,14 @@ export type StartStore<Tx> = {
   takenRanges(tx: Tx, now: Date): Promise<DateRange[]>;
   /** Creates the enquiry (with its quote) and the payment request together. */
   createHold(tx: Tx, record: HoldRecord): Promise<{ enquiryId: string; paymentRequestId: string }>;
+  /**
+   * Resuming (optional — without these a returning guest simply starts a new
+   * hold, as before): this guest's live holds, handing one back under a new
+   * link, and releasing one they have abandoned for different dates.
+   */
+  ownLiveHolds?(tx: Tx, phone: string, now: Date): Promise<OwnHold[]>;
+  resumeHold?(tx: Tx, paymentRequestId: string, tokenHash: string): Promise<void>;
+  releaseHold?(tx: Tx, hold: OwnHold, now: Date): Promise<void>;
 };
 
 export type StartResult =
@@ -61,6 +70,8 @@ export type StartResult =
       holdExpiresAt: Date;
       totalPaise: number;
       advancePaise: number;
+      /** The guest's existing hold, handed back under a new link. */
+      resumed?: boolean;
     }
   | { ok: false; status: 409; error: string; nextFree: DateRange[] }
   | { ok: false; status: 422; error: string };
@@ -80,6 +91,29 @@ export async function startHold<Tx>(
   const stay = { startDate: input.checkIn, endDate: input.checkOut };
 
   return store.withLock(async (tx) => {
+    // The same guest coming back: same stay -> resume their hold; different
+    // stay -> release their abandoned unpaid hold, so they never compete
+    // with themselves or leave two holds behind.
+    if (store.ownLiveHolds && store.resumeHold && store.releaseHold) {
+      const plan = planStart(await store.ownLiveHolds(tx, input.phone, now), input);
+      if (plan.kind === "resume") {
+        const token = newPayToken();
+        await store.resumeHold(tx, plan.hold.paymentRequestId, hashPayToken(token));
+        return {
+          ok: true as const,
+          resumed: true,
+          token,
+          reference: plan.hold.reference,
+          enquiryId: plan.hold.enquiryId,
+          paymentRequestId: plan.hold.paymentRequestId,
+          holdExpiresAt: plan.hold.holdExpiresAt,
+          totalPaise: plan.hold.totalPaise,
+          advancePaise: plan.hold.advancePaise,
+        };
+      }
+      for (const hold of plan.release) await store.releaseHold(tx, hold, now);
+    }
+
     const taken = await store.takenRanges(tx, now);
     const clash = clashesWith(stay, taken);
 

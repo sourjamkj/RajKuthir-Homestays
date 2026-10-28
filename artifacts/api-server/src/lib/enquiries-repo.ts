@@ -320,3 +320,39 @@ export async function updateContact(
       },
     });
 }
+
+/**
+ * The owner's own details for an enquiry they are booking by hand: dates,
+ * party, the price they agreed and the advance they received. Overwrites the
+ * quote on purpose — this is the deal as actually struck.
+ */
+export async function setBookingDetails(
+  id: string,
+  details: {
+    checkIn: string;
+    checkOut: string;
+    adults: number;
+    children: number;
+    pets: number;
+    totalPaise: number;
+    advancePaise: number;
+  },
+  now = new Date(),
+): Promise<Enquiry | null> {
+  const [updated] = await db
+    .update(enquiries)
+    .set({
+      checkIn: details.checkIn,
+      checkOut: details.checkOut,
+      adults: details.adults,
+      children: details.children,
+      pets: details.pets,
+      quotedTotalPaise: details.totalPaise,
+      quotedAdvancePaise: details.advancePaise,
+      // The owner is confirming the stay: with an advance, or knowingly without.
+      advancePaidAt: now,
+    })
+    .where(eq(enquiries.id, id))
+    .returning();
+  return updated ?? null;
+}

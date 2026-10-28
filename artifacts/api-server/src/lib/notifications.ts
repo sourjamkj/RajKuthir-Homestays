@@ -6,6 +6,7 @@ import {
   sendTemplate,
   toWhatsappNumber,
 } from "./whatsapp-client";
+import { reviewStillSendable, reviewTemplateForSend } from "./review-requests";
 import {
   bookingsNeedingMessages,
   claimDueMessages,
@@ -92,15 +93,17 @@ function scheduleFor(kind: MessageKind, booking: Booking, now: Date): Date | nul
       return istMoment(booking.checkOut, 8);
 
     case "review_request":
-      return istMoment(addDays(booking.checkOut, 1), 11);
+      // Queued by review-requests.ts instead: it has its own timing (14:00
+      // IST on check-out day, 3-day cut-off) and eligibility rules.
+      return null;
   }
 }
 
+/** review_request is scheduled by review-requests.ts, not here. */
 const ALL_KINDS: MessageKind[] = [
   "booking_confirmed",
   "checkin_reminder",
   "checkout_today",
-  "review_request",
 ];
 
 /**
@@ -188,11 +191,24 @@ export async function drainOutbox(now = new Date()): Promise<DrainResult> {
   const due = await claimDueMessages(BATCH_SIZE, now);
 
   for (const message of due) {
+    // A review ask may have been approved days after it was queued, or the
+    // stay cancelled or flagged since. Re-check before it goes.
+    if (message.kind === "review_request") {
+      const check = await reviewStillSendable(message, now);
+      if (!check.ok) {
+        await markFailed(message.id, `Not sent: ${check.reason}`, false, message.attempts, MAX_ATTEMPTS);
+        continue;
+      }
+    }
+
     result.attempted += 1;
 
     const outcome = await sendTemplate({
       to: message.toPhone,
-      templateName: message.templateName,
+      templateName:
+        message.kind === "review_request"
+          ? reviewTemplateForSend(message.templateName)
+          : message.templateName,
       languageCode: "en",
       params: message.templateParams,
     });

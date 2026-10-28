@@ -71,6 +71,7 @@ import AdminLogin from '@/pages/AdminLogin';
 import AdminEarnings from '@/pages/AdminEarnings';
 import AdminRates from '@/pages/AdminRates';
 import AdminGuests from '@/pages/AdminGuests';
+import AdminReviews from '@/pages/AdminReviews';
 import HouseRules from '@/pages/HouseRules';
 import PetFriendly from '@/pages/PetFriendly';
 import Gallery, { GALLERY_TEASER } from '@/pages/Gallery';
@@ -1720,6 +1721,7 @@ function Router() {
         <Route path="/admin/earnings" component={AdminEarnings} />
         <Route path="/admin/rates" component={AdminRates} />
         <Route path="/admin/guests" component={AdminGuests} />
+        <Route path="/admin/reviews" component={AdminReviews} />
         <Route path="/admin/guest-info" component={AdminGuestInfo} />
         {/* Legacy sign-in path, kept so existing bookmarks still land somewhere useful. */}
         <Route path="/sign-in/*?" component={AdminLogin} />

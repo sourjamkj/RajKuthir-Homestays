@@ -28,3 +28,4 @@ export * from "./mail";
 
 export * from "./guests";
 export * from "./payments";
+export * from "./reviews";

@@ -12,6 +12,7 @@ import mailRouter from "./mail";
 import activityRouter from "./activity";
 import bookRouter from "./book";
 import caretakerRouter from "./caretaker";
+import reviewsRouter from "./reviews";
 
 const router: IRouter = Router();
 
@@ -28,5 +29,6 @@ router.use(mailRouter);
 router.use(activityRouter);
 router.use(bookRouter);
 router.use(caretakerRouter);
+router.use(reviewsRouter);
 
 export default router;

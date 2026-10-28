@@ -7,6 +7,8 @@ import { startCaretakerAlerts } from "./lib/caretaker-alerts";
 import { scheduleBookingComBackfill } from "./lib/mail-runner";
 import { startBookPayCron } from "./lib/book-pay-cron";
 import { ensureBookPayTables } from "./lib/book-pay-migrate";
+import { startReviewsCron } from "./lib/reviews-cron";
+import { startBookingHygiene } from "./lib/booking-dedupe";
 import { runSchemaCheck } from "./lib/schema-check";
 import { ensureWaInboundTables } from "./lib/wa-webhook";
 
@@ -68,6 +70,16 @@ app.listen(port, (err) => {
   // WhatsApp inbound: creates wa_inbound_messages and wa_conversations
   // tables if missing. Additive, idempotent — like caretaker_alerts.
   void ensureWaInboundTables();
+
+  // Google reviews: queues review-request drafts for stays that just ended
+  // and drafts replies to new reviews. Creates its tables (and the WhatsApp
+  // outbox, if missing) at boot. Never posts or sends without the owner.
+  startReviewsCron();
+
+  // One guest, one stay, one booking: merges exact duplicates (and the ones
+  // the owner named), and releases unpaid bookings back to enquiries once
+  // their hold has passed. At boot, then hourly.
+  startBookingHygiene();
 
   // Says in the log whether the database still matches the Drizzle schema.
   // Four production 500s in one day came from that drift, each invisible until

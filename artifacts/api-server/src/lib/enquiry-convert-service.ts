@@ -6,7 +6,12 @@ import {
   type ConversionRefusal,
 } from "./enquiry-conversion";
 import { linkEnquiryToBooking } from "./enquiries-repo";
+import { advanceIsPaid } from "./enquiry-conversion";
+import { bookingsOverlapping, releaseToEnquiry } from "./booking-dedupe";
+import { planConversion, UNPAID_MESSAGE } from "./booking-dedupe-rules";
 import { createBooking, findClashes, type Clash } from "./ledger-repo";
+import { db, bookings } from "@workspace/db";
+import { eq } from "drizzle-orm";
 import { logger } from "./logger";
 
 /**
@@ -21,7 +26,7 @@ export type ConvertOutcome =
       ok: false;
       status: 409 | 422;
       error: string;
-      reason: ConversionRefusal | Clash["kind"];
+      reason: ConversionRefusal | Clash["kind"] | "advance_not_received";
       bookingId?: string | null;
       clashes?: Array<{
         id: string;
@@ -49,6 +54,46 @@ export async function convertEnquiry(
         ? { bookingId: enquiry.convertedBookingId }
         : {}),
     };
+  }
+
+  /*
+    One guest, one stay, one booking (booking-dedupe-rules.ts):
+    no booking until the advance is received, and if this guest already has
+    a confirmed booking over these nights this enquiry is linked to it
+    instead of creating a second. Their own unpaid bookings on the same
+    nights are released back to enquiries first.
+  */
+  const plan = planConversion({
+    paid: advanceIsPaid(enquiry.advancePaidAt),
+    stay: {
+      name: enquiry.name,
+      phone: enquiry.phone,
+      checkIn: drafted.draft.checkIn,
+      checkOut: drafted.draft.checkOut,
+    },
+    existing: await bookingsOverlapping(drafted.draft.checkIn, drafted.draft.checkOut),
+  });
+
+  if (plan.kind === "refuse_unpaid") {
+    return { ok: false, status: 409, error: UNPAID_MESSAGE, reason: "advance_not_received" };
+  }
+
+  if (plan.kind === "link") {
+    const [existing] = await db.select().from(bookings).where(eq(bookings.id, plan.booking.id)).limit(1);
+    if (existing) {
+      const updated = await linkEnquiryToBooking(enquiry.id, existing.id);
+      logger.info(
+        { enquiryId: enquiry.id, bookingId: existing.id },
+        "Enquiry linked to the guest's existing booking instead of creating a duplicate",
+      );
+      return { ok: true, booking: existing, enquiry: updated };
+    }
+  }
+
+  if (plan.kind === "create") {
+    for (const old of plan.release) {
+      await releaseToEnquiry(old.id, "Replaced by a newer booking for the same guest and dates");
+    }
   }
 
   /*

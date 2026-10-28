@@ -469,6 +469,7 @@ const CLIENT_ROUTES = new Set([
   "/admin/earnings",
   "/admin/rates",
   "/admin/guests",
+  "/admin/reviews",
   "/admin/guest-info",
   "/pre-arrival",
   "/management-documents",

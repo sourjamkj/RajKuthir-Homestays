@@ -209,7 +209,9 @@ test("route · links the enquiry to the booking so it cannot convert twice", () 
 
   assert.match(body, /await linkEnquiryToBooking\(enquiry\.id, booking\.id\)/);
   assert.ok(
-    body.indexOf("createBooking") < body.indexOf("linkEnquiryToBooking"),
+    // The new booking is linked after it exists. (Linking to the guest's
+    // EXISTING booking, the duplicate guard, comes earlier and creates nothing.)
+    body.indexOf("await createBooking(") < body.indexOf("await linkEnquiryToBooking(enquiry.id, booking.id)"),
     "the link must be written after the booking exists",
   );
 });

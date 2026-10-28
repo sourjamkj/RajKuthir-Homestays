@@ -14,6 +14,7 @@ import {
   setEnquiryStatus,
   updateContact,
   type EnquiryStatus,
+  setBookingDetails,
 } from "../lib/enquiries-repo";
 import { convertEnquiry } from "../lib/enquiry-convert-service";
 import { findByEnquiryId, holdDeadlinesByEnquiry } from "../lib/book-pay-repo";
@@ -446,6 +447,98 @@ router.post("/enquiries/:id/convert", requireAdmin, async (req, res) => {
     return;
   }
 
+  res.status(201).json({
+    booking: {
+      id: outcome.booking.id,
+      reference: outcome.booking.reference,
+      status: outcome.booking.status,
+      checkIn: outcome.booking.checkIn,
+      checkOut: outcome.booking.checkOut,
+    },
+    enquiry: outcome.enquiry,
+  });
+});
+
+/**
+ * "Book with my details": the owner fills in what the enquiry lacks — dates,
+ * party, the agreed total and the advance received — and it becomes a booking
+ * in one step, through the same conversion (and duplicate rules) as Create
+ * booking. Prices here are the owner's own deal, not the rate card's.
+ */
+router.post("/enquiries/:id/book", requireAdmin, async (req, res) => {
+  const id = Array.isArray(req.params.id) ? "" : req.params.id;
+  if (!isUuid(id)) {
+    res.status(400).json({ error: "Invalid enquiry id." });
+    return;
+  }
+  const enquiry = await getEnquiry(id);
+  if (!enquiry) {
+    res.status(404).json({ error: "That enquiry no longer exists." });
+    return;
+  }
+  if (enquiry.convertedBookingId) {
+    res.status(409).json({ error: "This enquiry is already booked." });
+    return;
+  }
+
+  const b = (req.body ?? {}) as Record<string, unknown>;
+  const ISO = /^\d{4}-\d{2}-\d{2}$/;
+  const whole = (value: unknown, min: number, max: number) => {
+    const n = Number(value ?? 0);
+    return Number.isInteger(n) && n >= min && n <= max ? n : null;
+  };
+  const checkIn = String(b.checkIn ?? "");
+  const checkOut = String(b.checkOut ?? "");
+  const adults = whole(b.adults, 1, 20);
+  const children = whole(b.children, 0, 20);
+  const pets = whole(b.pets, 0, 10);
+  const total = whole(b.totalRupees, 1, 10_000_000);
+  const advance = whole(b.advanceRupees, 0, 10_000_000);
+
+  if (!ISO.test(checkIn) || !ISO.test(checkOut) || checkOut <= checkIn) {
+    res.status(400).json({ error: "Check-in and check-out dates are needed, with check-out after check-in." });
+    return;
+  }
+  if (adults === null || children === null || pets === null) {
+    res.status(400).json({ error: "Check the number of adults, children and pets." });
+    return;
+  }
+  if (total === null) {
+    res.status(400).json({ error: "Enter the total for the stay in rupees." });
+    return;
+  }
+  if (advance === null || advance > total) {
+    res.status(400).json({ error: "The advance must be between ₹0 and the total." });
+    return;
+  }
+  if (advance === 0 && b.confirmWithoutAdvance !== true) {
+    res.status(409).json({ error: "No advance entered. Tick “Confirm without an advance” if you want to book it anyway." });
+    return;
+  }
+
+  const updated = await setBookingDetails(id, {
+    checkIn,
+    checkOut,
+    adults,
+    children,
+    pets,
+    totalPaise: total * 100,
+    advancePaise: advance * 100,
+  });
+  if (!updated) {
+    res.status(404).json({ error: "That enquiry no longer exists." });
+    return;
+  }
+
+  const paymentRequest = await findByEnquiryId(id);
+  const outcome = await convertEnquiry(updated, { reference: paymentRequest?.reference ?? null });
+  if (!outcome.ok) {
+    const { ok: _ok, status, ...body } = outcome;
+    res.status(status).json(body);
+    return;
+  }
+
+  logger.info({ enquiryId: id, bookingId: outcome.booking.id }, "Enquiry booked with the owner's details");
   res.status(201).json({
     booking: {
       id: outcome.booking.id,

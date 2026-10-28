@@ -290,7 +290,7 @@ router.post("/book/start", async (req, res) => {
 
     logger.info(
       { paymentRequestId: result.paymentRequestId, enquiryId: result.enquiryId },
-      "Book & Pay hold started",
+      result.resumed ? "Book & Pay hold resumed by the same guest" : "Book & Pay hold started",
     );
 
     // The token travels in the URL FRAGMENT, as /pre-arrival's does: a
@@ -300,6 +300,7 @@ router.post("/book/start", async (req, res) => {
       token: result.token,
       reference: result.reference,
       holdExpiresAt: result.holdExpiresAt.toISOString(),
+      resumed: result.resumed ?? false,
     });
   } catch (error) {
     if (isNotMigrated(error)) {

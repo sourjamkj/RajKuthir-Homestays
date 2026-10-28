@@ -301,7 +301,8 @@ test("guest message · does carry the money, and the verification link first", (
 test("guest message · the URL is encoded when it goes into the wa.me link", () => {
   assert.match(
     ADMIN_GUESTS_TSX,
-    /wa\.me\/\$\{stay\.guestPhone\.replace\(\/\\D\/g, ''\)\}\?text=\$\{encodeURIComponent\(message\)\}/,
+    // waNumber() adds the 91 country code to a bare 10-digit number.
+    /wa\.me\/\$\{waNumber\(stay\.guestPhone\)\}\?text=\$\{encodeURIComponent\(message\)\}/,
     "the guest WhatsApp deep link does not URL-encode its message",
   );
 });

@@ -28,6 +28,7 @@ import { SOURCE_LABELS, formatRupees, type BookingSource } from '@/lib/ledger-ap
 import { CONFIG, asset } from '@/lib/site';
 import { useFocusTarget } from '@/hooks/use-focus-target';
 import { AdminBookPay } from '@/components/AdminBookPay';
+import { EnquiryBookForm } from '@/components/EnquiryBookForm';
 import { AdminHeader } from '@/components/AdminHeader';
 
 const ENQUIRIES_KEY = ['/api/enquiries'];
@@ -937,7 +938,7 @@ export default function AdminGuests() {
                               title={
                                 row.hold.state === 'paid'
                                   ? 'Create the booking, issue the reference and open the calendar entry'
-                                  : 'The advance is not marked received — the booking will be created as pending and will not hold the dates'
+                                  : 'Mark the advance received first — an unpaid enquiry stays an enquiry and its dates are released when the hold ends'
                               }
                               className="flex shrink-0 items-center justify-center gap-1.5 rounded-lg border border-primary px-3 py-2 text-[10px] font-bold uppercase tracking-[.07em] text-primary transition-colors hover:bg-primary hover:text-primary-foreground disabled:cursor-not-allowed disabled:opacity-40"
                               data-testid={`button-convert-${row.id}`}
@@ -1014,6 +1015,18 @@ export default function AdminGuests() {
                         . It is now in Guest check-in readiness above, ready for Send info.
                       </p>
                     )}
+
+                  {/* Any enquiry not yet booked can be booked with the owner's
+                      own details: dates, party, agreed price, advance. */}
+                  {!row.convertedBookingId && (
+                    <EnquiryBookForm
+                      row={row}
+                      onBooked={() => {
+                        refresh();
+                        queryClient.invalidateQueries({ queryKey: GUEST_STAYS_KEY });
+                      }}
+                    />
+                  )}
 
                   {/* Says what actually happened. Opening WhatsApp is not the
                       same as delivering a message, and the dates are now held
@@ -1723,15 +1736,43 @@ function canAskForReview(stay: GuestStay): boolean {
   return stay.status !== 'cancelled' && stay.checkIn < todayInIndia();
 }
 
+/**
+ * After check-out this is the same message the review queue uses — the
+ * variant picked the same way (pets, then 1-night, else general) — kept in
+ * step with REVIEW TEXTS in api-server/src/lib/review-rules.ts. The same
+ * words for every guest: never "if you enjoyed it".
+ */
 function buildReviewMessage(stay: GuestStay): string {
   const first = (stay.guestName ?? '').trim().split(/\s+/)[0] || 'there';
-  const stillHere = stay.checkOut > todayInIndia();
-  const opening = stillHere
-    ? `Hello ${first}, we hope you are enjoying your stay at Sobuj Potro. Whenever you have a minute, ` +
-      `a short Google review would mean a lot and helps other travellers find us: ${CONFIG.leaveReviewUrl}`
-    : `Hello ${first}, we hope you got home well. If Sobuj Potro treated you kindly, ` +
-      `a short Google review helps other travellers find us: ${CONFIG.leaveReviewUrl}`;
-  return `${opening}\n\nThank you — you are welcome back any time.\n\nTeam Raj Kuthir Homestays – Sobuj Potro`;
+  const url = CONFIG.leaveReviewUrl;
+  const sign = 'Warm Regards, Sourja Mukherjee, Raj Kuthir Homestays – Sobuj Potro';
+  if (stay.checkOut > todayInIndia()) {
+    return (
+      `Hello ${first}, we hope you are enjoying your stay at Sobuj Potro. Whenever you have a minute, ` +
+      `a short Google review would mean a lot and helps other travellers find us: ${url}\n\n${sign}`
+    );
+  }
+  if ((stay.pets ?? 0) > 0) {
+    return (
+      `Hi ${first}, it was a pleasure hosting you and your pet at Raj Kuthir Homestays – Sobuj Potro. ` +
+      `We hope the drive home was smooth. Finding a genuinely pet-friendly stay in Bolpur is hard for many pet parents, ` +
+      `so your review would help them a lot: ${url} Feel free to mention how your pet took to the garden. ${sign}`
+    );
+  }
+  if (nightsBetween(stay.checkIn, stay.checkOut) === 1) {
+    return (
+      `Namaskar ${first}, thank you for choosing Raj Kuthir Homestays – Sobuj Potro for your Santiniketan getaway. ` +
+      `Could you share a quick Google review of your stay? ${url} ` +
+      `Your favourite part, in a line, helps other travellers find us on Google Maps. ${sign}`
+    );
+  }
+  return (
+    `Hi ${first}, thank you for staying with us at Raj Kuthir Homestays – Sobuj Potro. ` +
+    `We hope you reached home safely and enjoyed your time in Santiniketan. ` +
+    `Google reviews help other travellers find our private 2-bedroom villa. ` +
+    `If you have a minute, we'd really appreciate a few words about your stay: ${url} ` +
+    `Even a line about what you liked most helps future guests know what to expect. ${sign}`
+  );
 }
 
 function reviewRequestUrl(stay: GuestStay): string {

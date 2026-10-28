@@ -23,6 +23,7 @@ const LINKS = [
   { href: '/admin', label: 'Calendar', testId: 'link-admin-calendar' },
   { href: '/admin/guest-info', label: 'Arrival pack', testId: 'link-admin-guest-info' },
   { href: '/admin/guests', label: 'Guests', testId: 'link-admin-guests' },
+  { href: '/admin/reviews', label: 'Reviews', testId: 'link-admin-reviews' },
   { href: '/admin/earnings', label: 'Earnings', testId: 'link-admin-earnings' },
   { href: '/admin/rates', label: 'Rates', testId: 'link-admin-rates' },
 ] as const;
