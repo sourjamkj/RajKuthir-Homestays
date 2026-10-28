@@ -5,7 +5,9 @@ import { eq } from "drizzle-orm";
 import { requireAdmin } from "../lib/admin-auth";
 import { buildInvoice, emailInvoice, invoiceStatuses } from "../lib/invoices";
 import { autoEmailDecision } from "../lib/invoice-rules";
-import { guestEmailFor } from "../lib/invoices";
+import { buildConfirmation, guestEmailFor, invoiceByToken, invoiceShareMessage, invoiceWhatsappReady, whatsappInvoice } from "../lib/invoices";
+import { toWhatsappNumber } from "../lib/whatsapp-client";
+import { createLimiter } from "../lib/rate-limit";
 import { getOtaDocument, listStatements } from "../lib/ota-documents";
 
 /**
@@ -32,6 +34,24 @@ router.get("/admin/bookings/:id/invoice.pdf", requireAdmin, async (req, res) => 
     return;
   }
   const built = await buildInvoice(req.params.id);
+  if (!built.ok) {
+    res.status(built.status).json({ error: built.error });
+    return;
+  }
+  res.set({
+    "Content-Type": "application/pdf",
+    "Content-Disposition": `inline; filename="${built.invoice.filename}"`,
+    "Cache-Control": "no-store, private",
+  });
+  res.send(Buffer.from(built.invoice.pdf));
+});
+
+router.get("/admin/bookings/:id/confirmation.pdf", requireAdmin, async (req, res) => {
+  if (!isId(req.params.id)) {
+    res.status(400).json({ error: "Invalid booking id." });
+    return;
+  }
+  const built = await buildConfirmation(req.params.id);
   if (!built.ok) {
     res.status(built.status).json({ error: built.error });
     return;
@@ -80,13 +100,71 @@ router.post("/admin/bookings/:id/paid-in-full", requireAdmin, async (req, res) =
     .returning();
 
   const email = await guestEmailFor(booking.id);
-  const decision = autoEmailDecision({ booking: updated!, email, alreadyEmailed: false, now: new Date() });
+  const decision = autoEmailDecision({
+    booking: updated!,
+    email,
+    alreadyEmailed: false,
+    whatsappTo: invoiceWhatsappReady() ? toWhatsappNumber(booking.guestPhone) : null,
+    now: new Date(),
+  });
   if (decision.send) {
-    const sent = await emailInvoice(booking.id, email);
-    res.json({ ok: true, emailed: sent.ok ? sent.to : null });
+    const sent = decision.channel === "email" ? await emailInvoice(booking.id, email) : await whatsappInvoice(booking.id);
+    res.json({ ok: true, emailed: sent.ok ? (decision.channel === "email" ? sent.to : `WhatsApp +${sent.to}`) : null });
     return;
   }
   res.json({ ok: true, emailed: null, note: decision.reason });
+});
+
+/**
+ * WhatsApp: through the Cloud API (PDF attached) when it is set up;
+ * otherwise a ready message with a private link, for the owner to send
+ * from their own WhatsApp.
+ */
+router.post("/admin/bookings/:id/invoice/whatsapp", requireAdmin, async (req, res) => {
+  if (!isId(req.params.id)) {
+    res.status(400).json({ error: "Invalid booking id." });
+    return;
+  }
+  if (invoiceWhatsappReady() && req.body?.manual !== true) {
+    const sent = await whatsappInvoice(req.params.id);
+    if (sent.ok) {
+      res.json({ sent: true, to: sent.to });
+      return;
+    }
+    if (sent.status !== 502) {
+      res.status(sent.status).json({ error: sent.error });
+      return;
+    }
+    // The API refused: fall through to the manual message rather than fail.
+  }
+  const share = await invoiceShareMessage(req.params.id);
+  if (!share.ok) {
+    res.status(share.status).json({ error: share.error });
+    return;
+  }
+  res.json({ sent: false, whatsappUrl: share.whatsappUrl, text: share.text });
+});
+
+/** The guest's private invoice link (token in the fragment, posted here). */
+const guestLimiter = createLimiter(30, 60 * 60 * 1000);
+router.post("/invoice/pdf", async (req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  if (guestLimiter(req.ip ?? "unknown")) {
+    res.status(429).json({ error: "Too many requests. Please try again later." });
+    return;
+  }
+  const token = typeof req.body?.token === "string" ? req.body.token : "";
+  const invoice = await invoiceByToken(token);
+  if (!invoice) {
+    res.status(404).json({ error: "This invoice link is not valid. Please ask us for a new one." });
+    return;
+  }
+  res.set({
+    "Content-Type": "application/pdf",
+    "Content-Disposition": `inline; filename="${invoice.filename}"`,
+    "X-Content-Type-Options": "nosniff",
+  });
+  res.send(Buffer.from(invoice.pdf));
 });
 
 /** PDFs from OTA emails: one by id, or the list of monthly statements. */

@@ -166,7 +166,8 @@ export function invoiceContent(input: {
 }
 
 export type AutoEmailDecision =
-  | { send: true }
+  /** Email when there is an address; otherwise WhatsApp (the PDF attached) when that is set up. */
+  | { send: true; channel: "email" | "whatsapp" }
   /** `waiting` shows in the console as something the owner can fix; `skip` is final. */
   | { send: false; reason: string; kind: "not_yet" | "waiting" | "skip" };
 
@@ -180,11 +181,17 @@ export type AutoEmailDecision =
 export function autoEmailDecision(input: {
   booking: InvoiceBooking;
   email: string | null;
+  /** Sent already, by email or WhatsApp. */
   alreadyEmailed: boolean;
+  /**
+   * The guest's WhatsApp number when invoices can go by WhatsApp (Cloud API
+   * on and the invoice template set); null otherwise.
+   */
+  whatsappTo?: string | null;
   now: Date;
 }): AutoEmailDecision {
   const { booking, now } = input;
-  if (input.alreadyEmailed) return { send: false, reason: "Already emailed", kind: "skip" };
+  if (input.alreadyEmailed) return { send: false, reason: "Already sent", kind: "skip" };
   if (!(AUTO_EMAIL_SOURCES as readonly string[]).includes(booking.source)) {
     return { send: false, reason: "OTA booking — download the invoice and send it through the channel if asked", kind: "skip" };
   }
@@ -203,10 +210,9 @@ export function autoEmailDecision(input: {
   if ((booking.receivedPaise ?? 0) < (booking.grossPaise ?? 0)) {
     return { send: false, reason: "Balance not recorded as received — press “Paid in full” to send", kind: "waiting" };
   }
-  if (!input.email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(input.email)) {
-    return { send: false, reason: "No email on file — download the invoice and send it on WhatsApp", kind: "waiting" };
-  }
-  return { send: true };
+  if (input.email && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(input.email)) return { send: true, channel: "email" };
+  if (input.whatsappTo) return { send: true, channel: "whatsapp" };
+  return { send: false, reason: "No email on file — press WhatsApp to send it to the guest", kind: "waiting" };
 }
 
 export function invoiceEmail(content: InvoiceContent): { subject: string; text: string } {
@@ -220,6 +226,56 @@ export function invoiceEmail(content: InvoiceContent): { subject: string; text: 
       "",
       `Total: ${money(content.totalPaise)}`,
       content.balancePaise > 0 ? `Balance due: ${money(content.balancePaise)}` : "Paid in full — thank you.",
+      "",
+      `Any questions, call or WhatsApp ${BUSINESS.phone}.`,
+      "",
+      "Warm Regards,",
+      "Sourja Mukherjee",
+      BUSINESS.name,
+    ].join("\n"),
+  };
+}
+
+/** The words of the invoice WhatsApp — the PDF rides along as the template's document header. */
+export function invoiceWhatsappParams(content: InvoiceContent): string[] {
+  return [content.billedTo.name.split(/\s+/)[0] || "there", content.number];
+}
+
+/**
+ * The manual fallback when the Cloud API is not set up: a message the owner
+ * sends from their own WhatsApp, with a private link to the PDF.
+ */
+export function invoiceWhatsappText(content: InvoiceContent, link: string): string {
+  const first = content.billedTo.name.split(/\s+/)[0] || "there";
+  return [
+    `Hello ${first}, thank you for staying with us at ${BUSINESS.name}.`,
+    "",
+    `Your invoice ${content.number} for ${prettyDate(content.stay.checkIn)} to ${prettyDate(content.stay.checkOut)} is here: ${link}`,
+    "",
+    `Total: ${money(content.totalPaise)}${content.balancePaise > 0 ? ` · Balance due: ${money(content.balancePaise)}` : " · Paid in full"}`,
+    "",
+    "Warm Regards,",
+    "Sourja Mukherjee",
+    BUSINESS.name,
+  ].join("\n");
+}
+
+/** The email that carries the booking confirmation PDF (owner-made bookings). */
+export function confirmationEmail(content: InvoiceContent): { subject: string; text: string } {
+  const first = content.billedTo.name.split(/\s+/)[0] || "there";
+  return {
+    subject: `Booking confirmed — ${content.number}`,
+    text: [
+      `Hello ${first}, your stay at ${BUSINESS.name} is confirmed.`,
+      "",
+      `Booking reference: ${content.number}`,
+      `Check-in: ${prettyDate(content.stay.checkIn)} (from 12 noon)`,
+      `Check-out: ${prettyDate(content.stay.checkOut)} (by 11 am)`,
+      `Total: ${money(content.totalPaise)}`,
+      `Advance received: ${money(content.paidPaise)}`,
+      `Balance at check-in: ${money(content.balancePaise)}`,
+      "",
+      "Your booking confirmation is attached, with a QR code to pay the balance by UPI.",
       "",
       `Any questions, call or WhatsApp ${BUSINESS.phone}.`,
       "",

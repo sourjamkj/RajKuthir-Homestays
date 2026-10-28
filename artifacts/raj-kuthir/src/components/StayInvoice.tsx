@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Check, FileText, Loader2, Mail, Share2 } from 'lucide-react';
+import { Check, FileText, Loader2, Mail, MessageCircle, Share2 } from 'lucide-react';
 
 import { adminFetch } from '@/lib/admin-api';
 
@@ -16,6 +16,7 @@ export type InvoiceStatus = {
   email: string | null;
   autoStatus: string;
   needsAction: boolean;
+  whatsappReady: boolean;
   canInvoice: boolean;
   problem: string | null;
   otaDocuments: Array<{ id: string; kind: 'voucher' | 'cancellation' | 'statement' | 'other'; filename: string; createdAt: string }>;
@@ -83,6 +84,38 @@ export function StayInvoice({ bookingId, status }: { bookingId: string; status: 
     onError: (error) => setMessage(error instanceof Error ? error.message : 'Could not email the invoice.'),
   });
 
+  // WhatsApp: sent with the PDF attached when the Cloud API is set up;
+  // otherwise opens your WhatsApp with a message and a private PDF link.
+  const whatsapp = useMutation({
+    mutationFn: async () => {
+      const tab = window.open('', '_blank');
+      try {
+        const result = await adminFetch<{ sent: boolean; to?: string; whatsappUrl?: string | null; text?: string }>(
+          `/api/admin/bookings/${bookingId}/invoice/whatsapp`,
+          { method: 'POST', body: '{}' },
+        );
+        if (result.sent) tab?.close();
+        else if (tab && result.whatsappUrl) tab.location.href = result.whatsappUrl;
+        else tab?.close();
+        return result;
+      } catch (error) {
+        tab?.close();
+        throw error;
+      }
+    },
+    onSuccess: (result) => {
+      setMessage(
+        result.sent
+          ? `Invoice sent on WhatsApp to +${result.to}.`
+          : result.whatsappUrl
+            ? 'WhatsApp opened with the invoice link — press send.'
+            : 'No WhatsApp number on this booking. Copy the message: ' + (result.text ?? ''),
+      );
+      refresh();
+    },
+    onError: (error) => setMessage(error instanceof Error ? error.message : 'Could not prepare the WhatsApp message.'),
+  });
+
   const paid = useMutation({
     mutationFn: () =>
       adminFetch<{ emailed: string | null; note?: string }>(`/api/admin/bookings/${bookingId}/paid-in-full`, { method: 'POST', body: '{}' }),
@@ -101,6 +134,21 @@ export function StayInvoice({ bookingId, status }: { bookingId: string; status: 
         <span className="font-bold text-primary">Invoice</span>
         {status.number ? ` ${status.number}` : ''} · {status.canInvoice ? status.autoStatus : status.problem}
       </p>
+      {status.canInvoice && (
+        <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+          <a href={`/api/admin/bookings/${bookingId}/confirmation.pdf`} target="_blank" rel="noreferrer" className={PILL} title="Booking confirmation with payment summary and UPI QR for the balance">
+            <FileText size={11} /> Confirmation
+          </a>
+          <button
+            type="button"
+            className={PILL}
+            aria-label="Share the booking confirmation"
+            onClick={() => void sharePdf(`/api/admin/bookings/${bookingId}/confirmation.pdf`, 'Booking-Confirmation.pdf')}
+          >
+            <Share2 size={11} />
+          </button>
+        </div>
+      )}
       {status.otaDocuments.length > 0 && (
         <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
           {status.otaDocuments.map((doc) => (
@@ -129,6 +177,9 @@ export function StayInvoice({ bookingId, status }: { bookingId: string; status: 
             }}
           >
             <Share2 size={11} />
+          </button>
+          <button type="button" className={PILL} onClick={() => whatsapp.mutate()} disabled={whatsapp.isPending}>
+            {whatsapp.isPending ? <Loader2 size={11} className="animate-spin" /> : <MessageCircle size={11} />} WhatsApp
           </button>
           <button type="button" className={PILL} onClick={() => (status.email && !asking ? email.mutate() : setAsking((value) => !value))} disabled={email.isPending}>
             {email.isPending ? <Loader2 size={11} className="animate-spin" /> : <Mail size={11} />} Email{status.emailedAt ? ' again' : ''}

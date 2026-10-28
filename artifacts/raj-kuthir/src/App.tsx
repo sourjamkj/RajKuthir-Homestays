@@ -86,6 +86,7 @@ import Welcome from '@/pages/Welcome';
 import AdminGuestInfo from '@/pages/AdminGuestInfo';
 import PreArrival from '@/pages/PreArrival';
 import Pay from '@/pages/Pay';
+import GuestInvoice from '@/pages/GuestInvoice';
 import ManagementDocuments from '@/pages/ManagementDocuments';
 import {
   useRatePlan,
@@ -1715,6 +1716,7 @@ function Router() {
             carries no parameter and is safe to serve to anyone. */}
         <Route path="/pre-arrival" component={PreArrival} />
         <Route path="/pay" component={Pay} />
+        <Route path="/invoice" component={GuestInvoice} />
         <Route path="/management-documents" component={ManagementDocuments} />
         <Route path="/admin" component={AdminDashboard} />
         <Route path="/admin/login" component={AdminLogin} />

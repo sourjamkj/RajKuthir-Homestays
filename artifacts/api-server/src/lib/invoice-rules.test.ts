@@ -9,6 +9,9 @@ import {
   invoiceEmail,
   invoiceNumber,
   invoiceProblem,
+  invoiceWhatsappParams,
+  invoiceWhatsappText,
+  confirmationEmail,
   money,
   nextSequence,
   type InvoiceBooking,
@@ -110,4 +113,38 @@ test("the PDF renders, says INVOICE (not Tax Invoice) and carries the GST note",
   assert.ok(bytes.length > 2000);
   assert.equal(Buffer.from(bytes.slice(0, 5)).toString(), "%PDF-");
   assert.match(GST_NOTE, /Not registered under GST/);
+});
+
+test("auto send: email when there is one, else WhatsApp when it is set up", () => {
+  const now = ist("2026-11-20", 13);
+  const withEmail = autoEmailDecision({ booking: booking(), email: "x@y.com", alreadyEmailed: false, whatsappTo: "919830040042", now });
+  assert.deepEqual(withEmail, { send: true, channel: "email" });
+  const noEmail = autoEmailDecision({ booking: booking(), email: null, alreadyEmailed: false, whatsappTo: "919830040042", now });
+  assert.deepEqual(noEmail, { send: true, channel: "whatsapp" });
+  const neither = autoEmailDecision({ booking: booking(), email: null, alreadyEmailed: false, whatsappTo: null, now });
+  assert.equal(neither.send, false);
+  if (!neither.send) assert.match(neither.reason, /WhatsApp/);
+});
+
+test("WhatsApp message and params name the guest and the invoice", () => {
+  const content = invoiceContent({ booking: booking(), number: "RK/2026-27/0002", issuedOn: "2026-11-20", email: null });
+  assert.deepEqual(invoiceWhatsappParams(content), ["Rana", "RK/2026-27/0002"]);
+  const text = invoiceWhatsappText(content, "https://rajkuthirhomestays.casa/invoice#abc");
+  assert.match(text, /^Hello Rana,/);
+  assert.match(text, /invoice#abc/);
+  assert.match(text, /Paid in full/);
+});
+
+test("the booking confirmation renders with a QR for the balance", async () => {
+  const QRCode = (await import("qrcode")).default;
+  const content = invoiceContent({ booking: booking({ receivedPaise: 280000 }), number: "RK-18NOV-AB12C", issuedOn: "2026-10-28", email: null });
+  const qrPng = new Uint8Array(await QRCode.toBuffer("upi://pay?pa=test@ybl&am=2800.00", { type: "png" }));
+  const bytes = await renderInvoicePdf(content, {
+    kind: "confirmation",
+    payment: { upiId: "test@ybl", payeeName: "Raj Kuthir Homestays", qrPng, note: "RK-18NOV-AB12C" },
+  });
+  assert.equal(Buffer.from(bytes.slice(0, 5)).toString(), "%PDF-");
+  const email = confirmationEmail(content);
+  assert.match(email.subject, /RK-18NOV-AB12C/);
+  assert.match(email.text, /Balance at check-in: Rs\. 2,800/);
 });

@@ -56,9 +56,16 @@ function wrap(text: string, font: PDFFont, size: number, width: number): string[
   return lines;
 }
 
-export async function renderInvoicePdf(invoice: InvoiceContent): Promise<Uint8Array> {
+/** For a booking confirmation: how to pay the balance, with a UPI QR. */
+export type BalancePayment = { upiId: string; payeeName: string; qrPng: Uint8Array; note: string };
+
+export async function renderInvoicePdf(
+  invoice: InvoiceContent,
+  options: { kind?: "invoice" | "confirmation"; payment?: BalancePayment | null } = {},
+): Promise<Uint8Array> {
+  const confirmation = options.kind === "confirmation";
   const pdf = await PDFDocument.create();
-  pdf.setTitle(`Invoice ${invoice.number}`);
+  pdf.setTitle(confirmation ? `Booking confirmation ${invoice.number}` : `Invoice ${invoice.number}`);
   pdf.setAuthor(BUSINESS.name);
   pdf.setCreator(BUSINESS.website);
 
@@ -84,14 +91,19 @@ export async function renderInvoicePdf(invoice: InvoiceContent): Promise<Uint8Ar
     page.drawText(line, { x: textX, y: headerY, size: 9, font: regular, color: MUTED });
     headerY -= 12;
   }
-  rightText(page, "INVOICE", right, y - 4, 20, bold, GREEN);
-  rightText(page, invoice.number, right, y - 24, 10, bold);
+  if (confirmation) {
+    rightText(page, "BOOKING", right, y + 12, 9, bold, MUTED);
+    rightText(page, "CONFIRMATION", right, y - 4, 16, bold, GREEN);
+  } else {
+    rightText(page, "INVOICE", right, y - 4, 20, bold, GREEN);
+  }
+  rightText(page, confirmation ? `Ref: ${invoice.number}` : invoice.number, right, y - 24, 10, bold);
   rightText(page, `Date: ${prettyDate(invoice.issuedOn)}`, right, y - 38, 9, regular, MUTED);
 
   y -= 110;
 
   // Billed to / Stay
-  page.drawText("BILLED TO", { x: left, y, size: 8, font: bold, color: MUTED });
+  page.drawText(confirmation ? "GUEST" : "BILLED TO", { x: left, y, size: 8, font: bold, color: MUTED });
   page.drawText("STAY", { x: 320, y, size: 8, font: bold, color: MUTED });
   y -= 16;
   const billed = [invoice.billedTo.name, invoice.billedTo.phone, invoice.billedTo.email].filter(Boolean) as string[];
@@ -136,8 +148,30 @@ export async function renderInvoicePdf(invoice: InvoiceContent): Promise<Uint8Ar
     rightText(page, value, right, y, strong ? 11 : 10, strong ? bold : regular);
   };
   row("Total", money(invoice.totalPaise), true);
-  row("Amount paid", money(invoice.paidPaise));
-  row("Balance due", money(invoice.balancePaise), invoice.balancePaise > 0);
+  row(confirmation ? "Advance received" : "Amount paid", money(invoice.paidPaise));
+  row(confirmation ? "Balance (at check-in)" : "Balance due", money(invoice.balancePaise), invoice.balancePaise > 0);
+
+  // Confirmation: how to pay the balance — scan the QR or use the UPI ID.
+  if (confirmation && invoice.balancePaise > 0 && options.payment) {
+    const qr = await pdf.embedPng(options.payment.qrPng);
+    const top = y - 34;
+    page.drawText("PAY THE BALANCE", { x: left, y: top, size: 8, font: bold, color: MUTED });
+    page.drawImage(qr, { x: left, y: top - 132, width: 122, height: 122 });
+    const info = [
+      `Scan with any UPI app (GPay, PhonePe, Paytm)`,
+      `UPI ID: ${options.payment.upiId}`,
+      `Name: ${options.payment.payeeName}`,
+      `Amount: ${money(invoice.balancePaise)}`,
+      `Note: ${options.payment.note}`,
+      `Payable at check-in on ${prettyDate(invoice.stay.checkIn)}.`,
+    ];
+    let infoY = top - 22;
+    for (const [index, line] of info.entries()) {
+      page.drawText(line, { x: left + 134, y: infoY, size: index === 1 || index === 3 ? 10 : 9, font: index === 1 || index === 3 ? bold : regular, color: index === 1 || index === 3 ? INK : MUTED });
+      infoY -= 15;
+    }
+    y = Math.min(y, top - 140);
+  }
 
   if (invoice.balancePaise === 0) {
     y -= 26;
@@ -146,11 +180,17 @@ export async function renderInvoicePdf(invoice: InvoiceContent): Promise<Uint8Ar
   }
 
   // Footer
-  const footer = [
-    "Thank you for staying with us. We hope to welcome you back to Sobuj Potro.",
-    GST_NOTE,
-    "This is a computer-generated invoice and needs no signature.",
-  ];
+  const footer = confirmation
+    ? [
+        "Your stay is confirmed. We look forward to welcoming you to Sobuj Potro.",
+        `Check-in from 12 noon, check-out by 11 am. Questions: ${BUSINESS.phone} (call or WhatsApp).`,
+        "This confirmation is not a tax invoice. " + GST_NOTE.replace(" on this invoice", ""),
+      ]
+    : [
+        "Thank you for staying with us. We hope to welcome you back to Sobuj Potro.",
+        GST_NOTE,
+        "This is a computer-generated invoice and needs no signature.",
+      ];
   let fy = 72;
   for (const line of footer) {
     page.drawText(line, { x: left, y: fy, size: 8.5, font: line === footer[0] ? bold : regular, color: line === footer[0] ? GREEN : MUTED });

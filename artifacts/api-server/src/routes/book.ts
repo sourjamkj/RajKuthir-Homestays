@@ -46,6 +46,7 @@ import {
 } from "../lib/book-pay-repo";
 import { confirmedMessage, expiredMessage, ownerUtrAlert } from "../lib/book-pay-messages";
 import { ownerEmail, sendEmail, sendWhatsappTemplate } from "../lib/book-pay-notify";
+import { buildConfirmation, sendConfirmation } from "../lib/invoices";
 
 /**
  * Self-serve Book & Pay by UPI, on top of the existing enquiry pipeline:
@@ -650,7 +651,18 @@ router.post("/admin/book-pay/:id/confirm", requireAdmin, async (req, res) => {
     balancePaise: request.totalPaise - request.advancePaise,
     preArrivalUrl,
   });
-  const emailed = await sendEmail(enquiry.email, message.subject, message.text);
+  // The booking confirmation PDF (payment summary + QR for the balance) goes
+  // with the email; with no email, by WhatsApp when that is set up.
+  const confirmationPdf = await buildConfirmation(booking.id).catch(() => null);
+  const emailed = await sendEmail(
+    enquiry.email,
+    message.subject,
+    message.text,
+    confirmationPdf?.ok
+      ? [{ filename: confirmationPdf.invoice.filename, content: confirmationPdf.invoice.pdf, contentType: "application/pdf" }]
+      : undefined,
+  );
+  const whatsappConfirmation = emailed ? null : await sendConfirmation(booking.id);
 
   res.json({
     booking: {
@@ -660,6 +672,7 @@ router.post("/admin/book-pay/:id/confirm", requireAdmin, async (req, res) => {
       receivedPaise: booking.receivedPaise,
     },
     emailed,
+    confirmationSentOnWhatsapp: whatsappConfirmation?.via === "whatsapp",
     // Today's delivery path for WhatsApp: the owner presses send.
     whatsappUrl: waLink(enquiry.phone, message.text),
     preview: message.text,

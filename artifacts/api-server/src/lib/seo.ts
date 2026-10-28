@@ -419,6 +419,13 @@ export const PAGES: Record<string, PageMeta> = {
     noindex: true,
   },
 
+  /** A guest's invoice. The token is in the URL fragment, as on /pay. */
+  "/invoice": {
+    title: "Your invoice | Raj Kuthir Homestays",
+    description: "Invoice for your stay.",
+    noindex: true,
+  },
+
   /** Management's view of a guest's uploaded identity documents. */
   "/management-documents": {
     title: "Guest document access | Raj Kuthir Homestays",
@@ -442,6 +449,7 @@ const PRIVATE_PREFIXES = [
   "/pre-arrival",
   "/management-documents",
   "/pay",
+  "/invoice",
 ];
 
 /**
@@ -474,6 +482,7 @@ const CLIENT_ROUTES = new Set([
   "/pre-arrival",
   "/management-documents",
   "/pay",
+  "/invoice",
 ]);
 
 const CLIENT_ROUTE_PREFIXES = ["/sign-in"];

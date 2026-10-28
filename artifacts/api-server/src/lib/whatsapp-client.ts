@@ -257,6 +257,8 @@ export async function sendTemplate(input: {
   templateName: string;
   languageCode?: string;
   params: string[];
+  /** A document header (e.g. the invoice PDF), from uploadMedia. The template must have a Document header. */
+  headerDocument?: { mediaId: string; filename: string };
 }): Promise<SendResult> {
   if (!isWhatsappEnabled()) {
     return {
@@ -286,17 +288,32 @@ export async function sendTemplate(input: {
         template: {
           name: input.templateName,
           language: { code: input.languageCode ?? "en" },
-          components: input.params.length
-            ? [
-                {
-                  type: "body",
-                  parameters: input.params.map((text) => ({
-                    type: "text",
-                    text,
-                  })),
-                },
-              ]
-            : [],
+          components: [
+            ...(input.headerDocument
+              ? [
+                  {
+                    type: "header",
+                    parameters: [
+                      {
+                        type: "document",
+                        document: { id: input.headerDocument.mediaId, filename: input.headerDocument.filename },
+                      },
+                    ],
+                  },
+                ]
+              : []),
+            ...(input.params.length
+              ? [
+                  {
+                    type: "body",
+                    parameters: input.params.map((text) => ({
+                      type: "text",
+                      text,
+                    })),
+                  },
+                ]
+              : []),
+          ],
         },
       }),
     });
@@ -335,5 +352,40 @@ export async function sendTemplate(input: {
     };
   } finally {
     clearTimeout(timeout);
+  }
+}
+
+/* ------------------------------------------------------------------ *
+ * Media — a file uploaded once, then sent by id (e.g. an invoice PDF).
+ * ------------------------------------------------------------------ */
+
+export async function uploadMedia(input: {
+  bytes: Uint8Array;
+  mimeType: string;
+  filename: string;
+}): Promise<{ ok: true; mediaId: string } | { ok: false; error: string }> {
+  if (!isWhatsappEnabled()) return { ok: false, error: "WhatsApp sending is disabled or not configured." };
+
+  const form = new FormData();
+  form.append("messaging_product", "whatsapp");
+  form.append("type", input.mimeType);
+  form.append("file", new Blob([new Uint8Array(input.bytes)], { type: input.mimeType }), input.filename);
+
+  try {
+    const response = await fetch(`https://graph.facebook.com/${GRAPH_VERSION}/${PHONE_NUMBER_ID}/media`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${ACCESS_TOKEN}` },
+      body: form,
+      signal: AbortSignal.timeout(30_000),
+    });
+    const body = (await response.json().catch(() => ({}))) as { id?: string; error?: { message?: string } };
+    if (!response.ok || !body.id) {
+      const error = body.error?.message ?? `HTTP ${response.status}`;
+      logger.warn({ status: response.status, error }, "WhatsApp media upload rejected");
+      return { ok: false, error };
+    }
+    return { ok: true, mediaId: body.id };
+  } catch (error) {
+    return { ok: false, error: error instanceof Error ? error.message : "Network error." };
   }
 }

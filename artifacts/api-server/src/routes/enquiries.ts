@@ -17,6 +17,7 @@ import {
   setBookingDetails,
 } from "../lib/enquiries-repo";
 import { convertEnquiry } from "../lib/enquiry-convert-service";
+import { sendConfirmation } from "../lib/invoices";
 import { findByEnquiryId, holdDeadlinesByEnquiry } from "../lib/book-pay-repo";
 import { quoteForEnquiry, type QuoteResult } from "../lib/enquiry-quote";
 import { holdExpiryOf, holdStateOf } from "../lib/enquiry-hold";
@@ -447,6 +448,14 @@ router.post("/enquiries/:id/convert", requireAdmin, async (req, res) => {
     return;
   }
 
+  // The guest gets the booking confirmation PDF (payment summary + UPI QR)
+  // right away: by email, or by WhatsApp when that is set up.
+  const confirmation = outcome.booking.status === "confirmed" ? await sendConfirmation(outcome.booking.id) : null;
+  logger.info(
+    { enquiryId: id, bookingId: outcome.booking.id, confirmationSent: confirmation?.via ?? null },
+    "Booking confirmation handled",
+  );
+
   res.status(201).json({
     booking: {
       id: outcome.booking.id,
@@ -456,6 +465,7 @@ router.post("/enquiries/:id/convert", requireAdmin, async (req, res) => {
       checkOut: outcome.booking.checkOut,
     },
     enquiry: outcome.enquiry,
+    confirmation,
   });
 });
 
@@ -539,6 +549,10 @@ router.post("/enquiries/:id/book", requireAdmin, async (req, res) => {
   }
 
   logger.info({ enquiryId: id, bookingId: outcome.booking.id }, "Enquiry booked with the owner's details");
+  // The guest gets the booking confirmation PDF (payment summary + UPI QR)
+  // right away: by email, or by WhatsApp when that is set up.
+  const confirmation = outcome.booking.status === "confirmed" ? await sendConfirmation(outcome.booking.id) : null;
+
   res.status(201).json({
     booking: {
       id: outcome.booking.id,
@@ -548,6 +562,7 @@ router.post("/enquiries/:id/book", requireAdmin, async (req, res) => {
       checkOut: outcome.booking.checkOut,
     },
     enquiry: outcome.enquiry,
+    confirmation,
   });
 });
 
