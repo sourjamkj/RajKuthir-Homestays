@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { formatDistanceToNowStrict, parseISO } from 'date-fns';
-import { Bell, CalendarDays, CalendarPlus, CalendarX, FileCheck, Inbox, Loader2, X } from 'lucide-react';
+import { Bell, CalendarDays, CalendarPlus, CalendarX, FileCheck, Inbox, Loader2, Wallet, X } from 'lucide-react';
 
 import { adminFetch } from '@/lib/admin-api';
 
@@ -21,7 +21,8 @@ type ActivityKind =
   | 'booking_cancelled'
   | 'ota_block'
   | 'enquiry_new'
-  | 'documents_uploaded';
+  | 'documents_uploaded'
+  | 'payment';
 
 type ActivityItem = {
   id: string;
@@ -41,6 +42,7 @@ const ICONS: Record<ActivityKind, typeof Bell> = {
   ota_block: CalendarDays,
   enquiry_new: Inbox,
   documents_uploaded: FileCheck,
+  payment: Wallet,
 };
 
 /** Cancellations are the one thing that may need undoing elsewhere. */
@@ -50,7 +52,14 @@ const TONE: Record<ActivityKind, string> = {
   ota_block: 'bg-[#d8a24a]/15 text-[#8a6320]',
   enquiry_new: 'bg-primary/10 text-primary',
   documents_uploaded: 'bg-[#7A8065]/15 text-[#4b5340]',
+  payment: 'bg-[#d8a24a]/15 text-[#8a6320]',
 };
+
+/** "5 minutes ago", or nothing for a timestamp that will not parse. */
+function ago(iso: string): string {
+  const date = parseISO(iso);
+  return Number.isNaN(date.getTime()) ? '' : formatDistanceToNowStrict(date, { addSuffix: true });
+}
 
 export function AdminActivity() {
   const queryClient = useQueryClient();
@@ -155,18 +164,20 @@ export function AdminActivity() {
             )}
             <ul>
               {items.map((item) => {
-                const Icon = ICONS[item.kind];
+                // A kind the server adds before this list knows it gets the
+                // plain bell instead of taking the whole console down.
+                const Icon = ICONS[item.kind] ?? Bell;
                 return (
                   <li key={item.id} className="border-b border-border last:border-0">
                     <a href={item.href} onClick={() => setOpen(false)} className="flex gap-3 px-4 py-3 transition-colors hover:bg-background/60" data-testid={`activity-${item.id}`}>
-                      <span className={`mt-0.5 grid h-8 w-8 shrink-0 place-items-center rounded-full ${TONE[item.kind]}`}>
+                      <span className={`mt-0.5 grid h-8 w-8 shrink-0 place-items-center rounded-full ${TONE[item.kind] ?? 'bg-primary/10 text-primary'}`}>
                         <Icon size={14} />
                       </span>
                       <span className="min-w-0 flex-1">
                         <span className="flex items-baseline justify-between gap-2">
                           <span className="text-sm font-medium text-foreground">{item.title}</span>
                           <span className="shrink-0 text-[10px] text-muted-foreground">
-                            {formatDistanceToNowStrict(parseISO(item.at), { addSuffix: true })}
+                            {ago(item.at)}
                           </span>
                         </span>
                         <span className="mt-0.5 block text-xs text-muted-foreground">{item.detail}</span>
