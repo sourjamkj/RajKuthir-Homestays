@@ -13,6 +13,7 @@ import activityRouter from "./activity";
 import bookRouter from "./book";
 import caretakerRouter from "./caretaker";
 import reviewsRouter from "./reviews";
+import invoicesRouter from "./invoices";
 
 const router: IRouter = Router();
 
@@ -30,5 +31,6 @@ router.use(activityRouter);
 router.use(bookRouter);
 router.use(caretakerRouter);
 router.use(reviewsRouter);
+router.use(invoicesRouter);
 
 export default router;

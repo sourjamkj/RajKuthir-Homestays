@@ -29,6 +29,7 @@ import { CONFIG, asset } from '@/lib/site';
 import { useFocusTarget } from '@/hooks/use-focus-target';
 import { AdminBookPay } from '@/components/AdminBookPay';
 import { EnquiryBookForm } from '@/components/EnquiryBookForm';
+import { StayInvoice, useInvoiceStatuses } from '@/components/StayInvoice';
 import { AdminHeader } from '@/components/AdminHeader';
 
 const ENQUIRIES_KEY = ['/api/enquiries'];
@@ -315,6 +316,9 @@ export default function AdminGuests() {
     enabled: signedIn,
     retry: false,
   });
+
+  // Invoice number and check-out email status for every stay listed.
+  const invoices = useInvoiceStatuses((guestStays.data?.stays ?? []).map((stay) => stay.bookingId));
 
   const createOnboarding = useMutation({
     mutationFn: async (stay: GuestStay) => {
@@ -1187,6 +1191,7 @@ export default function AdminGuests() {
                             {editingStay === stay.bookingId ? 'Close' : 'Edit details'}
                           </button>
                         </div>
+                        <StayInvoice bookingId={stay.bookingId} status={invoices.data?.invoices[stay.bookingId]} />
                       </td>
                       <td className="px-5 py-4 text-xs text-muted-foreground">
                         <p className="text-sm text-foreground">

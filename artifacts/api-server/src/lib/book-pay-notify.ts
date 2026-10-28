@@ -28,7 +28,12 @@ function smtpHostFor(imapHost: string): string {
   return host;
 }
 
-export async function sendEmail(to: string | null, subject: string, text: string): Promise<boolean> {
+export async function sendEmail(
+  to: string | null,
+  subject: string,
+  text: string,
+  attachments?: Array<{ filename: string; content: Buffer | Uint8Array; contentType: string }>,
+): Promise<boolean> {
   if (!to || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(to)) return false;
 
   try {
@@ -51,6 +56,9 @@ export async function sendEmail(to: string | null, subject: string, text: string
       to,
       subject,
       text,
+      ...(attachments?.length
+        ? { attachments: attachments.map((file) => ({ ...file, content: Buffer.from(file.content) })) }
+        : {}),
     });
     return true;
   } catch (error) {

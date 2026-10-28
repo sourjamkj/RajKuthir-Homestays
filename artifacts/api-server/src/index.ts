@@ -9,6 +9,7 @@ import { startBookPayCron } from "./lib/book-pay-cron";
 import { ensureBookPayTables } from "./lib/book-pay-migrate";
 import { startReviewsCron } from "./lib/reviews-cron";
 import { startBookingHygiene } from "./lib/booking-dedupe";
+import { startInvoiceEmails } from "./lib/invoices";
 import { runSchemaCheck } from "./lib/schema-check";
 import { ensureWaInboundTables } from "./lib/wa-webhook";
 
@@ -80,6 +81,10 @@ app.listen(port, (err) => {
   // the owner named), and releases unpaid bookings back to enquiries once
   // their hold has passed. At boot, then hourly.
   startBookingHygiene();
+
+  // Guest invoices: emailed at noon on check-out day for our own bookings
+  // once fully paid. Creates its table at boot (additive).
+  startInvoiceEmails();
 
   // Says in the log whether the database still matches the Drizzle schema.
   // Four production 500s in one day came from that drift, each invisible until
