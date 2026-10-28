@@ -16,7 +16,11 @@ export type MailMessage = {
   from: string;
   subject: string;
   body: string;
+  /** PDF attachments only — OTA vouchers, cancellations and statements. */
+  attachments?: MailAttachment[];
 };
+
+export type MailAttachment = { filename: string; contentType: string; content: Buffer };
 
 export type MailboxRead = {
   /**

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Check, FileText, Loader2, Mail } from 'lucide-react';
+import { Check, FileText, Loader2, Mail, Share2 } from 'lucide-react';
 
 import { adminFetch } from '@/lib/admin-api';
 
@@ -18,7 +18,31 @@ export type InvoiceStatus = {
   needsAction: boolean;
   canInvoice: boolean;
   problem: string | null;
+  otaDocuments: Array<{ id: string; kind: 'voucher' | 'cancellation' | 'statement' | 'other'; filename: string; createdAt: string }>;
 };
+
+const KIND_LABEL: Record<string, string> = { voucher: 'OTA voucher', cancellation: 'Cancellation', statement: 'Statement', other: 'OTA document' };
+
+/**
+ * Shares a PDF through the phone's share sheet — WhatsApp included — with
+ * the file attached. Where the browser cannot share files (most desktops),
+ * opens it instead so it can be saved and attached by hand.
+ */
+export async function sharePdf(url: string, filename: string): Promise<'shared' | 'opened'> {
+  try {
+    const response = await fetch(url, { credentials: 'include' });
+    if (!response.ok) throw new Error('fetch failed');
+    const file = new File([await response.blob()], filename, { type: 'application/pdf' });
+    if (navigator.canShare?.({ files: [file] })) {
+      await navigator.share({ files: [file], title: filename });
+      return 'shared';
+    }
+  } catch (error) {
+    if (error instanceof DOMException && error.name === 'AbortError') return 'shared';
+  }
+  window.open(url, '_blank', 'noopener');
+  return 'opened';
+}
 
 export const INVOICES_KEY = ['/api/admin/invoices'];
 
@@ -77,11 +101,35 @@ export function StayInvoice({ bookingId, status }: { bookingId: string; status: 
         <span className="font-bold text-primary">Invoice</span>
         {status.number ? ` ${status.number}` : ''} · {status.canInvoice ? status.autoStatus : status.problem}
       </p>
+      {status.otaDocuments.length > 0 && (
+        <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+          {status.otaDocuments.map((doc) => (
+            <span key={doc.id} className="inline-flex items-center gap-1">
+              <a href={`/api/admin/ota-documents/${doc.id}`} target="_blank" rel="noreferrer" className={PILL} title={doc.filename}>
+                <FileText size={11} /> {KIND_LABEL[doc.kind] ?? 'OTA document'}
+              </a>
+              <button type="button" className={PILL} aria-label={`Share ${doc.filename}`} onClick={() => void sharePdf(`/api/admin/ota-documents/${doc.id}`, doc.filename)}>
+                <Share2 size={11} />
+              </button>
+            </span>
+          ))}
+        </div>
+      )}
       {status.canInvoice && (
         <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
           <a href={`/api/admin/bookings/${bookingId}/invoice.pdf`} target="_blank" rel="noreferrer" className={PILL} onClick={() => setTimeout(refresh, 1500)}>
-            <FileText size={11} /> PDF
+            <FileText size={11} /> Our invoice
           </a>
+          <button
+            type="button"
+            className={PILL}
+            aria-label="Share our invoice"
+            onClick={() => {
+              void sharePdf(`/api/admin/bookings/${bookingId}/invoice.pdf`, `Invoice-${(status.number ?? 'Raj-Kuthir').replace(/\//g, '-')}.pdf`).then(refresh);
+            }}
+          >
+            <Share2 size={11} />
+          </button>
           <button type="button" className={PILL} onClick={() => (status.email && !asking ? email.mutate() : setAsking((value) => !value))} disabled={email.isPending}>
             {email.isPending ? <Loader2 size={11} className="animate-spin" /> : <Mail size={11} />} Email{status.emailedAt ? ' again' : ''}
           </button>

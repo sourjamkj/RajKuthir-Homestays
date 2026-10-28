@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import { useAdminSession } from '@/lib/admin-api';
 import { BookingImport } from '@/components/BookingImport';
+import { ChannelStatements } from '@/components/ChannelStatements';
 import {
   formatMonth,
   formatRupees,
@@ -125,6 +126,8 @@ export default function AdminEarnings() {
           expenses={expenses.data?.expenses ?? []}
           loading={expenses.isLoading}
         />
+
+        <ChannelStatements />
       </main>
     </div>
   );

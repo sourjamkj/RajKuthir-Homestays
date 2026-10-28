@@ -13,6 +13,7 @@ import {
   type SyncableAccount,
 } from "./mail-sync";
 import { parseMessage, type ParsedVoucher } from "./mail-parsers/index";
+import { backfillOtaDocuments, saveOtaDocuments } from "./ota-documents";
 import { appSettings, db } from "@workspace/db";
 import { eq } from "drizzle-orm";
 
@@ -64,7 +65,11 @@ async function readMailbox(
   sinceUid: number,
 ): Promise<MailboxRead> {
   const { readMailbox: open } = await import("./mail-imap");
-  return open(account, sinceUid);
+  const read = await open(account, sinceUid);
+  // OTA PDFs (vouchers, statements) are filed as the mail is read. Never
+  // throws, so a storage problem cannot hold up the booking import.
+  await saveOtaDocuments(read.messages);
+  return read;
 }
 
 /**
@@ -268,4 +273,22 @@ export function scheduleBookingComBackfill(): void {
       }
     })();
   }, 60_000).unref?.();
+}
+
+/**
+ * Files the PDFs from OTA emails already in the mailbox, once, two minutes
+ * after boot. New ones are filed by the normal sync as they arrive.
+ */
+export function scheduleOtaDocumentBackfill(): void {
+  setTimeout(() => {
+    void (async () => {
+      try {
+        if (encryptionProblem()) return;
+        const { readBySender } = await import("./mail-imap");
+        await backfillOtaDocuments(await listForSync(), readBySender);
+      } catch (error) {
+        logger.error({ err: error }, "OTA document backfill failed");
+      }
+    })();
+  }, 120_000).unref?.();
 }

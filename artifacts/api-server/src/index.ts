@@ -4,7 +4,7 @@ import { startCalendarCron } from "./lib/calendar-cron";
 import { startNotificationsCron } from "./lib/notifications-cron";
 import { startMailCron } from "./lib/mail-cron";
 import { startCaretakerAlerts } from "./lib/caretaker-alerts";
-import { scheduleBookingComBackfill } from "./lib/mail-runner";
+import { scheduleBookingComBackfill, scheduleOtaDocumentBackfill } from "./lib/mail-runner";
 import { startBookPayCron } from "./lib/book-pay-cron";
 import { ensureBookPayTables } from "./lib/book-pay-migrate";
 import { startReviewsCron } from "./lib/reviews-cron";
@@ -60,6 +60,10 @@ app.listen(port, (err) => {
   // One-off: import every Booking.com email already in the mailbox (bookings,
   // guest names, cancellations). Skips itself once it has completed.
   scheduleBookingComBackfill();
+
+  // One-off: file the PDFs (vouchers, statements) from OTA emails already in
+  // the mailbox. New ones are filed by the mail sync as they arrive.
+  scheduleOtaDocumentBackfill();
 
   // Releases unpaid Book & Pay holds and tells the guest. The dates free
   // themselves without it (holds are derived); this tidies and notifies.

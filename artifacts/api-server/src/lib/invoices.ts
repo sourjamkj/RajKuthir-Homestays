@@ -4,6 +4,7 @@ import { bookings, db, enquiries, pool, type Booking } from "@workspace/db";
 import { logger } from "./logger";
 import { sendEmail } from "./book-pay-notify";
 import { renderInvoicePdf } from "./invoice-pdf";
+import { documentsForRefs, type OtaDocumentMeta } from "./ota-documents";
 import {
   AUTO_EMAIL_SOURCES,
   SEND_WINDOW_DAYS,
@@ -227,6 +228,8 @@ export type InvoiceStatus = {
   needsAction: boolean;
   canInvoice: boolean;
   problem: string | null;
+  /** PDFs the OTA emailed for this booking — its voucher shows the taxes the guest paid. */
+  otaDocuments: Array<Pick<OtaDocumentMeta, "id" | "kind" | "filename" | "createdAt">>;
 };
 
 /** Invoice state for the stays the console is showing. */
@@ -239,6 +242,7 @@ export async function invoiceStatuses(bookingIds: string[], now = new Date()): P
     [bookingIds],
   );
   const byBooking = new Map(invoices.map((row) => [row.booking_id, row]));
+  const otaDocs = await documentsForRefs(rows.map((booking) => booking.externalRef ?? "").filter(Boolean));
   for (const booking of rows) {
     const invoice = byBooking.get(booking.id);
     const email = await guestEmailFor(booking.id);
@@ -254,6 +258,12 @@ export async function invoiceStatuses(bookingIds: string[], now = new Date()): P
       needsAction: !decision.send && decision.kind === "waiting",
       canInvoice: problem === null,
       problem,
+      otaDocuments: (booking.externalRef ? otaDocs.get(booking.externalRef) ?? [] : []).map((doc) => ({
+        id: doc.id,
+        kind: doc.kind,
+        filename: doc.filename,
+        createdAt: doc.createdAt,
+      })),
     };
   }
   return out;

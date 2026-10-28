@@ -6,6 +6,7 @@ import { requireAdmin } from "../lib/admin-auth";
 import { buildInvoice, emailInvoice, invoiceStatuses } from "../lib/invoices";
 import { autoEmailDecision } from "../lib/invoice-rules";
 import { guestEmailFor } from "../lib/invoices";
+import { getOtaDocument, listStatements } from "../lib/ota-documents";
 
 /**
  * Guest invoices in the console: status per stay, download the PDF, email
@@ -86,6 +87,27 @@ router.post("/admin/bookings/:id/paid-in-full", requireAdmin, async (req, res) =
     return;
   }
   res.json({ ok: true, emailed: null, note: decision.reason });
+});
+
+/** PDFs from OTA emails: one by id, or the list of monthly statements. */
+router.get("/admin/ota-documents", requireAdmin, async (_req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  res.json({ documents: await listStatements() });
+});
+
+router.get("/admin/ota-documents/:id", requireAdmin, async (req, res) => {
+  const doc = isId(req.params.id) ? await getOtaDocument(req.params.id) : null;
+  if (!doc) {
+    res.status(404).json({ error: "That document no longer exists." });
+    return;
+  }
+  res.set({
+    "Content-Type": "application/pdf",
+    "Content-Disposition": `inline; filename="${doc.filename.replace(/[^\w.\- ]+/g, "_")}"`,
+    "X-Content-Type-Options": "nosniff",
+    "Cache-Control": "no-store, private",
+  });
+  res.send(doc.bytes);
 });
 
 export default router;

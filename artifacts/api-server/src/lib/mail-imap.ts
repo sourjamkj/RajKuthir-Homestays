@@ -3,7 +3,7 @@ import { simpleParser } from "mailparser";
 
 import { logger } from "./logger";
 import { bodyText } from "./mail-body";
-import type { MailboxRead, MailMessage, SyncableAccount } from "./mail-sync";
+import type { MailAttachment, MailboxRead, MailMessage, SyncableAccount } from "./mail-sync";
 
 /**
  * The only file that talks IMAP.
@@ -37,15 +37,29 @@ const CONNECT_TIMEOUT_MS = 20_000;
  * Handing a parser the raw source instead would feed it base64 and it would
  * politely find no booking in it.
  */
-async function readableBody(source: Buffer | string | undefined): Promise<string> {
-  if (!source) return "";
+/** Largest PDF kept from an email; OTA vouchers are ~100 KB. */
+const MAX_PDF_BYTES = 10 * 1024 * 1024;
+
+async function readableBody(
+  source: Buffer | string | undefined,
+): Promise<{ body: string; attachments: MailAttachment[] }> {
+  if (!source) return { body: "", attachments: [] };
 
   try {
     const parsed = await simpleParser(source);
-    return bodyText({ text: parsed.text, html: parsed.html });
+    // PDFs only: the vouchers, cancellations and statements the OTAs send.
+    const attachments = (parsed.attachments ?? [])
+      .filter((file) => /pdf$/i.test(file.contentType ?? "") || /\.pdf$/i.test(file.filename ?? ""))
+      .filter((file) => file.content && file.content.length <= MAX_PDF_BYTES)
+      .map((file) => ({
+        filename: file.filename || "document.pdf",
+        contentType: "application/pdf",
+        content: file.content,
+      }));
+    return { body: bodyText({ text: parsed.text, html: parsed.html }), attachments };
   } catch (error) {
     logger.warn({ err: error }, "Could not parse message body");
-    return "";
+    return { body: "", attachments: [] };
   }
 }
 
@@ -95,11 +109,13 @@ export async function readMailbox(
         if (messages.length >= MAX_PER_RUN) break;
         if (typeof message.uid !== "number" || message.uid <= sinceUid) continue;
 
+        const { body, attachments } = await readableBody(message.source);
         messages.push({
           uid: message.uid,
           from: addressOf(message.envelope?.from),
           subject: message.envelope?.subject ?? "",
-          body: await readableBody(message.source),
+          body,
+          attachments,
         });
       }
 
@@ -159,11 +175,13 @@ export async function readBySender(
         { uid: true },
       )) {
         if (typeof message.uid !== "number") continue;
+        const { body, attachments } = await readableBody(message.source);
         messages.push({
           uid: message.uid,
           from: addressOf(message.envelope?.from),
           subject: message.envelope?.subject ?? "",
-          body: await readableBody(message.source),
+          body,
+          attachments,
         });
       }
 
