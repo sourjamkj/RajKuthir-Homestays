@@ -215,7 +215,7 @@ export const PAGES: Record<string, PageMeta> = {
     // yet; they search for the kind of place this is.
     title: "Private 2-Bedroom Villa in Shantiniketan | Raj Kuthir",
     description:
-      "An entire 2-bedroom villa in Bolpur, Shantiniketan \u2014 not a room in a homestay. Two AC bedrooms, private garden, parking, pet-friendly. Book direct.",
+      "An entire 2-bedroom villa in Bolpur, Santiniketan \u2014 not a room in a homestay. Two AC bedrooms, private garden, parking, pet-friendly. Book direct.",
     lastmod: "2026-10-29",
     // The hero photograph is the homepage's LCP. Keep in step with IMG.villaNight
     // in App.tsx — a test asserts the two name the same file.
@@ -240,7 +240,7 @@ export const PAGES: Record<string, PageMeta> = {
   "/pet-friendly-homestay-shantiniketan": {
     title: "Pet-Friendly Homestay in Shantiniketan | Raj Kuthir",
     description:
-      "Bring the dog. A private two-bedroom villa with its own garden in Bolpur, Shantiniketan — the whole house is yours, and pets are in our published house rules.",
+      "Bring the dog. A private two-bedroom villa with its own garden in Bolpur, Santiniketan — the whole house is yours, and pets are in our house rules.",
     ogImage: {
       url: `${SITE_ORIGIN}/villa-day.jpg`,
       width: 1536,
@@ -272,7 +272,7 @@ export const PAGES: Record<string, PageMeta> = {
       height: 1086,
       alt: "Raj Kuthir Homestays, Sobuj Potro, from the garden on a clear morning",
     },
-    lastmod: "2026-09-14",
+    lastmod: "2026-10-29",
     breadcrumb: "Gallery",
     intent: { primary: "Raj Kuthir Homestays photos" },
   },
@@ -280,7 +280,7 @@ export const PAGES: Record<string, PageMeta> = {
     title: "Our Story | Raj Kuthir Homestays, Shantiniketan",
     description:
       "Why Sobuj Potro exists and what the house actually is \u2014 an entire two-bedroom villa with its own garden in Bolpur, let directly by the owner.",
-    lastmod: "2026-09-11",
+    lastmod: "2026-10-29",
     breadcrumb: "Our story",
     // Navigational: people who already know the name. Deliberately not a
     // generic query, which would only compete with the homepage.
@@ -289,14 +289,14 @@ export const PAGES: Record<string, PageMeta> = {
   "/places-to-visit-in-shantiniketan": {
     title: "Places to Visit in Shantiniketan | Raj Kuthir Homestays",
     description:
-      "Eighteen places around Shantiniketan with road distances from our doorstep in Bolpur \u2014 the Tagore campus, Sonajhuri haat, Kopai, Tarapith and Bishnupur.",
+      "Eighteen places around Santiniketan with road distances from our doorstep in Bolpur \u2014 the Tagore campus, Sonajhuri haat, Kopai, Tarapith and Bishnupur.",
     ogImage: {
       url: `${SITE_ORIGIN}/Rabiguru%20Statue.jpg`,
       width: 1254,
       height: 1254,
       alt: "A statue of Rabindranath Tagore near Raj Kuthir Homestays, Shantiniketan",
     },
-    lastmod: "2026-09-14",
+    lastmod: "2026-10-29",
     faq: PLACES_FAQ,
     breadcrumb: "Places to visit",
     intent: {
@@ -341,8 +341,8 @@ export const PAGES: Record<string, PageMeta> = {
   "/shantiniketan-weekend-trip-from-kolkata": {
     title: "Shantiniketan Weekend Trip from Kolkata | Raj Kuthir",
     description:
-      "Planning a weekend in Shantiniketan from Kolkata: trains, roads, which days the haat runs, and a private two-bedroom villa in Bolpur to come back to.",
-    lastmod: "2026-09-18",
+      "Planning a weekend in Santiniketan from Kolkata: trains, roads, which days the haat runs, and a private two-bedroom villa in Bolpur to come back to.",
+    lastmod: "2026-10-29",
     breadcrumb: "Weekend from Kolkata",
     intent: {
       primary: "Shantiniketan weekend trip from Kolkata",
@@ -353,7 +353,7 @@ export const PAGES: Record<string, PageMeta> = {
     title: "2-Day Shantiniketan Itinerary | Raj Kuthir Homestays",
     description:
       "A 2-day Shantiniketan itinerary with road distances from Bolpur: Sonajhuri haat and the Kopai on day one, the Tagore campus and Ballavpur on day two.",
-    lastmod: "2026-09-18",
+    lastmod: "2026-10-29",
     breadcrumb: "2-day itinerary",
     intent: {
       primary: "2 day Shantiniketan itinerary",

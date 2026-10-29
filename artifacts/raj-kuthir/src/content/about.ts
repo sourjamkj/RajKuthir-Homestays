@@ -13,7 +13,7 @@
 export const ABOUT = {
   eyebrow: 'The idea',
   heading: ['Come as guests.', 'Leave lighter.'],
-  lede: 'Raj Kuthir is a small invitation to do Shantiniketan differently: with a morning that does not need an itinerary, a garden that belongs to your group, and a house that lets everyone find their own corner.',
+  lede: 'Raj Kuthir is a small invitation to do Shantiniketan (also spelt Santiniketan) differently: with a morning that does not need an itinerary, a garden that belongs to your group, and a house that lets everyone find their own corner.',
   points: [
     'A private home in nature for the pace of real life.',
     'Warm Bengali hospitality, led by a thoughtful local team.',

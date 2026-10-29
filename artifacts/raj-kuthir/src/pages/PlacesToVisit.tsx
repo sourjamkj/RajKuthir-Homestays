@@ -97,7 +97,7 @@ export default function PlacesToVisit() {
             a two-hour drive, and it matters which.
           </p>
           <p className="mt-4 max-w-[620px] text-sm leading-6 text-muted-foreground">
-            Shantiniketan is best met in fragments: a red-earth path, a market
+            Shantiniketan (also spelt Santiniketan) is best met in fragments: a red-earth path, a market
             pause, a late return home.
           </p>
         </section>

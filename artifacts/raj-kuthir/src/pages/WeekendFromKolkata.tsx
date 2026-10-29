@@ -86,7 +86,7 @@ export default function WeekendFromKolkata() {
             A Shantiniketan weekend<br /><em>from Kolkata.</em>
           </h1>
           <p className="mt-8 max-w-[640px] text-lg leading-8 text-primary/75">
-            Shantiniketan is the weekend Kolkata keeps meaning to take. This is
+            Shantiniketan (also spelt Santiniketan) is the weekend Kolkata keeps meaning to take. This is
             the practical version &mdash; how to get here, which days actually
             matter, and where to sleep once you arrive.
           </p>

@@ -84,7 +84,7 @@ export default function TwoDayItinerary() {
             A 2-day itinerary<br /><em>for Shantiniketan.</em>
           </h1>
           <p className="mt-8 max-w-[640px] text-lg leading-8 text-primary/75">
-            Two days is enough for Shantiniketan if you do not try to do all of
+            Two days is enough for Shantiniketan (also spelt Santiniketan) if you do not try to do all of
             it. This plan puts the market on the first afternoon and the campus
             on the second morning, because that is the order the place itself
             suggests.

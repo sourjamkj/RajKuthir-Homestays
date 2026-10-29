@@ -1371,7 +1371,7 @@ test("homepage · title, description and social tags are the approved ones", () 
   // actually shopping for.
   const title = "Private 2-Bedroom Villa in Shantiniketan | Raj Kuthir";
   const description =
-    "An entire 2-bedroom villa in Bolpur, Shantiniketan \u2014 not a room in a homestay. Two AC bedrooms, private garden, parking, pet-friendly. Book direct.";
+    "An entire 2-bedroom villa in Bolpur, Santiniketan \u2014 not a room in a homestay. Two AC bedrooms, private garden, parking, pet-friendly. Book direct.";
 
   assert.deepEqual(titles(html), [title]);
   assert.deepEqual(metaByName(html, "description"), [description]);

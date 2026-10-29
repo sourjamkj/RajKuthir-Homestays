@@ -139,7 +139,7 @@ export default function PetFriendly() {
                 Pet-friendly in Shantiniketan,<br /><em className="text-accent">and we mean it.</em>
               </h1>
               <p className="mt-8 max-w-[560px] text-[15px] leading-7 text-muted-foreground md:text-[17px]">
-                Raj Kuthir &ndash; Sobuj Potro is a dog-friendly stay in Shantiniketan: a private
+                Raj Kuthir &ndash; Sobuj Potro is a dog-friendly stay in Shantiniketan (also spelt Santiniketan): a private
                 two-bedroom villa in Bolpur with its own garden. You get the whole house, so there is no
                 front desk to clear your dog with, no corridor to walk them down, and nobody else&rsquo;s
                 pet on the other side of the wall.

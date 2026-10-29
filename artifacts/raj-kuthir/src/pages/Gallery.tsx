@@ -227,7 +227,7 @@ export default function Gallery() {
           </h1>
           <p className="mt-8 max-w-[560px] text-lg leading-8 text-primary/75">
             {GALLERY.length} photographs of Sobuj Potro — the rooms as they are, the
-            garden, and the short walk into Shantiniketan. Nothing here is a stock
+            garden, and the short walk into Shantiniketan (also spelt Santiniketan). Nothing here is a stock
             picture of somewhere else.
           </p>
           <div className="mt-9 flex flex-wrap gap-3">

@@ -890,7 +890,7 @@ function Home() {
               </p>
               <p className="mt-8 max-w-[520px] text-[15px] leading-7 text-white/75 md:text-[17px]">
                 An entire two-bedroom villa in Bolpur, made for couples, families
-                and the four-legged members of the family. Come to Shantiniketan.
+                and the four-legged members of the family. Come to Shantiniketan (also spelt Santiniketan).
                 Take your time.
               </p>
               <div className="mt-10 flex flex-wrap items-center gap-4">
