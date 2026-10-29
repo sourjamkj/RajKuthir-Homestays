@@ -8,7 +8,7 @@ import { existsSync, readFileSync } from "node:fs";
 import router from "./routes";
 import waWebhookRouter from "./routes/wa-webhook";
 import { logger } from "./lib/logger";
-import { staticCacheControl, wwwRedirectTarget } from "./lib/site-host";
+import { prerenderFileFor, staticCacheControl, withPrerender, wwwRedirectTarget } from "./lib/site-host";
 import { injectMeta, isKnownPath, isPrivatePath, llmsTxt, sitemapXml } from "./lib/seo";
 
 const app: Express = express();
@@ -169,6 +169,21 @@ if (clientDist) {
     return baseHtml;
   };
 
+  /**
+   * Public pages prerendered at build time (raj-kuthir/scripts/prerender.mjs),
+   * read once per route. Null when a page has none — it then goes out as the
+   * plain shell and renders in the browser, as every page used to.
+   */
+  const prerenderDir = path.join(clientDist, "..", "prerender");
+  const prerendered = new Map<string, string | null>();
+  const prerenderFor = (route: string): string | null => {
+    if (!prerendered.has(route)) {
+      const file = path.join(prerenderDir, prerenderFileFor(route));
+      prerendered.set(route, existsSync(file) ? readFileSync(file, "utf8") : null);
+    }
+    return prerendered.get(route) ?? null;
+  };
+
   app.get("/sitemap.xml", (_req, res) => {
     res.setHeader("Cache-Control", "public, max-age=3600");
     res.type("application/xml").send(sitemapXml());
@@ -206,7 +221,8 @@ if (clientDist) {
     try {
       // The page itself is always revalidated, so a deploy shows at once.
       res.setHeader("Cache-Control", "no-cache");
-      res.type("html").send(injectMeta(readBaseHtml(), req.path));
+      const fragment = res.statusCode === 200 && !isPrivatePath(req.path) ? prerenderFor(req.path) : null;
+      res.type("html").send(withPrerender(injectMeta(readBaseHtml(), req.path), fragment));
     } catch (error) {
       // A metadata problem must never take the site down. The raw shell is
       // safe to send for any route: it carries no canonical, og:url or

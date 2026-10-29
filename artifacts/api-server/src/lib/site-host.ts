@@ -30,3 +30,20 @@ export function staticCacheControl(relativePath: string): string {
   if (file.endsWith(".html")) return "no-cache";
   return "public, max-age=86400";
 }
+
+/** The file a route's prerendered HTML is written to (raj-kuthir/scripts/prerender.mjs). */
+export function prerenderFileFor(route: string): string {
+  return route === "/" ? "index.html" : `${route.replace(/^\/+/, "")}.html`;
+}
+
+const EMPTY_ROOT = '<div id="root"></div>';
+
+/**
+ * Puts a page's prerendered HTML inside the app's root element, so the words,
+ * headings, links and images are in the response itself. Without a fragment,
+ * or when the shell has no empty root to fill, the HTML is returned unchanged.
+ */
+export function withPrerender(html: string, fragment: string | null): string {
+  if (!fragment || !html.includes(EMPTY_ROOT)) return html;
+  return html.replace(EMPTY_ROOT, () => `<div id="root">${fragment}</div>`);
+}

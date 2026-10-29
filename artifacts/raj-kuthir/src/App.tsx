@@ -1733,11 +1733,15 @@ function Router() {
   );
 }
 
-function App() {
+/**
+ * `ssrPath` is only passed by the build-time prerender (entry-server.tsx),
+ * which renders each public page to HTML without a browser.
+ */
+function App({ ssrPath }: { ssrPath?: string } = {}) {
   return (
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
-        <WouterRouter base={basePath}>
+        <WouterRouter base={basePath} ssrPath={ssrPath}>
           <Router />
         </WouterRouter>
         <Toaster />

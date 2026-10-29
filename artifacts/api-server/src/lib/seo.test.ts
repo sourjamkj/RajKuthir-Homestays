@@ -1748,3 +1748,17 @@ test("llms.txt: every sitemap page, no private path, no price", () => {
   assert.doesNotMatch(txt, /\/admin|\/welcome|\/sign-in/);
   assert.doesNotMatch(txt, /₹\s*\d/, "prices belong to /rates, not llms.txt");
 });
+
+test("prerender · exactly the sitemap's pages are prerendered, and nothing private", () => {
+  const source = readFileSync(path.join(clientRoot, "src/lib/prerender-routes.ts"), "utf8");
+  const listed = [...source.matchAll(/^\s*'([^']+)',$/gm)].map((m) => m[1]!);
+  assert.deepEqual([...listed].sort(), [...PUBLIC_ROUTES].sort(), "prerender-routes.ts and seo.ts PAGES disagree");
+  for (const route of listed) assert.ok(!isPrivatePath(route), `${route} is private`);
+});
+
+test("prerender · the browser hydrates prerendered HTML instead of replacing it", () => {
+  const main = readFileSync(path.join(clientRoot, "src/main.tsx"), "utf8");
+  assert.match(main, /hydrateRoot\(container/);
+  assert.match(main, /createRoot\(container/);
+  assert.match(APP_TS, /withPrerender\(injectMeta\(/);
+});
