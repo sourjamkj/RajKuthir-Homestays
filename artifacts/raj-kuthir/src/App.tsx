@@ -1354,10 +1354,31 @@ function Home() {
           <div className="section-shell"><div className="flex flex-col justify-between gap-8 md:flex-row md:items-end"><div><p className="eyebrow mb-5 text-accent">Eat at your pace</p><h2 id="food-title" className="font-journal text-5xl leading-[.94] text-primary md:text-7xl">A kitchen<br /><em>with options.</em></h2></div><p className="max-w-[290px] text-sm leading-6 text-muted-foreground">The best meal plan is the one that leaves room for another cup of tea.</p></div>
             <div className="mt-14 grid gap-4 md:grid-cols-3">
               {[
-                { icon: Sparkles, title: 'Cafe Soi', text: 'Cafe Soi is inside the premises when you want a meal without leaving your little orbit.' },
+                { icon: Sparkles, title: 'Cafe Soi', text: 'Cafe Soi is inside the premises when you want a meal without leaving your little orbit.', href: `${basePath}/cafe-soi-shantiniketan` },
                 { icon: CookingPot, title: 'Make it yours', text: 'Basic cooking utensils, induction setup, microwave, refrigerator and a water filter are available.' },
                 { icon: HeartHandshake, title: 'Cooked with care', text: 'Ask the caretaker about the home-cooked meal option. Zomato is available too.' },
-              ].map(({ icon: Icon, title, text }, index) => <div key={title} className={`lift rounded-[1.4rem] p-7 ${index === 1 ? 'bg-primary text-primary-foreground' : 'border border-border bg-background'}`}><Icon size={24} className={index === 1 ? 'text-secondary' : 'text-accent'} strokeWidth={1.4} /><p className="mt-16 font-journal text-3xl">{title}</p><p className={`mt-4 text-sm leading-6 ${index === 1 ? 'text-primary-foreground/70' : 'text-muted-foreground'}`}>{text}</p></div>)}
+              ].map(({ icon: Icon, title, text, href }: { icon: typeof Sparkles; title: string; text: string; href?: string }, index) => {
+                const className = `lift block rounded-[1.4rem] p-7 ${index === 1 ? 'bg-primary text-primary-foreground' : 'border border-border bg-background'}`;
+                const body = (
+                  <>
+                    <Icon size={24} className={index === 1 ? 'text-secondary' : 'text-accent'} strokeWidth={1.4} />
+                    <p className="mt-16 font-journal text-3xl">{title}</p>
+                    <p className={`mt-4 text-sm leading-6 ${index === 1 ? 'text-primary-foreground/70' : 'text-muted-foreground'}`}>{text}</p>
+                    {href && (
+                      <p className="mt-5 inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-[.1em] text-primary underline decoration-accent decoration-2 underline-offset-4">
+                        See the full menu <ArrowUpRight size={14} />
+                      </p>
+                    )}
+                  </>
+                );
+                return href ? (
+                  <a key={title} href={href} className={`${className} transition-colors hover:border-primary`} data-testid="link-home-cafe">
+                    {body}
+                  </a>
+                ) : (
+                  <div key={title} className={className}>{body}</div>
+                );
+              })}
             </div>
           </div>
         </section>
