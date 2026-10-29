@@ -1,9 +1,7 @@
-import { existsSync, readFileSync } from "node:fs";
-import path from "node:path";
-import { fileURLToPath } from "node:url";
 import { PDFDocument, StandardFonts, rgb, type PDFFont, type PDFPage } from "pdf-lib";
 
 import { BUSINESS, GST_NOTE, money, prettyDate, type InvoiceContent } from "./invoice-rules.ts";
+import { INVOICE_LOGO_JPEG_BASE64 } from "./invoice-logo.ts";
 
 /**
  * Renders an invoice as an A4 PDF: the villa photo mark, the business, the
@@ -11,21 +9,15 @@ import { BUSINESS, GST_NOTE, money, prettyDate, type InvoiceContent } from "./in
  * only (Helvetica), so nothing to ship but the logo.
  */
 
-const here = path.dirname(fileURLToPath(import.meta.url));
-
-/** Same places the arrival pack is looked for: dev, bundled, and Railway's cwd. */
+/** The logo, checked to really be a JPEG before pdf-lib is asked to draw it. */
 function logoBytes(): Uint8Array | null {
-  const candidates = [
-    path.resolve(process.cwd(), "assets/invoice-logo.jpg"),
-    path.resolve(process.cwd(), "artifacts/api-server/assets/invoice-logo.jpg"),
-    path.resolve(here, "../../assets/invoice-logo.jpg"),
-    path.resolve(here, "../../../assets/invoice-logo.jpg"),
-    path.resolve(here, "../assets/invoice-logo.jpg"),
-  ];
-  for (const candidate of candidates) {
-    if (existsSync(candidate)) return readFileSync(candidate);
-  }
-  return null;
+  const bytes = Buffer.from(INVOICE_LOGO_JPEG_BASE64, "base64");
+  return isJpeg(bytes) ? new Uint8Array(bytes) : null;
+}
+
+/** A JPEG starts FF D8 FF; anything else makes pdf-lib throw "SOI not found". */
+export function isJpeg(bytes: Uint8Array): boolean {
+  return bytes.length > 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff;
 }
 
 const GREEN = rgb(0x2d / 255, 0x66 / 255, 0x58 / 255);
@@ -100,9 +92,14 @@ export async function renderInvoicePdf(
   const logo = logoBytes();
   let textX = left;
   if (logo) {
-    const image = await pdf.embedJpg(logo);
-    page.drawImage(image, { x: left, y: y - 58, width: 72, height: 72 });
-    textX = left + 88;
+    // The logo is decoration: if it cannot be drawn, the document still goes.
+    try {
+      const image = await pdf.embedJpg(logo);
+      page.drawImage(image, { x: left, y: y - 58, width: 72, height: 72 });
+      textX = left + 88;
+    } catch {
+      textX = left;
+    }
   }
   page.drawText(pdfSafe(BUSINESS.name), { x: textX, y: y - 4, size: 15, font: bold, color: GREEN });
   let headerY = y - 22;

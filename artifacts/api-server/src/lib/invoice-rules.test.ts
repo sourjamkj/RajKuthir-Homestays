@@ -160,3 +160,13 @@ test("PDFs never fail on names the standard fonts cannot draw", async () => {
     assert.equal(Buffer.from(bytes.slice(0, 5)).toString(), "%PDF-", guestName);
   }
 });
+
+test("the logo carried in the code is a real JPEG, and a bad one never fails the PDF", async () => {
+  const { isJpeg } = await import("./invoice-pdf.ts");
+  const { INVOICE_LOGO_JPEG_BASE64 } = await import("./invoice-logo.ts");
+  assert.ok(isJpeg(Buffer.from(INVOICE_LOGO_JPEG_BASE64, "base64")));
+  assert.ok(!isJpeg(new Uint8Array([0x89, 0x50, 0x4e, 0x47])));
+  const content = invoiceContent({ booking: booking(), number: "RK/2026-27/0004", issuedOn: "2026-11-20", email: null });
+  const bytes = await renderInvoicePdf(content, { kind: "confirmation" });
+  assert.equal(Buffer.from(bytes.slice(0, 5)).toString(), "%PDF-");
+});
