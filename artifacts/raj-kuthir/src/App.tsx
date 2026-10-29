@@ -97,6 +97,7 @@ import {
   breakdownOf,
   surchargePerNight,
   petCharge,
+  petChargeText,
   minimumStayFor,
 } from '@/lib/rates';
 import { Route, Switch, useLocation, Router as WouterRouter } from 'wouter';
@@ -357,7 +358,7 @@ function Home() {
   }, [ratePlan.data, form.checkIn, form.checkOut, nights]);
   const extrasPaise =
     surchargePerNight(ratePlan.data, breakdown) * nights +
-    petCharge(ratePlan.data, breakdown);
+    petCharge(ratePlan.data, breakdown, nights);
   const total = Math.round((stay.totalPaise + extrasPaise) / 100);
   const advance = Math.round(total * CONFIG.advanceShare);
   const balance = total - advance;
@@ -1009,8 +1010,7 @@ function Home() {
                       under {ratePlan.data.extras.childUnderAge}.
                     </li>
                     <li>
-                      Pets are {formatRupees(ratePlan.data.extras.petPaise)} for the
-                      stay, not per night.
+                      {petChargeText(ratePlan.data.extras, formatRupees)}
                     </li>
                   </ul>
                 )}

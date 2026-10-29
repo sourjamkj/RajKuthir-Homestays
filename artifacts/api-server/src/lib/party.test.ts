@@ -4,7 +4,9 @@ import test from "node:test";
 import {
   EXTRA_ADULT_PAISE,
   EXTRA_CHILD_PAISE,
-  PET_PAISE,
+  PET_NIGHTLY_PAISE,
+  PET_SHORT_STAY_PAISE,
+  chargesNote,
   RATE_CARD_MAX_GUESTS,
   breakdownOf,
   petCharge,
@@ -97,20 +99,43 @@ test("party · the surcharge lands on every night, not once", () => {
   );
 });
 
-test("party · a pet is charged once for the stay, however many nights", () => {
+test("party · a pet is ₹1,000 for one or two nights, ₹375 a night from three", () => {
   const breakdown = breakdownOf({ adults: 2, children: 0, pets: 1 });
 
-  assert.equal(petCharge(breakdown), PET_PAISE);
+  assert.equal(petCharge(breakdown, 1), PET_SHORT_STAY_PAISE);
+  assert.equal(petCharge(breakdown, 2), PET_SHORT_STAY_PAISE);
+  assert.equal(petCharge(breakdown, 3), 3 * PET_NIGHTLY_PAISE);
+  assert.equal(petCharge(breakdown, 7), 7 * PET_NIGHTLY_PAISE);
+  assert.equal(PET_SHORT_STAY_PAISE, 100_000);
+  assert.equal(PET_NIGHTLY_PAISE, 37_500);
 
   const three = stayTotalPaise({ nights: NIGHTS, breakdown, nightlyRate });
   const one = stayTotalPaise({ nights: ["2026-10-02"], breakdown, nightlyRate });
+  assert.equal(three - one, 2 * 290_000 + 3 * PET_NIGHTLY_PAISE - PET_SHORT_STAY_PAISE);
+});
 
-  // Three nights costs two more nights of room, and not a rupee more of pet.
-  assert.equal(three - one, 2 * 290_000);
+test("party · the pet charge never drops as the stay gets longer", () => {
+  const breakdown = breakdownOf({ adults: 2, children: 0, pets: 1 });
+  for (let nights = 1; nights < 14; nights += 1) {
+    assert.ok(petCharge(breakdown, nights + 1) >= petCharge(breakdown, nights), `${nights} → ${nights + 1}`);
+  }
 });
 
 test("party · two pets are two charges", () => {
-  assert.equal(petCharge(breakdownOf({ adults: 2, children: 0, pets: 2 })), 2 * PET_PAISE);
+  const two = breakdownOf({ adults: 2, children: 0, pets: 2 });
+  assert.equal(petCharge(two, 2), 2 * PET_SHORT_STAY_PAISE);
+  assert.equal(petCharge(two, 4), 2 * 4 * PET_NIGHTLY_PAISE);
+});
+
+test("party · no pets or no nights, no pet charge", () => {
+  assert.equal(petCharge(breakdownOf({ adults: 2, children: 0, pets: 0 }), 3), 0);
+  assert.equal(petCharge(breakdownOf({ adults: 2, children: 0, pets: 1 }), 0), 0);
+});
+
+test("party · the words say both tiers", () => {
+  const note = chargesNote().join(" ");
+  assert.match(note, /₹1,000 each for a stay of one or two nights/);
+  assert.match(note, /₹375 each per night/);
 });
 
 test("party · a pet does not count as a head", () => {
@@ -143,7 +168,7 @@ test("party · missing and nonsense counts are treated as none, never negative",
     const breakdown = breakdownOf(party);
     assert.ok(breakdown.heads >= 0);
     assert.ok(surchargePerNight(breakdown) >= 0);
-    assert.ok(petCharge(breakdown) >= 0);
+    assert.ok(petCharge(breakdown, 3) >= 0);
   }
 
   // 2.7 adults is two adults, not three — never round a guest up into a charge.

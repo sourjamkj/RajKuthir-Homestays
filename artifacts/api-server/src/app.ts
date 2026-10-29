@@ -8,9 +8,11 @@ import { existsSync, readFileSync } from "node:fs";
 import router from "./routes";
 import waWebhookRouter from "./routes/wa-webhook";
 import { logger } from "./lib/logger";
+import { staticCacheControl, wwwRedirectTarget } from "./lib/site-host";
 import { injectMeta, isKnownPath, isPrivatePath, llmsTxt, sitemapXml } from "./lib/seo";
 
 const app: Express = express();
+
 
 // Railway (and most PaaS hosts) terminate TLS at a proxy. Without this,
 // req.ip is the proxy's address and req.secure is always false.
@@ -20,6 +22,17 @@ app.set("trust proxy", 1);
 // tells an attacker which stack to try exploits against and tells a guest
 // nothing at all.
 app.disable("x-powered-by");
+
+// One address for the site: www answers with a permanent redirect to the
+// bare domain (see lib/site-host.ts).
+app.use((req, res, next) => {
+  const target = wwwRedirectTarget(req.headers.host, req.originalUrl);
+  if (target) {
+    res.redirect(301, target);
+    return;
+  }
+  next();
+});
 
 app.use(
   pinoHttp({
@@ -132,7 +145,17 @@ if (clientDist) {
   // JSON-LD and no analytics tag while every other route was injected
   // correctly. Turning the directory index off makes "/" fall through like
   // everything else. seo.test.ts asserts this option is still set.
-  app.use(express.static(clientDist, { index: false }));
+  app.use(
+    express.static(clientDist, {
+      index: false,
+      // Vite names everything under /assets/ by its content hash, so a changed
+      // file is a new URL: those can be cached for a year. Other files in the
+      // public folder (photos, icons) keep their names when edited, so a day.
+      setHeaders(res, filePath) {
+        res.setHeader("Cache-Control", staticCacheControl(path.relative(clientDist, filePath)));
+      },
+    }),
+  );
 
   /**
    * The built index.html, read once. Railway restarts the process on every
@@ -181,6 +204,8 @@ if (clientDist) {
     }
 
     try {
+      // The page itself is always revalidated, so a deploy shows at once.
+      res.setHeader("Cache-Control", "no-cache");
       res.type("html").send(injectMeta(readBaseHtml(), req.path));
     } catch (error) {
       // A metadata problem must never take the site down. The raw shell is

@@ -7,7 +7,7 @@ import {
   quoteForEnquiry,
   type NightlyRate,
 } from "./enquiry-quote.ts";
-import { EXTRA_CHILD_PAISE, PET_PAISE } from "./party.ts";
+import { EXTRA_CHILD_PAISE, PET_NIGHTLY_PAISE, PET_SHORT_STAY_PAISE } from "./party.ts";
 
 /**
  * These numbers end up in a WhatsApp message asking a stranger to send money.
@@ -59,13 +59,19 @@ test("quote · the sixth head adds a surcharge to every night", () => {
   assert.equal(six.totalPaise, six.roomPaise + 3 * EXTRA_CHILD_PAISE);
 });
 
-test("quote · a pet adds one charge to the stay, not one per night", () => {
+test("quote · a pet on a three-night stay is ₹375 a night", () => {
   const withPet = quoteForEnquiry({ ...base, pets: 1 }, nightlyRate);
   const without = quoteForEnquiry(base, nightlyRate);
 
   assert.ok(withPet.ok && without.ok);
-  assert.equal(withPet.petPaise, PET_PAISE);
-  assert.equal(withPet.totalPaise - without.totalPaise, PET_PAISE);
+  assert.equal(withPet.petPaise, 3 * PET_NIGHTLY_PAISE);
+  assert.equal(withPet.totalPaise - without.totalPaise, 3 * PET_NIGHTLY_PAISE);
+});
+
+test("quote · a pet on a two-night stay is ₹1,000 for the stay", () => {
+  const withPet = quoteForEnquiry({ ...base, checkOut: "2026-10-04", pets: 1 }, nightlyRate);
+  assert.ok(withPet.ok);
+  assert.equal(withPet.petPaise, PET_SHORT_STAY_PAISE);
 });
 
 test("quote · the advance is half, and the balance is the rest exactly", () => {

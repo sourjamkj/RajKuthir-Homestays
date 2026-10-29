@@ -4,7 +4,9 @@ import {
   CHILD_UNDER_AGE,
   EXTRA_ADULT_PAISE,
   EXTRA_CHILD_PAISE,
-  PET_PAISE,
+  PET_NIGHTLY_FROM_NIGHTS,
+  PET_NIGHTLY_PAISE,
+  PET_SHORT_STAY_PAISE,
 } from "../lib/party";
 import { requireAdmin } from "../lib/admin-auth";
 import {
@@ -95,7 +97,10 @@ router.get("/rates", async (_req, res) => {
       childUnderAge: CHILD_UNDER_AGE,
       extraAdultPaise: EXTRA_ADULT_PAISE,
       extraChildPaise: EXTRA_CHILD_PAISE,
-      petPaise: PET_PAISE,
+      /** Per pet for a stay of one or two nights (kept under its old name for cached pages). */
+      petPaise: PET_SHORT_STAY_PAISE,
+      petNightlyPaise: PET_NIGHTLY_PAISE,
+      petNightlyFromNights: PET_NIGHTLY_FROM_NIGHTS,
     },
   });
 });

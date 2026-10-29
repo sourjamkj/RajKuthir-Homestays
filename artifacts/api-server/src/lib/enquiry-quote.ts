@@ -46,7 +46,7 @@ export type Quote = {
   roomPaise: number;
   /** Extra heads, across the whole stay. */
   extraGuestPaise: number;
-  /** Pets, charged once. */
+  /** Pets: ₹1,000 each for one or two nights, ₹375 each per night from three. */
   petPaise: number;
   totalPaise: number;
   advancePaise: number;
@@ -162,7 +162,7 @@ export function quoteForEnquiry(
   }
 
   const totalPaise =
-    roomPaise + surchargePerNight(breakdown) * nights.length + petCharge(breakdown);
+    roomPaise + surchargePerNight(breakdown) * nights.length + petCharge(breakdown, nights.length);
   const advancePaise = advanceOf(totalPaise, rules.advancePercent ?? ADVANCE_PERCENT);
 
   return {
@@ -174,7 +174,7 @@ export function quoteForEnquiry(
     breakdown,
     roomPaise,
     extraGuestPaise: surchargePerNight(breakdown) * nights.length,
-    petPaise: petCharge(breakdown),
+    petPaise: petCharge(breakdown, nights.length),
     totalPaise,
     advancePaise,
     balancePaise: totalPaise - advancePaise,

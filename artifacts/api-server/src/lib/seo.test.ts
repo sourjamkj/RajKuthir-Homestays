@@ -281,7 +281,7 @@ test("point 2 · every sitemap entry is loc and lastmod, and nothing else", () =
 });
 
 test("point 2 · lastmod stays hand-maintained, with the homepage at its content date", () => {
-  assert.equal(PAGES["/"]!.lastmod, "2026-09-14");
+  assert.equal(PAGES["/"]!.lastmod, "2026-10-29");
   // Not today's date on every page: if every lastmod were identical the field
   // would read as generated, which is how Google learns to ignore it.
   const dates = new Set(
@@ -478,10 +478,10 @@ test("point 4 · the address is exactly the one the owner verified", () => {
       lodging.address,
       {
         "@type": "PostalAddress",
-        streetAddress: "Dopati 148, Bolpur, Potro Bunglow, Sobuj, Bandh Nabagram",
+        streetAddress: "Sobuj, Dopati 148, Potro Bunglow, Bandh Nabagram",
         addressLocality: "Bolpur",
         addressRegion: "West Bengal",
-        postalCode: "731235",
+        postalCode: "731204",
         addressCountry: "IN",
       },
       `${route}: address drifted from the verified one`,
@@ -1355,7 +1355,8 @@ test("pet faq · the pet charge is described from the rate plan, never priced on
   assert.ok(!/anything quoted here would be out of date/.test(answer));
   assert.match(answer, /current rate plan/);
   assert.match(answer, /rates page/);
-  assert.match(answer, /not per night/);
+  assert.match(answer, /one or two nights/);
+  assert.match(answer, /from three nights it is charged per night/);
 
   // The only rupee figure is the published damage minimum, not a pet price.
   const rupees = [...answer.matchAll(/₹\s?\d(?:[\d,]*\d)?/g)].map((m) => m[0]);

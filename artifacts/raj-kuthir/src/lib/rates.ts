@@ -45,8 +45,11 @@ export type RateExtras = {
   childUnderAge: number;
   extraAdultPaise: number;
   extraChildPaise: number;
-  /** Per pet, once for the stay — not per night. */
+  /** Per pet for a stay of one or two nights, once for the stay. */
   petPaise: number;
+  /** Per pet per night once the stay reaches petNightlyFromNights. */
+  petNightlyPaise?: number;
+  petNightlyFromNights?: number;
 };
 
 /** Mirrors the server's pricing.ts Ladder. */
@@ -131,12 +134,23 @@ export function surchargePerNight(
   );
 }
 
-/** Pets, once for the stay. */
+/** Pets: a flat charge each for one or two nights; per night each from three. Mirrors party.ts. */
 export function petCharge(
   plan: RatePlan | undefined,
   breakdown: PartyBreakdown,
+  nights: number,
 ): number {
-  return breakdown.pets * (plan?.extras?.petPaise ?? 0);
+  const extras = plan?.extras;
+  if (!extras || breakdown.pets <= 0 || nights <= 0) return 0;
+  const from = extras.petNightlyFromNights ?? Infinity;
+  const perPet = nights >= from && extras.petNightlyPaise ? extras.petNightlyPaise * nights : extras.petPaise;
+  return breakdown.pets * perPet;
+}
+
+/** The pet charge in words, from the plan — the same sentence as the server's chargesNote. */
+export function petChargeText(extras: RateExtras, format: (paise: number) => string): string {
+  if (!extras.petNightlyPaise || !extras.petNightlyFromNights) return `Pets are ${format(extras.petPaise)} each for the stay.`;
+  return `Pets are ${format(extras.petPaise)} each for a stay of one or two nights; from ${extras.petNightlyFromNights} nights, ${format(extras.petNightlyPaise)} each per night.`;
 }
 
 /** What one night costs this party: the rate card plus any extra heads. */

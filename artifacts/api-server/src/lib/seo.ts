@@ -162,7 +162,7 @@ const PET_FRIENDLY_FAQ = [
   },
   {
     q: 'Is there an extra charge for bringing a pet?',
-    a: 'Yes — a one-off charge per pet for the whole stay, not per night. The amount comes from our current rate plan: it is shown on the rates page and in the booking section of the homepage, and the enquiry form adds it to your estimate when you enter your pets. Separately, pet damage or soiling is charged from ₹1,000, and that is on the house rules page along with everything else.',
+    a: 'Yes, per pet, and it depends on how long you stay: for one or two nights it is a single charge for the whole stay; from three nights it is charged per night. The amounts come from our current rate plan: it is shown on the rates page and in the booking section of the homepage, and the enquiry form adds it to your estimate when you enter your pets. Separately, pet damage or soiling is charged from ₹1,000, and that is on the house rules page along with everything else.',
   },
   {
     q: 'Can we leave our dog in the villa while we go out?',
@@ -216,7 +216,7 @@ export const PAGES: Record<string, PageMeta> = {
     title: "Private 2-Bedroom Villa in Shantiniketan | Raj Kuthir",
     description:
       "An entire 2-bedroom villa in Bolpur, Shantiniketan \u2014 not a room in a homestay. Two AC bedrooms, private garden, parking, pet-friendly. Book direct.",
-    lastmod: "2026-09-14",
+    lastmod: "2026-10-29",
     // The hero photograph is the homepage's LCP. Keep in step with IMG.villaNight
     // in App.tsx — a test asserts the two name the same file.
     preloadImage: { href: "/villa-night.jpg", type: "image/jpeg" },
@@ -247,7 +247,7 @@ export const PAGES: Record<string, PageMeta> = {
       height: 1024,
       alt: "Raj Kuthir Homestays, Sobuj Potro, seen from the garden in daylight",
     },
-    lastmod: "2026-09-14",
+    lastmod: "2026-10-29",
     faq: PET_FRIENDLY_FAQ,
     breadcrumb: "Staying with a pet",
     intent: {
@@ -377,7 +377,7 @@ export const PAGES: Record<string, PageMeta> = {
     title: "Shantiniketan Homestay Rates & Tariff | Raj Kuthir",
     description:
       "The full tariff for Sobuj Potro, a private two-bedroom villa in Bolpur, Shantiniketan: priced by number of guests, with extra-guest and pet charges in full.",
-    lastmod: "2026-09-17",
+    lastmod: "2026-10-29",
     breadcrumb: "Rates",
     intent: {
       primary: "Shantiniketan homestay price",
@@ -573,7 +573,9 @@ export const VERIFIED_AMENITIES = [
 ] as const;
 
 /**
- * The postal address, as the owner verified it.
+ * The postal address, exactly as the Google Business Profile shows it — the
+ * owner's choice for every listing (website, OTAs), so name, address and PIN
+ * match everywhere Google looks.
  *
  * The Plus Code (PM88+R7 Bandh Nabagram) is deliberately not in here. It is a
  * location code, not a street address, and pushing it into streetAddress makes
@@ -581,10 +583,10 @@ export const VERIFIED_AMENITIES = [
  */
 export const VERIFIED_ADDRESS = {
   "@type": "PostalAddress",
-  streetAddress: "Dopati 148, Bolpur, Potro Bunglow, Sobuj, Bandh Nabagram",
+  streetAddress: "Sobuj, Dopati 148, Potro Bunglow, Bandh Nabagram",
   addressLocality: "Bolpur",
   addressRegion: "West Bengal",
-  postalCode: "731235",
+  postalCode: "731204",
   addressCountry: "IN",
 } as const;
 

@@ -10,7 +10,7 @@
 
 export const BUSINESS = {
   name: "Raj Kuthir Homestays – Sobuj Potro",
-  address: ["Dopati 148, Potro Bunglow, Sobuj, Bandh Nabagram", "Bolpur, Birbhum, West Bengal 731235, India"],
+  address: ["Sobuj, Dopati 148, Potro Bunglow, Bandh Nabagram", "Bolpur, West Bengal 731204, India"],
   phone: "+91 62903 99165",
   website: "rajkuthirhomestays.casa",
 } as const;
