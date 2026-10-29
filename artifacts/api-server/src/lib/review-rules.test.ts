@@ -60,7 +60,9 @@ test("request text: same words for everyone — never conditional on enjoying it
     assert.match(text, /https:\/\/g\.page\/r\/CR9H9DboJM75EBM\/review/);
     assert.doesNotMatch(text, /\bif you (enjoyed|liked|loved|were happy)/i);
     assert.doesNotMatch(text, /treated you kindly/i);
-    assert.match(text, /Warm Regards, Sourja Mukherjee, Raj Kuthir Homestays – Sobuj Potro$/);
+    assert.match(text, /\n\nWarm Regards,\nSourja Mukherjee\nRaj Kuthir Homestays – Sobuj Potro$/);
+    assert.match(text, /\nhttps:\/\/g\.page\/r\/CR9H9DboJM75EBM\/review\n/, "the link sits on its own line");
+    assert.doesNotMatch(text, /\n{3,}/);
   }
 });
 

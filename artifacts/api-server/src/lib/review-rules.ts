@@ -69,32 +69,33 @@ export function firstName(full: string | null | undefined): string {
  * guest's first name and {{2}} the review link. The same message goes to
  * every guest: nothing here asks only happy guests to review.
  */
+export const REVIEW_SIGN_OFF = "Warm Regards,\nSourja Mukherjee\nRaj Kuthir Homestays – Sobuj Potro";
+
 export function reviewRequestText(variant: ReviewVariant, guest: string, url = LEAVE_REVIEW_URL): string {
+  // Short paragraphs with blank lines between, the link on a line of its own,
+  // and the sign-off on three lines — how it reads in a WhatsApp bubble.
+  const lines = (...paragraphs: string[]) => [...paragraphs, REVIEW_SIGN_OFF].join("\n\n");
   switch (variant) {
     case "general":
-      return (
-        `Hi ${guest}, thank you for staying with us at Raj Kuthir Homestays – Sobuj Potro. ` +
-        `We hope you reached home safely and enjoyed your time in Santiniketan. ` +
-        `Google reviews help other travellers find our private 2-bedroom villa. ` +
-        `If you have a minute, we'd really appreciate a few words about your stay: ${url} ` +
-        `Even a line about what you liked most helps future guests know what to expect. ` +
-        `Warm Regards, Sourja Mukherjee, Raj Kuthir Homestays – Sobuj Potro`
+      return lines(
+        `Hi ${guest},`,
+        `Thank you for staying with us at Raj Kuthir Homestays – Sobuj Potro. We hope you reached home safely and enjoyed your time in Santiniketan.`,
+        `Google reviews help other travellers find our private 2-bedroom villa. If you have a minute, we'd really appreciate a few words about your stay:\n${url}`,
+        `Even a line about what you liked most helps future guests know what to expect.`,
       );
     case "pet":
-      return (
-        `Hi ${guest}, it was a pleasure hosting you and your pet at Raj Kuthir Homestays – Sobuj Potro. ` +
-        `We hope the drive home was smooth. ` +
-        `Finding a genuinely pet-friendly stay in Bolpur is hard for many pet parents, ` +
-        `so your review would help them a lot: ${url} ` +
-        `Feel free to mention how your pet took to the garden. ` +
-        `Warm Regards, Sourja Mukherjee, Raj Kuthir Homestays – Sobuj Potro`
+      return lines(
+        `Hi ${guest},`,
+        `It was a pleasure hosting you and your pet at Raj Kuthir Homestays – Sobuj Potro. We hope the drive home was smooth.`,
+        `Finding a genuinely pet-friendly stay in Bolpur is hard for many pet parents, so your review would help them a lot:\n${url}`,
+        `Feel free to mention how your pet took to the garden.`,
       );
     case "short":
-      return (
-        `Namaskar ${guest}, thank you for choosing Raj Kuthir Homestays – Sobuj Potro for your Santiniketan getaway. ` +
-        `Could you share a quick Google review of your stay? ${url} ` +
-        `Your favourite part, in a line, helps other travellers find us on Google Maps. ` +
-        `Warm Regards, Sourja Mukherjee, Raj Kuthir Homestays – Sobuj Potro`
+      return lines(
+        `Namaskar ${guest},`,
+        `Thank you for choosing Raj Kuthir Homestays – Sobuj Potro for your Santiniketan getaway.`,
+        `Could you share a quick Google review of your stay?\n${url}`,
+        `Your favourite part, in a line, helps other travellers find us on Google Maps.`,
       );
   }
 }

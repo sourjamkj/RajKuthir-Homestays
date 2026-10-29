@@ -1786,33 +1786,35 @@ function canAskForReview(stay: GuestStay): boolean {
 function buildReviewMessage(stay: GuestStay): string {
   const first = (stay.guestName ?? '').trim().split(/\s+/)[0] || 'there';
   const url = CONFIG.leaveReviewUrl;
-  const sign = 'Warm Regards, Sourja Mukherjee, Raj Kuthir Homestays – Sobuj Potro';
+  const lines = (...paragraphs: string[]) =>
+    [...paragraphs, 'Warm Regards,\nSourja Mukherjee\nRaj Kuthir Homestays – Sobuj Potro'].join('\n\n');
   if (stay.checkOut > todayInIndia()) {
-    return (
-      `Hello ${first}, we hope you are enjoying your stay at Sobuj Potro. Whenever you have a minute, ` +
-      `a short Google review would mean a lot and helps other travellers find us: ${url}\n\n${sign}`
+    return lines(
+      `Hello ${first},`,
+      `We hope you are enjoying your stay at Sobuj Potro. Whenever you have a minute, a short Google review would mean a lot and helps other travellers find us:\n${url}`,
     );
   }
   if ((stay.pets ?? 0) > 0) {
-    return (
-      `Hi ${first}, it was a pleasure hosting you and your pet at Raj Kuthir Homestays – Sobuj Potro. ` +
-      `We hope the drive home was smooth. Finding a genuinely pet-friendly stay in Bolpur is hard for many pet parents, ` +
-      `so your review would help them a lot: ${url} Feel free to mention how your pet took to the garden. ${sign}`
+    return lines(
+      `Hi ${first},`,
+      `It was a pleasure hosting you and your pet at Raj Kuthir Homestays – Sobuj Potro. We hope the drive home was smooth.`,
+      `Finding a genuinely pet-friendly stay in Bolpur is hard for many pet parents, so your review would help them a lot:\n${url}`,
+      `Feel free to mention how your pet took to the garden.`,
     );
   }
   if (nightsBetween(stay.checkIn, stay.checkOut) === 1) {
-    return (
-      `Namaskar ${first}, thank you for choosing Raj Kuthir Homestays – Sobuj Potro for your Santiniketan getaway. ` +
-      `Could you share a quick Google review of your stay? ${url} ` +
-      `Your favourite part, in a line, helps other travellers find us on Google Maps. ${sign}`
+    return lines(
+      `Namaskar ${first},`,
+      `Thank you for choosing Raj Kuthir Homestays – Sobuj Potro for your Santiniketan getaway.`,
+      `Could you share a quick Google review of your stay?\n${url}`,
+      `Your favourite part, in a line, helps other travellers find us on Google Maps.`,
     );
   }
-  return (
-    `Hi ${first}, thank you for staying with us at Raj Kuthir Homestays – Sobuj Potro. ` +
-    `We hope you reached home safely and enjoyed your time in Santiniketan. ` +
-    `Google reviews help other travellers find our private 2-bedroom villa. ` +
-    `If you have a minute, we'd really appreciate a few words about your stay: ${url} ` +
-    `Even a line about what you liked most helps future guests know what to expect. ${sign}`
+  return lines(
+    `Hi ${first},`,
+    `Thank you for staying with us at Raj Kuthir Homestays – Sobuj Potro. We hope you reached home safely and enjoyed your time in Santiniketan.`,
+    `Google reviews help other travellers find our private 2-bedroom villa. If you have a minute, we'd really appreciate a few words about your stay:\n${url}`,
+    `Even a line about what you liked most helps future guests know what to expect.`,
   );
 }
 
