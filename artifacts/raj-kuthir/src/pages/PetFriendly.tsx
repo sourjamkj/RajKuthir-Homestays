@@ -378,7 +378,7 @@ export default function PetFriendly() {
                 several ways round it.
               </p>
               <div className="mt-8 space-y-4 text-sm leading-6 text-muted-foreground">
-                <p><strong className="text-primary">Cafe Soi is on the premises.</strong> You are not going anywhere to eat.</p>
+                <p><strong className="text-primary"><a href={`${basePath}/cafe-soi-shantiniketan`} className="underline decoration-accent decoration-2 underline-offset-4" data-testid="link-pet-cafe">Cafe Soi</a> is on the premises.</strong> You are not going anywhere to eat.</p>
                 <p><strong className="text-primary">The villa has a kitchen for simple meals</strong> &mdash; refrigerator, microwave, water filter and basic utensils.</p>
                 <p><strong className="text-primary">Home-cooked meals can be arranged</strong> with the designated caretaker. Talk to them about it when you arrive, or mention it in your enquiry.</p>
                 <p><strong className="text-primary">Zomato delivers to the area</strong>, subject to the usual delivery conditions.</p>

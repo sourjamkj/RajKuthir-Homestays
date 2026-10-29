@@ -83,6 +83,7 @@ import WeekendFromKolkata from '@/pages/WeekendFromKolkata';
 import TwoDayItinerary from '@/pages/TwoDayItinerary';
 import PoushMelaStay from '@/pages/PoushMelaStay';
 import BasantaUtsavStay from '@/pages/BasantaUtsavStay';
+import CafeSoi from '@/pages/CafeSoi';
 import Rates from '@/pages/Rates';
 import Welcome from '@/pages/Welcome';
 import AdminGuestInfo from '@/pages/AdminGuestInfo';
@@ -1491,6 +1492,7 @@ function Home() {
               <a href={`${basePath}/homestay-near-sonajhuri-haat`} className="transition-colors hover:text-[#e4c9a4]" data-testid="link-footer-sonajhuri">Near Sonajhuri Haat</a>
               <a href={`${basePath}/poush-mela-stay-shantiniketan`} className="transition-colors hover:text-[#e4c9a4]" data-testid="link-footer-poush-mela">Poush Mela stay</a>
               <a href={`${basePath}/basanta-utsav-stay-shantiniketan`} className="transition-colors hover:text-[#e4c9a4]" data-testid="link-footer-basanta-utsav">Basanta Utsav stay</a>
+              <a href={`${basePath}/cafe-soi-shantiniketan`} className="transition-colors hover:text-[#e4c9a4]" data-testid="link-footer-cafe">Cafe Soi menu</a>
               <a href={`${basePath}/gallery`} className="transition-colors hover:text-[#e4c9a4]" data-testid="link-footer-gallery">Photos</a>
               <a href={`${basePath}/pet-friendly-homestay-shantiniketan`} className="transition-colors hover:text-[#e4c9a4]" data-testid="link-footer-pet">Staying with a pet</a>
               <a href={`${basePath}/rates`} className="transition-colors hover:text-[#e4c9a4]" data-testid="link-footer-rates">Rates</a>
@@ -1714,6 +1716,8 @@ function Router() {
             rate plan's peak periods. */}
         <Route path="/poush-mela-stay-shantiniketan" component={PoushMelaStay} />
         <Route path="/basanta-utsav-stay-shantiniketan" component={BasantaUtsavStay} />
+        {/* The café on the grounds, open to everyone; menu from content/cafe-menu.ts. */}
+        <Route path="/cafe-soi-shantiniketan" component={CafeSoi} />
         {/* Public rate card, read live from /api/rates. */}
         <Route path="/rates" component={Rates} />
         {/* Guest arrival pack, unlocked with a booking reference. */}

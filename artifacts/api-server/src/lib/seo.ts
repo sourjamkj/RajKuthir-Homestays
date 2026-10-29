@@ -400,6 +400,21 @@ export const PAGES: Record<string, PageMeta> = {
       secondary: ["Basanta Utsav homestay Bolpur", "where to stay for Dol in Santiniketan"],
     },
   },
+  /**
+   * Cafe Soi, on the grounds and open to everyone. Owns the café search
+   * ("cafe in Shantiniketan", "Cafe Soi menu"), which no stay page answers.
+   */
+  "/cafe-soi-shantiniketan": {
+    title: "Cafe Soi, Shantiniketan — Menu & Prices | Raj Kuthir",
+    description:
+      "The full Cafe Soi menu with prices: Bengali home cooking, breakfast combos, tea and snacks in Bolpur, Santiniketan. Open to everyone; plus 5% GST.",
+    lastmod: "2026-10-29",
+    breadcrumb: "Cafe Soi",
+    intent: {
+      primary: "Cafe Soi Shantiniketan menu",
+      secondary: ["cafe in Shantiniketan", "Bengali food in Bolpur", "restaurant near Sonajhuri Santiniketan"],
+    },
+  },
   "/rates": {
     title: "Shantiniketan Homestay Rates & Tariff | Raj Kuthir",
     description:
@@ -490,6 +505,7 @@ const CLIENT_ROUTES = new Set([
   "/",
   "/poush-mela-stay-shantiniketan",
   "/basanta-utsav-stay-shantiniketan",
+  "/cafe-soi-shantiniketan",
   "/gallery",
   "/our-story",
   "/places-to-visit-in-shantiniketan",

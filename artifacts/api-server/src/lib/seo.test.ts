@@ -252,6 +252,7 @@ test("point 2 · the sitemap lists exactly the public, indexable pages", () => {
   assert.deepEqual(locs.sort(), [
     `${SITE_ORIGIN}/`,
     `${SITE_ORIGIN}/basanta-utsav-stay-shantiniketan`,
+    `${SITE_ORIGIN}/cafe-soi-shantiniketan`,
     `${SITE_ORIGIN}/gallery`,
     `${SITE_ORIGIN}/homestay-near-sonajhuri-haat`,
     `${SITE_ORIGIN}/homestay-near-visva-bharati`,
@@ -1098,6 +1099,7 @@ const RENDERED_BY: Record<string, string | string[]> = {
   "/rates": "src/pages/Rates.tsx",
   "/poush-mela-stay-shantiniketan": ["src/pages/PoushMelaStay.tsx", "src/components/FestivalStay.tsx"],
   "/basanta-utsav-stay-shantiniketan": ["src/pages/BasantaUtsavStay.tsx", "src/components/FestivalStay.tsx"],
+  "/cafe-soi-shantiniketan": "src/pages/CafeSoi.tsx",
 };
 
 const sourceOf = (route: string) =>

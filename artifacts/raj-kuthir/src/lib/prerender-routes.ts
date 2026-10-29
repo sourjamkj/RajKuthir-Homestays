@@ -17,4 +17,5 @@ export const PRERENDER_ROUTES = [
   '/rates',
   '/poush-mela-stay-shantiniketan',
   '/basanta-utsav-stay-shantiniketan',
+  '/cafe-soi-shantiniketan',
 ] as const;

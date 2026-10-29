@@ -111,7 +111,7 @@ export default function TwoDayItinerary() {
               <strong className="font-bold text-primary">Late afternoon &mdash; the Kopai.</strong> About {kopai} away and in the same direction as the haat, so it costs almost nothing to add. This is the &lsquo;amader chhoto nodi&rsquo; of the poem.
             </p>
             <p className="mt-7 max-w-[640px] text-[15px] leading-7 text-muted-foreground md:text-[17px]">
-              <strong className="font-bold text-primary">Evening &mdash; back at the house.</strong> Cafe Soi is on the premises. The villa has a refrigerator, microwave, water filter and an induction setup with basic utensils; home-cooked food can be arranged through the caretaker, and Zomato delivers to the area. Nobody has to go out again.
+              <strong className="font-bold text-primary">Evening &mdash; back at the house.</strong> <a href={`${basePath}/cafe-soi-shantiniketan`} className="underline decoration-accent decoration-2 underline-offset-4" data-testid="link-itinerary-cafe">Cafe Soi</a> is on the premises. The villa has a refrigerator, microwave, water filter and an induction setup with basic utensils; home-cooked food can be arranged through the caretaker, and Zomato delivers to the area. Nobody has to go out again.
             </p>
             <p className="mt-7 max-w-[640px] border-l-2 border-accent/40 pl-5 text-sm leading-6 text-muted-foreground">
               If your first day is not a Saturday or Sunday, the haat may not be running. Swap day one and day two rather than turning up hopefully &mdash; the campus does not keep market hours.
