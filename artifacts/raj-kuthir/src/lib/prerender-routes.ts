@@ -15,4 +15,6 @@ export const PRERENDER_ROUTES = [
   '/shantiniketan-2-day-itinerary',
   '/house-rules',
   '/rates',
+  '/poush-mela-stay-shantiniketan',
+  '/basanta-utsav-stay-shantiniketan',
 ] as const;

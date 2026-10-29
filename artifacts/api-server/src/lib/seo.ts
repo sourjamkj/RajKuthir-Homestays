@@ -314,7 +314,7 @@ export const PAGES: Record<string, PageMeta> = {
     title: "Homestay near Sonajhuri Haat, Shantiniketan | Raj Kuthir",
     description:
       "A private two-bedroom villa in Bolpur, a short ride from Sonajhuri Khoai Haat. Two AC bedrooms, garden, parking, pet-friendly. Enquire direct.",
-    lastmod: "2026-09-18",
+    lastmod: "2026-10-29",
     breadcrumb: "Near Sonajhuri Haat",
     intent: {
       primary: "homestay near Sonajhuri Haat",
@@ -373,6 +373,33 @@ export const PAGES: Record<string, PageMeta> = {
    * names a figure: a price in a meta description would be a second copy of
    * the rate plan, and it would be the one nobody remembers to change.
    */
+  /**
+   * Festival stays. Each owns one search — somewhere to stay for that
+   * festival — and reads its dates, minimum stay and price from the live rate
+   * plan's peak period rather than stating them in copy.
+   */
+  "/poush-mela-stay-shantiniketan": {
+    title: "Stay for Poush Mela in Shantiniketan | Raj Kuthir",
+    description:
+      "A private two-bedroom villa in Bolpur for Poush Mela in Santiniketan: this year's peak dates, two-night minimum and live rates. Garden, parking. Book direct.",
+    lastmod: "2026-10-29",
+    breadcrumb: "Poush Mela stay",
+    intent: {
+      primary: "stay for Poush Mela Shantiniketan",
+      secondary: ["Poush Mela homestay Bolpur", "where to stay for Poush Mela Santiniketan"],
+    },
+  },
+  "/basanta-utsav-stay-shantiniketan": {
+    title: "Stay for Basanta Utsav in Shantiniketan | Raj Kuthir",
+    description:
+      "A private two-bedroom villa in Bolpur for Basanta Utsav and Dol in Santiniketan: peak dates, two-night minimum, live rates, and what to check first.",
+    lastmod: "2026-10-29",
+    breadcrumb: "Basanta Utsav stay",
+    intent: {
+      primary: "stay for Basanta Utsav Shantiniketan",
+      secondary: ["Basanta Utsav homestay Bolpur", "where to stay for Dol in Santiniketan"],
+    },
+  },
   "/rates": {
     title: "Shantiniketan Homestay Rates & Tariff | Raj Kuthir",
     description:
@@ -461,6 +488,8 @@ const PRIVATE_PREFIXES = [
  */
 const CLIENT_ROUTES = new Set([
   "/",
+  "/poush-mela-stay-shantiniketan",
+  "/basanta-utsav-stay-shantiniketan",
   "/gallery",
   "/our-story",
   "/places-to-visit-in-shantiniketan",

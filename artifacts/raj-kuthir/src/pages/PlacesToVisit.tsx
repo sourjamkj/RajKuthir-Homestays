@@ -300,6 +300,8 @@ export default function PlacesToVisit() {
             <a href={`${basePath}/our-story`} className="hover:text-[#e4c9a4]">Our story</a>
             <a href={`${basePath}/house-rules`} className="hover:text-[#e4c9a4]">House rules</a>
             <a href={`${basePath}/rates`} className="hover:text-[#e4c9a4]">Rates</a>
+            <a href={`${basePath}/poush-mela-stay-shantiniketan`} className="hover:text-[#e4c9a4]">Poush Mela stay</a>
+            <a href={`${basePath}/basanta-utsav-stay-shantiniketan`} className="hover:text-[#e4c9a4]">Basanta Utsav stay</a>
           </div>
         </div>
       </footer>

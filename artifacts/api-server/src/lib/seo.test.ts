@@ -251,6 +251,7 @@ test("point 2 · the sitemap lists exactly the public, indexable pages", () => {
 
   assert.deepEqual(locs.sort(), [
     `${SITE_ORIGIN}/`,
+    `${SITE_ORIGIN}/basanta-utsav-stay-shantiniketan`,
     `${SITE_ORIGIN}/gallery`,
     `${SITE_ORIGIN}/homestay-near-sonajhuri-haat`,
     `${SITE_ORIGIN}/homestay-near-visva-bharati`,
@@ -258,6 +259,7 @@ test("point 2 · the sitemap lists exactly the public, indexable pages", () => {
     `${SITE_ORIGIN}/our-story`,
     `${SITE_ORIGIN}/pet-friendly-homestay-shantiniketan`,
     `${SITE_ORIGIN}/places-to-visit-in-shantiniketan`,
+    `${SITE_ORIGIN}/poush-mela-stay-shantiniketan`,
     `${SITE_ORIGIN}/rates`,
     `${SITE_ORIGIN}/shantiniketan-2-day-itinerary`,
     `${SITE_ORIGIN}/shantiniketan-weekend-trip-from-kolkata`,
@@ -1081,7 +1083,8 @@ test("point 11 · the browser and the server agree on what a phone number is", (
  * page's own source is an accurate picture of what it renders, not an
  * approximation. A test below fails if a public route is missing from here.
  */
-const RENDERED_BY: Record<string, string> = {
+/** A page's file, plus the shared component that renders its body when it has one. */
+const RENDERED_BY: Record<string, string | string[]> = {
   "/": "src/App.tsx",
   "/gallery": "src/pages/Gallery.tsx",
   "/our-story": "src/pages/OurStory.tsx",
@@ -1093,10 +1096,12 @@ const RENDERED_BY: Record<string, string> = {
   "/house-rules": "src/pages/HouseRules.tsx",
   "/pet-friendly-homestay-shantiniketan": "src/pages/PetFriendly.tsx",
   "/rates": "src/pages/Rates.tsx",
+  "/poush-mela-stay-shantiniketan": ["src/pages/PoushMelaStay.tsx", "src/components/FestivalStay.tsx"],
+  "/basanta-utsav-stay-shantiniketan": ["src/pages/BasantaUtsavStay.tsx", "src/components/FestivalStay.tsx"],
 };
 
 const sourceOf = (route: string) =>
-  readFileSync(path.join(clientRoot, RENDERED_BY[route]!), "utf8");
+  ([] as string[]).concat(RENDERED_BY[route]!).map((file) => readFileSync(path.join(clientRoot, file), "utf8")).join("\n");
 
 /**
  * Every <img ... /> in a source file, whole.
@@ -1407,7 +1412,7 @@ test("routes · the title a page sets in the browser is the one the server sent"
   // Google renders JavaScript. A useEffect that swaps in a different title
   // quietly replaces the server's one in what gets indexed.
   for (const route of PUBLIC_ROUTES.filter((r) => r !== "/")) {
-    const set = sourceOf(route).match(/document\.title = '([^']+)'/)?.[1];
+    const set = (sourceOf(route).match(/document\.title = '([^']+)'/) ?? sourceOf(route).match(/documentTitle="([^"]+)"/))?.[1];
     assert.equal(set, PAGES[route]!.title, `${route}: document.title differs from seo.ts`);
   }
 });

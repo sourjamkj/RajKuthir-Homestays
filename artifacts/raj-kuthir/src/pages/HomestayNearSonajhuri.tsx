@@ -118,7 +118,7 @@ export default function HomestayNearSonajhuri() {
               The whole villa is yours for the stay. Two bedrooms, both air-conditioned, a private garden, and parking on the premises if you have driven from Kolkata. There is a refrigerator, a microwave, a water filter and basic utensils with an induction setup, so a late return from the market does not have to mean going out again to eat. Cafe Soi is on the premises, home-cooked food can be arranged through the caretaker, and Zomato delivers to the area.
             </p>
             <p className="mt-7 max-w-[640px] text-[15px] leading-7 text-muted-foreground md:text-[17px]">
-              Pets are welcome, and what that means in practice &mdash; including the one-off charge &mdash; is set out in full on the page for guests travelling with a dog. Nothing about it is a surprise at the door.
+              Pets are welcome, and what that means in practice &mdash; including the pet charge &mdash; is set out in full on the page for guests travelling with a dog. Nothing about it is a surprise at the door.
             </p>
             <p className="mt-7 flex flex-wrap gap-x-6 gap-y-3 text-xs font-bold uppercase tracking-[.1em] text-primary">
               <a href={`${basePath}/`} className="underline decoration-accent decoration-2 underline-offset-4" data-testid="link-sonajhuri-home">The villa in Shantiniketan</a>
