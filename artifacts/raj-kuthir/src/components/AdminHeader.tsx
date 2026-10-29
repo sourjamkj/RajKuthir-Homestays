@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { useLocation } from 'wouter';
-import { ArrowUpRight, LogOut } from 'lucide-react';
+import { AlertTriangle, ArrowUpRight, LogOut } from 'lucide-react';
 
 import { useLogout } from '@/lib/admin-api';
 import { AdminActivity } from '@/components/AdminActivity';
@@ -37,6 +38,39 @@ const PILL =
 const PILL_CURRENT =
   'rounded-full border border-primary bg-primary/5 px-4 py-2 text-[11px] font-bold uppercase tracking-[.09em] text-primary';
 
+type InvoiceHealth = { ok: boolean; checkedAt: string; steps: Array<{ name: string; ok: boolean; error?: string }> };
+
+/**
+ * A red bar across the console while the hourly invoice self-check is failing
+ * (api-server lib/invoice-selfcheck.ts). Nothing shows while PDFs work.
+ */
+function InvoiceHealthBar() {
+  const health = useQuery({
+    queryKey: ['/api/health/invoices'],
+    // 503 means "failing" and still carries the result, so read the body either way.
+    queryFn: async (): Promise<InvoiceHealth | null> => {
+      const response = await fetch('/api/health/invoices', { cache: 'no-store' });
+      return response.headers.get('content-type')?.includes('json') ? ((await response.json()) as InvoiceHealth) : null;
+    },
+    refetchInterval: 10 * 60_000,
+    staleTime: 5 * 60_000,
+  });
+  const result = health.data;
+  if (!result || result.ok) return null;
+  const failing = result.steps.filter((step) => !step.ok);
+  return (
+    <div role="alert" className="border-b border-[#e3b4a8] bg-[#fbeae5] text-[#7a2e1d]" data-testid="invoice-health-bar">
+      <div className="mx-auto flex max-w-[1180px] items-start gap-2 px-5 py-3 text-xs leading-5 md:px-8">
+        <AlertTriangle size={15} className="mt-0.5 shrink-0" />
+        <p>
+          <strong>Invoice PDFs are failing.</strong> Guest invoices and booking confirmations cannot be made right now
+          {failing.length ? ` (${failing.map((step) => `${step.name}: ${step.error ?? 'failed'}`).join('; ')})` : ''}. Send this to Claude to fix.
+        </p>
+      </div>
+    </div>
+  );
+}
+
 export function AdminHeader({
   eyebrow,
   title,
@@ -58,6 +92,8 @@ export function AdminHeader({
   const current = location.replace(/\/+$/, '') || '/admin';
 
   return (
+    <>
+    <InvoiceHealthBar />
     <header className="border-b border-border bg-card">
       <div className="mx-auto flex max-w-[1180px] flex-wrap items-center justify-between gap-4 px-5 py-5 md:px-8">
         <div>
@@ -137,5 +173,6 @@ export function AdminHeader({
         </nav>
       </div>
     </header>
+    </>
   );
 }

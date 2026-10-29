@@ -10,6 +10,7 @@ import { ensureBookPayTables } from "./lib/book-pay-migrate";
 import { startReviewsCron } from "./lib/reviews-cron";
 import { startBookingHygiene } from "./lib/booking-dedupe";
 import { startInvoiceEmails } from "./lib/invoices";
+import { startInvoiceSelfCheck } from "./lib/invoice-selfcheck";
 import { runSchemaCheck } from "./lib/schema-check";
 import { ensureWaInboundTables } from "./lib/wa-webhook";
 
@@ -89,6 +90,10 @@ app.listen(port, (err) => {
   // Guest invoices: emailed at noon on check-out day for our own bookings
   // once fully paid. Creates its table at boot (additive).
   startInvoiceEmails();
+
+  // Hourly test invoice + confirmation PDF; emails the owner when PDFs start
+  // failing and when they recover. Status at /api/health/invoices.
+  startInvoiceSelfCheck();
 
   // Says in the log whether the database still matches the Drizzle schema.
   // Four production 500s in one day came from that drift, each invisible until
