@@ -104,3 +104,43 @@ export function ownerUtrAlert(input: {
     ].join("\n"),
   };
 }
+
+/**
+ * The owner's note when a guest pays online through Cashfree. `confirmed` is
+ * whether the booking was made automatically; when it was not, `problem`
+ * says why and the owner decides (and refunds if needed) from the console.
+ */
+export function ownerOnlinePaymentAlert(input: {
+  guestName: string;
+  guestPhone: string;
+  reference: string;
+  checkIn: string | null;
+  checkOut: string | null;
+  amountPaise: number;
+  method: string;
+  cfPaymentId: string | null;
+  confirmed: boolean;
+  problem: string | null;
+  adminUrl: string;
+}): { subject: string; text: string } {
+  const head = input.confirmed
+    ? `Paid online and booked: ₹${rupees(input.amountPaise)} — ${input.guestName} (${input.reference})`
+    : `Paid online — needs your check: ₹${rupees(input.amountPaise)} — ${input.guestName} (${input.reference})`;
+  return {
+    subject: head,
+    text: [
+      input.confirmed
+        ? `${input.guestName} (${input.guestPhone}) paid the advance online. The booking is confirmed and the guest has their confirmation.`
+        : `${input.guestName} (${input.guestPhone}) paid the advance online, but the booking was NOT made automatically.`,
+      ...(input.problem ? ["", `Why: ${input.problem}`] : []),
+      "",
+      `Amount: ₹${rupees(input.amountPaise)} (${input.method})`,
+      `Cashfree payment ID: ${input.cfPaymentId ?? "—"}`,
+      `Stay: ${prettyDate(input.checkIn)} → ${prettyDate(input.checkOut)}`,
+      "",
+      input.confirmed
+        ? `Details: ${input.adminUrl}`
+        : `The dates stay held. Confirm or refund from the console: ${input.adminUrl}`,
+    ].join("\n"),
+  };
+}

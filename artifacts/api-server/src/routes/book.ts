@@ -1,7 +1,5 @@
 import { Router, type IRouter, type Request } from "express";
 import QRCode from "qrcode";
-import { and, eq, gt, inArray, lt } from "drizzle-orm";
-import { bookings, calendarEvents, db } from "@workspace/db";
 
 import { requireAdmin } from "../lib/admin-auth";
 import { logger } from "../lib/logger";
@@ -11,9 +9,7 @@ import { quoteForEnquiry, nightsOf, type QuoteResult } from "../lib/enquiry-quot
 import { getRatePlan, minimumStay, rateForNight, stayNightPrices, type RatePlan } from "../lib/rates-repo";
 import { isWeekendNight, peakFor } from "../lib/pricing";
 import { upiDetails } from "../lib/whatsapp-templates";
-import { getEnquiry, setAdvancePaid, setEnquiryStatus } from "../lib/enquiries-repo";
-import { convertEnquiry } from "../lib/enquiry-convert-service";
-import { createOrRefreshOnboarding } from "../lib/guest-onboarding-repo";
+import { setEnquiryStatus } from "../lib/enquiries-repo";
 import { SITE_ORIGIN } from "../lib/seo";
 import {
   checkScreenshot,
@@ -44,9 +40,13 @@ import {
   setDecision,
   submitUtr,
 } from "../lib/book-pay-repo";
-import { confirmedMessage, expiredMessage, ownerUtrAlert } from "../lib/book-pay-messages";
+import { expiredMessage, ownerUtrAlert } from "../lib/book-pay-messages";
 import { ownerEmail, sendEmail, sendWhatsappTemplate } from "../lib/book-pay-notify";
-import { buildConfirmation, sendConfirmation } from "../lib/invoices";
+import { confirmPaymentRequest, waLink } from "../lib/book-pay-confirm";
+import { CashfreeError, cashfreeConfig } from "../lib/cashfree-client";
+import { looksLikeOrderId, orderIdFromWebhook, verifyWebhook } from "../lib/cashfree-rules";
+import { findOrder, gatewayInfoFor } from "../lib/cashfree-repo";
+import { onlinePaymentMode, refundOnline, settleOrder, startCheckout } from "../lib/cashfree-service";
 
 /**
  * Self-serve Book & Pay by UPI, on top of the existing enquiry pipeline:
@@ -219,7 +219,7 @@ router.post("/book/quote", async (req, res) => {
       balancePaise: quote.balancePaise,
       advancePercent: settings.advancePercent,
       holdMinutes: settings.holdMinutes,
-      onlineBooking: upiDetails() !== null,
+      onlineBooking: upiDetails() !== null || onlinePaymentMode() !== null,
     });
   } catch (error) {
     logger.error({ err: error }, "Book & Pay quote failed");
@@ -233,7 +233,7 @@ router.post("/book/start", async (req, res) => {
     res.status(429).json({ error: "Too many booking attempts from this connection. Please try again in an hour." });
     return;
   }
-  if (!upiDetails()) {
+  if (!upiDetails() && !onlinePaymentMode()) {
     notReady(res);
     return;
   }
@@ -353,7 +353,10 @@ router.post("/book/pay", async (req, res) => {
     res.json({
       reference: request.reference,
       status: expired ? "expired" : request.status,
-      statusText: guestStatusText(request.status, expired),
+      statusText:
+        request.status === "awaiting_payment" && live && onlinePaymentMode() !== null
+          ? "Dates held. Pay the advance below to confirm your booking instantly."
+          : guestStatusText(request.status, expired),
       guestFirstName: enquiry.name.split(/\s+/)[0],
       checkIn: enquiry.checkIn,
       checkOut: enquiry.checkOut,
@@ -368,6 +371,8 @@ router.post("/book/pay", async (req, res) => {
       secondsLeft: request.status === "awaiting_payment" ? secondsLeft(request.holdExpiresAt, now) : 0,
       utrSubmitted: Boolean(request.utr),
       payee: payable ? { upiId: upi!.id, name: upi!.name } : null,
+      // Pay online (UPI, card, net banking) through Cashfree, when switched on.
+      onlinePay: request.status === "awaiting_payment" && live && onlinePaymentMode() !== null,
       upiUrl,
       qrSvg: upiUrl
         ? await QRCode.toString(upiUrl, { type: "svg", errorCorrectionLevel: "M", margin: 1 })
@@ -466,28 +471,126 @@ router.post("/book/pay/utr", async (req, res) => {
   }
 });
 
+/* --------------------------- pay online (Cashfree) ---------------------- */
+
+const checkoutLimiter = createLimiter(20, HOUR);
+
+/** Opens a Cashfree checkout for the advance. Bearer token in the body. */
+router.post("/book/pay/cashfree/order", async (req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  if (checkoutLimiter(ipOf(req))) {
+    res.status(429).json({ error: "Too many attempts. Please pay by UPI below, or call us." });
+    return;
+  }
+  const token = req.body?.token;
+  if (!looksLikePayToken(token)) {
+    res.status(404).json({ error: "This payment link is not valid." });
+    return;
+  }
+  try {
+    const found = await findByToken(token);
+    if (!found) {
+      res.status(404).json({ error: "This payment link is not valid." });
+      return;
+    }
+    const result = await startCheckout(found);
+    if (!result.ok) {
+      res.status(result.status).json({ error: result.error });
+      return;
+    }
+    res.json({ paymentSessionId: result.paymentSessionId, orderId: result.orderId, mode: result.mode });
+  } catch (error) {
+    if (isNotMigrated(error)) {
+      res.status(503).json({ error: "Online payment is not switched on yet. Please pay by UPI below." });
+      return;
+    }
+    logger.error({ err: error }, "Could not open a Cashfree checkout");
+    res.status(502).json({ error: "Online payment is not available just now. Please pay by UPI below, or try again in a minute." });
+  }
+});
+
+/**
+ * The guest is back from the checkout. Asks Cashfree (never the URL) what
+ * happened, and books the stay if it was paid. Bearer token in the body.
+ */
+router.post("/book/pay/cashfree/verify", async (req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  if (payLimiter(ipOf(req))) {
+    res.status(429).json({ error: "Too many requests. Please wait a little and refresh." });
+    return;
+  }
+  const token = req.body?.token;
+  const orderId = req.body?.orderId;
+  if (!looksLikePayToken(token) || !looksLikeOrderId(orderId)) {
+    res.status(400).json({ error: "This payment link is not valid." });
+    return;
+  }
+  try {
+    const [found, order] = await Promise.all([findByToken(token), findOrder(orderId)]);
+    if (!found || !order || order.paymentRequestId !== found.request.id) {
+      res.status(404).json({ error: "We could not find that payment. If money has left your account, please call us." });
+      return;
+    }
+    const result = await settleOrder(orderId, "return page");
+    res.json({ status: result.status });
+  } catch (error) {
+    logger.error({ err: error }, "Cashfree verify failed");
+    res.status(502).json({ error: "We could not check the payment just now. If money has left your account, it is safe: we will confirm shortly." });
+  }
+});
+
+/**
+ * Cashfree's server-to-server notification. The signature is checked over
+ * the raw bytes (app.ts keeps them for this path); the order is then fetched
+ * from Cashfree's API before anything is believed.
+ */
+router.post("/book/cashfree/webhook", async (req, res) => {
+  const config = cashfreeConfig();
+  if (!config) {
+    res.status(503).json({ error: "Not configured" });
+    return;
+  }
+  const check = verifyWebhook({
+    timestamp: req.get("x-webhook-timestamp") ?? undefined,
+    signature: req.get("x-webhook-signature") ?? undefined,
+    rawBody: (req as unknown as { rawBody?: Buffer }).rawBody,
+    key: config.webhookKey,
+    now: new Date(),
+  });
+  if (!check.ok) {
+    logger.warn({ reason: check.reason }, "Cashfree webhook refused");
+    res.status(401).json({ error: "Invalid signature" });
+    return;
+  }
+
+  const orderId = orderIdFromWebhook(req.body);
+  // Answer at once; Cashfree retries anything slow. The work is idempotent.
+  res.json({ ok: true });
+  if (!orderId) return;
+  void settleOrder(orderId, "webhook").catch((error) => {
+    logger.error({ err: error, orderId }, "Cashfree webhook processing failed; the reconciler will retry");
+  });
+});
+
 /* -------------------------------- admin -------------------------------- */
 
 function idParam(raw: unknown): string | null {
   return typeof raw === "string" && /^[0-9a-f-]{36}$/i.test(raw) ? raw : null;
 }
 
-function waLink(phone: string | null, message: string): string | null {
-  const digits = (phone ?? "").replace(/\D/g, "");
-  const to = digits.length === 10 ? `91${digits}` : digits.length === 11 && digits.startsWith("0") ? `91${digits.slice(1)}` : digits;
-  return to.length >= 11 ? `https://wa.me/${to}?text=${encodeURIComponent(message)}` : null;
-}
-
 router.get("/admin/book-pay", requireAdmin, async (_req, res) => {
   res.setHeader("Cache-Control", "no-store");
   try {
     const [settings, rows] = await Promise.all([getBookPaySettings(), listForAdmin()]);
+    const online = await gatewayInfoFor(rows.map((row) => row.id)).catch(() => new Map());
     const now = new Date();
     res.json({
       settings,
       upiReady: upiDetails() !== null,
+      onlinePayment: onlinePaymentMode(),
       payments: rows.map((row) => ({
         ...row,
+        online: online.get(row.id) ?? null,
         overdue: row.status === "submitted" && now >= row.holdExpiresAt,
         // For an expired hold the guest was not told about automatically.
         rebookWhatsappUrl:
@@ -549,7 +652,8 @@ router.get("/admin/book-pay/:id/screenshot", requireAdmin, async (req, res) => {
 /**
  * Confirm: exactly what the owner would otherwise click by hand —
  * advance-received, then convert — so the booking is created by the same
- * code as every other converted enquiry.
+ * code as every other converted enquiry (lib/book-pay-confirm.ts, shared
+ * with automatic confirmation after an online payment).
  */
 router.post("/admin/book-pay/:id/confirm", requireAdmin, async (req, res) => {
   const id = idParam(req.params.id);
@@ -558,125 +662,36 @@ router.post("/admin/book-pay/:id/confirm", requireAdmin, async (req, res) => {
     res.status(404).json({ error: "That payment no longer exists." });
     return;
   }
-  const { request } = found;
-
-  // Confirmable: waiting, submitted, or EXPIRED — a guest who paid after the
-  // hold ran out has still paid. A confirmed one re-sends its message.
-  const confirmable = ["submitted", "awaiting_payment", "expired"].includes(request.status);
-  if (!confirmable && request.status !== "confirmed") {
-    res.status(409).json({ error: `This payment is already ${request.status}.` });
+  const outcome = await confirmPaymentRequest(found, { force: req.body?.force === true });
+  if (!outcome.ok) {
+    res.status(outcome.status).json(outcome.body);
     return;
   }
+  res.json(outcome.body);
+});
 
-  let enquiry = found.enquiry;
-  let booking: { id: string; reference: string | null; status: string; receivedPaise: number | null } | null = null;
-
-  // Already turned into a booking (an earlier confirm, or the enquiry's own
-  // Convert button): use that booking rather than refusing.
-  if (enquiry.convertedBookingId) {
-    const [existing] = await db
-      .select({ id: bookings.id, reference: bookings.reference, status: bookings.status, receivedPaise: bookings.receivedPaise })
-      .from(bookings)
-      .where(eq(bookings.id, enquiry.convertedBookingId))
-      .limit(1);
-    booking = existing ?? null;
-  }
-
-  if (!booking && request.status === "confirmed") {
-    res.status(409).json({ error: "This payment is confirmed but its booking could not be found." });
+/** Refund (part of) an online payment through Cashfree. */
+router.post("/admin/book-pay/:id/refund", requireAdmin, async (req, res) => {
+  const id = idParam(req.params.id);
+  if (!id) {
+    res.status(400).json({ error: "Invalid payment id." });
     return;
   }
-
-  if (!booking) {
-    // An OTA may have sold the nights before its next sync picked up the hold.
-    // The ledger check inside convert would miss that; look at the calendar.
-    if (req.body?.force !== true && enquiry.checkIn && enquiry.checkOut) {
-      const otaClash = await db
-        .select({ id: calendarEvents.id, source: calendarEvents.source, startDate: calendarEvents.startDate, endDate: calendarEvents.endDate })
-        .from(calendarEvents)
-        .where(
-          and(
-            eq(calendarEvents.status, "confirmed"),
-            inArray(calendarEvents.source, ["bookingCom", "airbnb", "makeMyTrip", "manual"]),
-            lt(calendarEvents.startDate, enquiry.checkOut),
-            gt(calendarEvents.endDate, enquiry.checkIn),
-          ),
-        )
-        .limit(1);
-      if (otaClash[0]) {
-        res.status(409).json({
-          error: `The calendar shows ${otaClash[0].source} holding ${otaClash[0].startDate} to ${otaClash[0].endDate}. Check for a double booking before confirming.`,
-          reason: "calendar_clash",
-        });
-        return;
-      }
-    }
-
-    // Step 1 — the same mark as POST /enquiries/:id/advance-received.
-    await setAdvancePaid(request.enquiryId, true);
-    const fresh = await getEnquiry(request.enquiryId);
-    if (!fresh) {
-      res.status(404).json({ error: "The enquiry behind this payment no longer exists." });
-      return;
-    }
-    enquiry = fresh;
-
-    // Step 2 — the same conversion as POST /enquiries/:id/convert.
-    const outcome = await convertEnquiry(enquiry, { reference: request.reference });
+  const amountPaise = Number(req.body?.amountPaise);
+  try {
+    const outcome = await refundOnline(id, Number.isFinite(amountPaise) ? Math.round(amountPaise) : null, text(req.body?.note, 100));
     if (!outcome.ok) {
-      // Leave nothing half-done: the advance mark goes back off.
-      await setAdvancePaid(request.enquiryId, false);
-      const { ok: _ok, status, ...body } = outcome;
-      res.status(status).json(body);
+      res.status(outcome.status).json({ error: outcome.error });
       return;
     }
-    booking = outcome.booking;
+    res.json(outcome);
+  } catch (error) {
+    if (error instanceof CashfreeError) {
+      res.status(502).json({ error: `Cashfree refused the refund: ${error.message}` });
+      return;
+    }
+    throw error;
   }
-
-  if (request.status !== "confirmed") {
-    await setDecision(request.id, "confirmed");
-    await setEnquiryStatus(request.enquiryId, "converted").catch(() => undefined);
-    await logPaymentEvent(request.id, "confirmed", `Booking ${booking.reference ?? request.reference}`);
-  }
-
-  // Guest message: reference, dates, balance, pre-arrival link.
-  const onboarding = await createOrRefreshOnboarding(booking.id).catch(() => null);
-  const preArrivalUrl = onboarding ? `${SITE_ORIGIN}/pre-arrival#${encodeURIComponent(onboarding.token)}` : null;
-  const message = confirmedMessage({
-    guestName: enquiry.name,
-    reference: booking.reference ?? request.reference,
-    checkIn: enquiry.checkIn,
-    checkOut: enquiry.checkOut,
-    advancePaise: request.advancePaise,
-    balancePaise: request.totalPaise - request.advancePaise,
-    preArrivalUrl,
-  });
-  // The booking confirmation PDF (payment summary + QR for the balance) goes
-  // with the email; with no email, by WhatsApp when that is set up.
-  const confirmationPdf = await buildConfirmation(booking.id).catch(() => null);
-  const emailed = await sendEmail(
-    enquiry.email,
-    message.subject,
-    message.text,
-    confirmationPdf?.ok
-      ? [{ filename: confirmationPdf.invoice.filename, content: confirmationPdf.invoice.pdf, contentType: "application/pdf" }]
-      : undefined,
-  );
-  const whatsappConfirmation = emailed ? null : await sendConfirmation(booking.id);
-
-  res.json({
-    booking: {
-      id: booking.id,
-      reference: booking.reference ?? request.reference,
-      status: booking.status,
-      receivedPaise: booking.receivedPaise,
-    },
-    emailed,
-    confirmationSentOnWhatsapp: whatsappConfirmation?.via === "whatsapp",
-    // Today's delivery path for WhatsApp: the owner presses send.
-    whatsappUrl: waLink(enquiry.phone, message.text),
-    preview: message.text,
-  });
 });
 
 router.post("/admin/book-pay/:id/reject", requireAdmin, async (req, res) => {

@@ -6,6 +6,7 @@ import { startMailCron } from "./lib/mail-cron";
 import { startCaretakerAlerts } from "./lib/caretaker-alerts";
 import { scheduleBookingComBackfill, scheduleOtaDocumentBackfill } from "./lib/mail-runner";
 import { startBookPayCron } from "./lib/book-pay-cron";
+import { ensureCashfreeTables } from "./lib/cashfree-migrate";
 import { ensureBookPayTables } from "./lib/book-pay-migrate";
 import { startReviewsCron } from "./lib/reviews-cron";
 import { startBookingHygiene } from "./lib/booking-dedupe";
@@ -70,7 +71,8 @@ app.listen(port, (err) => {
   // themselves without it (holds are derived); this tidies and notifies.
   // Creates the Book & Pay tables if they are missing (additive, idempotent),
   // so online booking switches itself on with no hand-run SQL.
-  void ensureBookPayTables();
+  // Cashfree tables reference payment_requests, so they come second.
+  void ensureBookPayTables().then(ensureCashfreeTables);
   startBookPayCron();
 
   // WhatsApp inbound: creates wa_inbound_messages and wa_conversations

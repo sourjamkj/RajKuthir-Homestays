@@ -360,6 +360,34 @@ export const PAGES: Record<string, PageMeta> = {
       secondary: ["Shantiniketan itinerary", "what to do in Shantiniketan in 2 days"],
     },
   },
+  "/terms": {
+    title: "Terms & Conditions | Raj Kuthir Homestays, Shantiniketan",
+    description:
+      "The terms for booking Raj Kuthir Homestays – Sobuj Potro direct: prices, the advance, check-in, house rules and how payments are handled.",
+    // Legal and contact pages: reachable from every footer, not a search target.
+    noindex: true,
+  },
+  "/privacy-policy": {
+    title: "Privacy Policy | Raj Kuthir Homestays, Shantiniketan",
+    description:
+      "What Raj Kuthir Homestays collects when you book, why, who else sees it (only those who deliver your stay) and how to have it corrected or deleted.",
+    // Legal and contact pages: reachable from every footer, not a search target.
+    noindex: true,
+  },
+  "/cancellation-refund-policy": {
+    title: "Cancellation & Refund Policy | Raj Kuthir Homestays",
+    description:
+      "When a direct booking at Raj Kuthir Homestays is refundable, how date changes work, and how and when refunds reach you.",
+    // Legal and contact pages: reachable from every footer, not a search target.
+    noindex: true,
+  },
+  "/contact": {
+    title: "Contact Us | Raj Kuthir Homestays, Shantiniketan",
+    description:
+      "Call or WhatsApp the host of Raj Kuthir Homestays – Sobuj Potro in Bolpur, Shantiniketan. Address, phone numbers and directions.",
+    // Legal and contact pages: reachable from every footer, not a search target.
+    noindex: true,
+  },
   "/house-rules": {
     title: "House Rules | Raj Kuthir Homestays, Shantiniketan",
     description:
@@ -514,6 +542,10 @@ const CLIENT_ROUTES = new Set([
   "/shantiniketan-weekend-trip-from-kolkata",
   "/shantiniketan-2-day-itinerary",
   "/house-rules",
+  "/terms",
+  "/privacy-policy",
+  "/cancellation-refund-policy",
+  "/contact",
   "/pet-friendly-homestay-shantiniketan",
   "/rates",
   "/welcome",
