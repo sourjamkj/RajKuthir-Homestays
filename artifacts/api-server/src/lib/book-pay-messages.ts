@@ -132,7 +132,7 @@ export function ownerOnlinePaymentAlert(input: {
       input.confirmed
         ? `${input.guestName} (${input.guestPhone}) paid the advance online. The booking is confirmed and the guest has their confirmation.`
         : `${input.guestName} (${input.guestPhone}) paid the advance online, but the booking was NOT made automatically.`,
-      ...(input.problem ? ["", `Why: ${input.problem}`] : []),
+      ...(input.problem ? ["", input.confirmed ? `Note: ${input.problem}` : `Why: ${input.problem}`] : []),
       "",
       `Amount: ₹${rupees(input.amountPaise)} (${input.method})`,
       `Cashfree payment ID: ${input.cfPaymentId ?? "—"}`,

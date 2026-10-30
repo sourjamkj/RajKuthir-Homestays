@@ -72,7 +72,12 @@ export type BalancePayment = { upiId: string; payeeName: string; qrPng: Uint8Arr
 
 export async function renderInvoicePdf(
   invoice: InvoiceContent,
-  options: { kind?: "invoice" | "confirmation"; payment?: BalancePayment | null } = {},
+  options: {
+    kind?: "invoice" | "confirmation";
+    payment?: BalancePayment | null;
+    /** How the advance was paid, e.g. "Paid online … · UPI · Cashfree payment ID …". */
+    receipt?: string | null;
+  } = {},
 ): Promise<Uint8Array> {
   const confirmation = options.kind === "confirmation";
   const pdf = await PDFDocument.create();
@@ -115,6 +120,13 @@ export async function renderInvoicePdf(
   }
   rightText(page, confirmation ? `Ref: ${invoice.number}` : invoice.number, right, y - 24, 10, bold);
   rightText(page, `Date: ${prettyDate(invoice.issuedOn)}`, right, y - 38, 9, regular, MUTED);
+  if (confirmation) {
+    // The one word the guest is looking for, impossible to miss.
+    const stamp = "CONFIRMED";
+    const width = bold.widthOfTextAtSize(stamp, 10) + 16;
+    page.drawRectangle({ x: right - width, y: y - 60, width, height: 17, color: GREEN });
+    page.drawText(stamp, { x: right - width + 8, y: y - 55, size: 10, font: bold, color: rgb(1, 1, 1) });
+  }
 
   y -= 110;
 
@@ -166,6 +178,12 @@ export async function renderInvoicePdf(
   row("Total", money(invoice.totalPaise), true);
   row(confirmation ? "Advance received" : "Amount paid", money(invoice.paidPaise));
   row(confirmation ? "Balance (at check-in)" : "Balance due", money(invoice.balancePaise), invoice.balancePaise > 0);
+  if (options.receipt) {
+    for (const line of wrap(pdfSafe(options.receipt), regular, 8.5, right - left)) {
+      y -= 14;
+      rightText(page, line, right, y, 8.5, regular, MUTED);
+    }
+  }
 
   // Confirmation: how to pay the balance — scan the QR or use the UPI ID.
   if (confirmation && invoice.balancePaise > 0 && options.payment) {

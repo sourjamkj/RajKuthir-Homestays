@@ -1,9 +1,12 @@
-import { and, asc, desc, eq, gte, inArray, ne, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gte, inArray, isNull, ne, sql } from "drizzle-orm";
 import {
+  confirmationDeliveries,
   db,
+  enquiries,
   gatewayOrders,
   gatewayRefunds,
   paymentRequests,
+  type ConfirmationDeliveryRow,
   type GatewayOrder,
   type GatewayRefund,
   type PaymentRequest,
@@ -11,6 +14,7 @@ import {
 
 import { extendedHold } from "./book-pay-rules";
 import type { PaymentSummary } from "./cashfree-rules";
+import { logger } from "./logger";
 
 /** Database side of online payment. Decisions live in cashfree-rules.ts. */
 
@@ -225,3 +229,77 @@ export async function gatewayInfoFor(paymentRequestIds: string[]): Promise<Map<s
   return out;
 }
 
+
+/* ------------------------ confirmation deliveries ----------------------- */
+
+/** How a booking's advance was paid: online through Cashfree, or a UTR. Never throws. */
+export async function paymentSourceForBooking(bookingId: string): Promise<{
+  paymentRequestId: string | null;
+  utr: string | null;
+  online: { paymentGroup: string | null; paidAt: Date | null; cfPaymentId: string | null } | null;
+}> {
+  try {
+    const [request] = await db
+      .select({ id: paymentRequests.id, utr: paymentRequests.utr })
+      .from(paymentRequests)
+      .innerJoin(enquiries, eq(enquiries.id, paymentRequests.enquiryId))
+      .where(eq(enquiries.convertedBookingId, bookingId))
+      .orderBy(desc(paymentRequests.createdAt))
+      .limit(1);
+    if (!request) return { paymentRequestId: null, utr: null, online: null };
+    const order = await paidOrderFor(request.id).catch(() => null);
+    return {
+      paymentRequestId: request.id,
+      utr: request.utr,
+      online: order ? { paymentGroup: order.paymentGroup, paidAt: order.paidAt, cfPaymentId: order.cfPaymentId } : null,
+    };
+  } catch {
+    return { paymentRequestId: null, utr: null, online: null };
+  }
+}
+
+/** Records (or updates) where a booking's confirmation went. Never throws. */
+export async function recordDelivery(
+  bookingId: string,
+  paymentRequestId: string | null,
+  result: { email: string; whatsapp: string; emailTo: string | null; whatsappTo: string | null; notes: string[] },
+  now = new Date(),
+): Promise<void> {
+  const sent = result.email === "sent" || result.whatsapp === "sent";
+  const values = {
+    emailStatus: result.email,
+    whatsappStatus: result.whatsapp,
+    emailTo: result.emailTo,
+    whatsappTo: result.whatsappTo,
+    notes: result.notes.join("; ").slice(0, 1000) || null,
+    updatedAt: now,
+  };
+  try {
+    await db
+      .insert(confirmationDeliveries)
+      .values({ bookingId, paymentRequestId, ...values, deliveredAt: sent ? now : null, createdAt: now })
+      .onConflictDoUpdate({
+        target: confirmationDeliveries.bookingId,
+        set: {
+          ...values,
+          attempts: sql`${confirmationDeliveries.attempts} + 1`,
+          deliveredAt: sent ? now : sql`${confirmationDeliveries.deliveredAt}`,
+          ...(paymentRequestId ? { paymentRequestId } : {}),
+        },
+      });
+  } catch (error) {
+    logger.warn({ err: error, bookingId }, "Could not record the confirmation delivery");
+  }
+}
+
+export async function recentUndelivered(now = new Date()): Promise<ConfirmationDeliveryRow[]> {
+  try {
+    return await db
+      .select()
+      .from(confirmationDeliveries)
+      .where(and(isNull(confirmationDeliveries.deliveredAt), gte(confirmationDeliveries.createdAt, new Date(now.getTime() - 60 * 60_000))))
+      .limit(20);
+  } catch {
+    return [];
+  }
+}

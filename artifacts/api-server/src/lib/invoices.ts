@@ -11,6 +11,14 @@ import { documentsForRefs, type OtaDocumentMeta } from "./ota-documents";
 import { createHash, randomBytes } from "node:crypto";
 import { SITE_ORIGIN } from "./seo";
 import { isWhatsappEnabled, sendTemplate, toWhatsappNumber, uploadMedia } from "./whatsapp-client";
+import { paymentSourceForBooking, recordDelivery, recentUndelivered } from "./cashfree-repo";
+import { methodLabel } from "./cashfree-rules";
+import {
+  advanceReceiptLine,
+  deliverOnChannels,
+  dueForRetry,
+  type ConfirmationDelivery,
+} from "./confirmation-delivery";
 import {
   AUTO_EMAIL_SOURCES,
   SEND_WINDOW_DAYS,
@@ -196,7 +204,18 @@ export async function buildConfirmation(
       qrPng: new Uint8Array(await QRCode.toBuffer(url, { type: "png", errorCorrectionLevel: "M", margin: 1, width: 360 })),
     };
   }
-  const pdf = await renderInvoicePdf(content, { kind: "confirmation", payment });
+  // How the advance came in: online through Cashfree, or a UPI transfer with a UTR.
+  const source = await paymentSourceForBooking(booking.id);
+  const receipt =
+    content.paidPaise > 0
+      ? advanceReceiptLine({
+          online: source.online
+            ? { method: methodLabel(source.online.paymentGroup), paidAt: source.online.paidAt, cfPaymentId: source.online.cfPaymentId }
+            : null,
+          utr: source.utr,
+        })
+      : null;
+  const pdf = await renderInvoicePdf(content, { kind: "confirmation", payment, receipt });
   return { ok: true, invoice: { content, pdf, filename: `Booking-Confirmation-${reference.replace(/[^\w-]+/g, "-")}.pdf` } };
 }
 
@@ -266,47 +285,88 @@ export async function whatsappInvoice(
 }
 
 /**
- * Sends the booking confirmation PDF the moment a booking is confirmed:
- * by email when the enquiry gave one, otherwise by WhatsApp (PDF attached)
- * when WHATSAPP_CONFIRMATION_TEMPLATE is set up. Never throws — a failed
- * send must not undo a booking; the console's Confirmation button remains.
+ * Sends the booking confirmation PDF the moment a booking is confirmed, on
+ * EVERY channel available — email (when the guest gave an address) AND
+ * WhatsApp (when the Cloud API and WHATSAPP_CONFIRMATION_TEMPLATE are set
+ * up) — independently, so one failing never stops the other. The PDF is
+ * built once. The result is recorded in confirmation_deliveries, and a
+ * failed send is retried by the Book & Pay cron. Never throws: a failed send
+ * must not undo a booking; the console's Confirmation button remains.
+ *
+ * `emailMessage` replaces the standard confirmation email text (Book & Pay
+ * sends its own, with the pre-arrival link).
  */
+export async function deliverConfirmation(
+  bookingId: string,
+  options: { emailMessage?: { subject: string; text: string }; paymentRequestId?: string | null } = {},
+  now = new Date(),
+): Promise<ConfirmationDelivery & { built: BuiltInvoice | null }> {
+  try {
+    const built = await buildConfirmation(bookingId, now);
+    if (!built.ok) {
+      return { email: "skipped", whatsapp: "skipped", emailTo: null, whatsappTo: null, notes: [built.error], built: null };
+    }
+    const { content, pdf, filename } = built.invoice;
+    const attachment = { filename, content: pdf, contentType: "application/pdf" };
+    const message = options.emailMessage ?? confirmationEmail(content);
+    const template = process.env["WHATSAPP_CONFIRMATION_TEMPLATE"]?.trim();
+
+    const result = await deliverOnChannels(content.billedTo.email, {
+      sendEmail: (to) => sendEmail(to, message.subject, message.text, [attachment]),
+      whatsapp:
+        isWhatsappEnabled() && template
+          ? {
+              to: toWhatsappNumber(content.billedTo.phone),
+              send: async (to) => {
+                const media = await uploadMedia({ bytes: pdf, mimeType: "application/pdf", filename });
+                if (!media.ok) return { ok: false, error: `PDF upload refused: ${media.error}` };
+                const sent = await sendTemplate({
+                  to,
+                  templateName: template,
+                  params: [content.billedTo.name.split(/\s+/)[0] || "there", content.number],
+                  headerDocument: { mediaId: media.mediaId, filename },
+                });
+                return sent.ok ? { ok: true } : { ok: false, error: sent.error };
+              },
+            }
+          : null,
+    });
+
+    const paymentRequestId = options.paymentRequestId ?? (await paymentSourceForBooking(bookingId)).paymentRequestId;
+    await recordDelivery(bookingId, paymentRequestId, result, now);
+    logger.info({ bookingId, email: result.email, whatsapp: result.whatsapp }, "Booking confirmation delivered");
+    return { ...result, built: built.invoice };
+  } catch (error) {
+    logger.error({ err: error, bookingId }, "Sending the booking confirmation failed");
+    return { email: "failed", whatsapp: "failed", emailTo: null, whatsappTo: null, notes: ["Could not send the confirmation."], built: null };
+  }
+}
+
+/** The older single-answer shape, for the enquiry routes. Sends on every channel. */
 export async function sendConfirmation(
   bookingId: string,
   now = new Date(),
 ): Promise<{ via: "email" | "whatsapp" | null; to: string | null; note: string | null }> {
-  try {
-    const built = await buildConfirmation(bookingId, now);
-    if (!built.ok) return { via: null, to: null, note: built.error };
-    const content = built.invoice.content;
+  const result = await deliverConfirmation(bookingId, {}, now);
+  if (result.email === "sent") return { via: "email", to: result.emailTo, note: result.whatsapp === "sent" ? "Also sent on WhatsApp." : null };
+  if (result.whatsapp === "sent") return { via: "whatsapp", to: result.whatsappTo, note: null };
+  return { via: null, to: null, note: "Not sent automatically — use Share on the Confirmation PDF in Guests." };
+}
 
-    if (content.billedTo.email) {
-      const message = confirmationEmail(content);
-      const sent = await sendEmail(content.billedTo.email, message.subject, message.text, [
-        { filename: built.invoice.filename, content: built.invoice.pdf, contentType: "application/pdf" },
-      ]);
-      if (sent) return { via: "email", to: content.billedTo.email, note: null };
-    }
-
-    const template = process.env["WHATSAPP_CONFIRMATION_TEMPLATE"]?.trim();
-    const to = toWhatsappNumber(content.billedTo.phone);
-    if (isWhatsappEnabled() && template && to) {
-      const media = await uploadMedia({ bytes: built.invoice.pdf, mimeType: "application/pdf", filename: built.invoice.filename });
-      if (media.ok) {
-        const sent = await sendTemplate({
-          to,
-          templateName: template,
-          params: [content.billedTo.name.split(/\s+/)[0] || "there", content.number],
-          headerDocument: { mediaId: media.mediaId, filename: built.invoice.filename },
-        });
-        if (sent.ok) return { via: "whatsapp", to, note: null };
-      }
-    }
-    return { via: null, to: null, note: "Not sent automatically — use Share on the Confirmation PDF in Guests." };
-  } catch (error) {
-    logger.error({ err: error, bookingId }, "Sending the booking confirmation failed");
-    return { via: null, to: null, note: "Could not send the confirmation." };
+/**
+ * Retries confirmations that reached nobody because a channel FAILED (not
+ * merely skipped), a few minutes apart, for half an hour. Called by the
+ * Book & Pay cron. Never throws.
+ */
+export async function retryConfirmations(now = new Date()): Promise<number> {
+  let retried = 0;
+  for (const row of await recentUndelivered(now)) {
+    if (!dueForRetry(row, now)) continue;
+    const result = await deliverConfirmation(row.bookingId, { paymentRequestId: row.paymentRequestId }, now);
+    retried += 1;
+    logger.info({ bookingId: row.bookingId, email: result.email, whatsapp: result.whatsapp }, "Retried a booking confirmation");
   }
+  return retried;
 }
 
 const hashToken = (token: string) => createHash("sha256").update(token).digest("hex");

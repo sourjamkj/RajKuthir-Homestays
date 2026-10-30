@@ -73,3 +73,30 @@ export const gatewayRefunds = pgTable(
 );
 
 export type GatewayRefund = typeof gatewayRefunds.$inferSelect;
+
+/**
+ * Where each booking confirmation PDF went. Keyed by booking: one row per
+ * booking, updated on every (re)send. No foreign key, on purpose — it must
+ * never block deleting a booking.
+ */
+export const confirmationDeliveries = pgTable(
+  "confirmation_deliveries",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    bookingId: uuid("booking_id").notNull(),
+    paymentRequestId: uuid("payment_request_id"),
+    /** sent | skipped | failed */
+    emailStatus: text("email_status").notNull().default("skipped"),
+    whatsappStatus: text("whatsapp_status").notNull().default("skipped"),
+    emailTo: text("email_to"),
+    whatsappTo: text("whatsapp_to"),
+    notes: text("notes"),
+    attempts: integer("attempts").notNull().default(1),
+    deliveredAt: timestamp("delivered_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [uniqueIndex("confirmation_delivery_booking_uniq").on(table.bookingId)],
+);
+
+export type ConfirmationDeliveryRow = typeof confirmationDeliveries.$inferSelect;

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState, type ChangeEvent, type FormEvent } from 'react';
-import { AlertCircle, CheckCircle2, Clock, Copy, CreditCard, Loader2, ShieldCheck, Smartphone, Upload } from 'lucide-react';
+import { AlertCircle, CheckCircle2, Clock, Copy, CreditCard, Download, Loader2, ShieldCheck, Smartphone, Upload } from 'lucide-react';
 
 import { formatRupees } from '@/lib/rates';
 import { CONFIG, basePath, phoneHref } from '@/lib/site';
@@ -36,6 +36,7 @@ type PayData = {
   upiUrl: string | null;
   qrSvg: string | null;
   onlinePay?: boolean;
+  confirmationReady?: boolean;
 };
 
 type CashfreeCheckout = { checkout: (options: { paymentSessionId: string; redirectTarget: '_self' }) => Promise<unknown> };
@@ -117,6 +118,8 @@ export default function Pay() {
   const [verifying, setVerifying] = useState(false);
   const [onlineNote, setOnlineNote] = useState<string | null>(null);
   const [opening, setOpening] = useState(false);
+  const [downloading, setDownloading] = useState(false);
+  const [downloadError, setDownloadError] = useState<string | null>(null);
   const [data, setData] = useState<PayData | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [left, setLeft] = useState(0);
@@ -305,6 +308,37 @@ export default function Pay() {
     }
   };
 
+  const downloadConfirmation = async () => {
+    setDownloadError(null);
+    setDownloading(true);
+    try {
+      const response = await fetch('/api/book/pay/confirmation', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token }),
+      });
+      if (!response.ok) {
+        const body = await response.json().catch(() => ({}));
+        setDownloadError(body.error ?? 'Could not prepare the PDF just now. Please try again.');
+        return;
+      }
+      const blob = await response.blob();
+      const name = /filename="([^"]+)"/.exec(response.headers.get('Content-Disposition') ?? '')?.[1] ?? `Booking-Confirmation-${data?.reference ?? ''}.pdf`;
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = name;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.setTimeout(() => URL.revokeObjectURL(url), 10_000);
+    } catch {
+      setDownloadError('Could not reach the server. Please try again.');
+    } finally {
+      setDownloading(false);
+    }
+  };
+
   const copyUpi = async () => {
     if (!data?.payee) return;
     try {
@@ -361,6 +395,22 @@ export default function Pay() {
                 {data.status === 'awaiting_payment' && left > 0 && <strong className="ml-1 tabular-nums" data-testid="text-pay-countdown"> {clock(left)} left.</strong>}
               </span>
             </p>
+
+            {data.status === 'confirmed' && data.confirmationReady && (
+              <section className="mt-6" aria-label="Booking confirmation">
+                <button
+                  type="button"
+                  onClick={downloadConfirmation}
+                  disabled={downloading}
+                  className="flex w-full items-center justify-center gap-2 rounded-full bg-primary px-5 py-4 text-sm font-bold uppercase tracking-[.1em] text-primary-foreground disabled:opacity-60"
+                  data-testid="button-download-confirmation"
+                >
+                  {downloading ? <Loader2 size={17} className="animate-spin" /> : <Download size={17} />} Download booking confirmation (PDF)
+                </button>
+                <p className="mt-3 text-center text-xs text-muted-foreground">We've also sent it to your WhatsApp and email. Keep it handy for check-in.</p>
+                {downloadError && <p className="mt-2 text-center text-[13px] text-[#A65E45]" role="alert">{downloadError}</p>}
+              </section>
+            )}
 
             {verifying && (
               <p className="mt-5 flex items-center gap-2 rounded-xl bg-card p-4 text-sm text-primary" role="status" data-testid="text-pay-verifying">

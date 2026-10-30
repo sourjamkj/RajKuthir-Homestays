@@ -203,8 +203,17 @@ async function finishPaid(
   try {
     const outcome = await confirmPaymentRequest(found, { eventDetail: `paid online (${method})` });
     if (outcome.ok) {
-      await markSettled(gatewayOrderId, `Booked ${outcome.body.booking.reference}`);
-      await alertOwner(paymentRequestId, amountPaise, paymentGroup, cfPaymentId, true, null);
+      await markSettled(gatewayOrderId, `Booked ${outcome.body.booking.reference}; confirmation: ${outcome.body.deliverySummary}`);
+      await alertOwner(
+        paymentRequestId,
+        amountPaise,
+        paymentGroup,
+        cfPaymentId,
+        true,
+        outcome.body.confirmationDelivered
+          ? null
+          : `Booked, but the confirmation PDF did not reach the guest (${outcome.body.deliverySummary}). Tap Share on the Confirmation PDF in Guests.`,
+      );
       logger.info({ paymentRequestId }, "Book & Pay confirmed automatically after online payment");
       return true;
     }

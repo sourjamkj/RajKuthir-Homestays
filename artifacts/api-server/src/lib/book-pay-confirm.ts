@@ -7,8 +7,8 @@ import { createOrRefreshOnboarding } from "./guest-onboarding-repo";
 import { SITE_ORIGIN } from "./seo";
 import { logPaymentEvent, setDecision, type RequestWithEnquiry } from "./book-pay-repo";
 import { confirmedMessage } from "./book-pay-messages";
-import { sendEmail } from "./book-pay-notify";
-import { buildConfirmation, sendConfirmation } from "./invoices";
+import { deliverConfirmation } from "./invoices";
+import { delivered, deliverySummary } from "./confirmation-delivery";
 
 /**
  * Turning a paid Book & Pay request into a booking. Shared by the owner's
@@ -31,6 +31,8 @@ export type ConfirmOutcome =
         booking: { id: string; reference: string; status: string; receivedPaise: number | null };
         emailed: boolean;
         confirmationSentOnWhatsapp: boolean;
+        confirmationDelivered: boolean;
+        deliverySummary: string;
         whatsappUrl: string | null;
         preview: string;
       };
@@ -136,18 +138,20 @@ export async function confirmPaymentRequest(
     balancePaise: request.totalPaise - request.advancePaise,
     preArrivalUrl,
   });
-  // The booking confirmation PDF (payment summary + QR for the balance) goes
-  // with the email; with no email, by WhatsApp when that is set up.
-  const confirmationPdf = await buildConfirmation(booking.id).catch(() => null);
-  const emailed = await sendEmail(
-    enquiry.email,
-    message.subject,
-    message.text,
-    confirmationPdf?.ok
-      ? [{ filename: confirmationPdf.invoice.filename, content: confirmationPdf.invoice.pdf, contentType: "application/pdf" }]
-      : undefined,
-  );
-  const whatsappConfirmation = emailed ? null : await sendConfirmation(booking.id);
+  // The booking confirmation PDF (CONFIRMED, how the advance was paid, the
+  // balance and a QR for it) goes out on every channel we have: email with
+  // the message above, and WhatsApp with the PDF attached. One failing never
+  // stops the other; a failure is retried by the Book & Pay cron.
+  const emailMessage = {
+    subject: message.subject,
+    text: message.text.replace(
+      /\n\nAny questions,/,
+      "\n\nYour booking confirmation (PDF) is attached — please keep it handy for check-in.\n\nAny questions,",
+    ),
+  };
+  const delivery = await deliverConfirmation(booking.id, { emailMessage, paymentRequestId: request.id });
+  const summary = deliverySummary(delivery);
+  await logPaymentEvent(request.id, "confirmation_sent", summary);
 
   return {
     ok: true,
@@ -158,8 +162,10 @@ export async function confirmPaymentRequest(
         status: booking.status,
         receivedPaise: booking.receivedPaise,
       },
-      emailed,
-      confirmationSentOnWhatsapp: whatsappConfirmation?.via === "whatsapp",
+      emailed: delivery.email === "sent",
+      confirmationSentOnWhatsapp: delivery.whatsapp === "sent",
+      confirmationDelivered: delivered(delivery),
+      deliverySummary: summary,
       // Today's delivery path for WhatsApp: the owner presses send.
       whatsappUrl: waLink(enquiry.phone, message.text),
       preview: message.text,

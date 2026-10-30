@@ -42,3 +42,22 @@ CREATE TABLE IF NOT EXISTS gateway_refunds (
 
 CREATE UNIQUE INDEX IF NOT EXISTS gateway_refund_refund_id_uniq ON gateway_refunds (refund_id);
 CREATE INDEX        IF NOT EXISTS gateway_refund_order_idx      ON gateway_refunds (gateway_order_id);
+
+-- Where each booking confirmation PDF went (email, WhatsApp), so a failed
+-- send is retried and the owner can see it. One row per booking.
+CREATE TABLE IF NOT EXISTS confirmation_deliveries (
+  id                 uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  booking_id         uuid NOT NULL,
+  payment_request_id uuid,
+  email_status       text NOT NULL DEFAULT 'skipped',
+  whatsapp_status    text NOT NULL DEFAULT 'skipped',
+  email_to           text,
+  whatsapp_to        text,
+  notes              text,
+  attempts           integer NOT NULL DEFAULT 1,
+  delivered_at       timestamptz,
+  created_at         timestamptz NOT NULL DEFAULT now(),
+  updated_at         timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS confirmation_delivery_booking_uniq ON confirmation_deliveries (booking_id);

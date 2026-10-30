@@ -43,6 +43,7 @@ import {
 import { expiredMessage, ownerUtrAlert } from "../lib/book-pay-messages";
 import { ownerEmail, sendEmail, sendWhatsappTemplate } from "../lib/book-pay-notify";
 import { confirmPaymentRequest, waLink } from "../lib/book-pay-confirm";
+import { buildConfirmation } from "../lib/invoices";
 import { CashfreeError, cashfreeConfig } from "../lib/cashfree-client";
 import { looksLikeOrderId, orderIdFromWebhook, verifyWebhook } from "../lib/cashfree-rules";
 import { findOrder, gatewayInfoFor } from "../lib/cashfree-repo";
@@ -371,6 +372,8 @@ router.post("/book/pay", async (req, res) => {
       secondsLeft: request.status === "awaiting_payment" ? secondsLeft(request.holdExpiresAt, now) : 0,
       utrSubmitted: Boolean(request.utr),
       payee: payable ? { upiId: upi!.id, name: upi!.name } : null,
+      // The booking confirmation PDF can be downloaded right here once booked.
+      confirmationReady: request.status === "confirmed" && Boolean(enquiry.convertedBookingId),
       // Pay online (UPI, card, net banking) through Cashfree, when switched on.
       onlinePay: request.status === "awaiting_payment" && live && onlinePaymentMode() !== null,
       upiUrl,
@@ -468,6 +471,42 @@ router.post("/book/pay/utr", async (req, res) => {
   } catch (error) {
     logger.error({ err: error }, "Book & Pay UTR submission failed");
     res.status(500).json({ error: "Could not save that just now. Please try again." });
+  }
+});
+
+/** The booking confirmation PDF, for the guest on /pay. Bearer token in the body. */
+router.post("/book/pay/confirmation", async (req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  if (payLimiter(ipOf(req))) {
+    res.status(429).json({ error: "Too many requests. Please wait a little and try again." });
+    return;
+  }
+  const token = req.body?.token;
+  if (!looksLikePayToken(token)) {
+    res.status(404).json({ error: "This payment link is not valid." });
+    return;
+  }
+  try {
+    const found = await findByToken(token);
+    const bookingId = found?.enquiry.convertedBookingId ?? null;
+    if (!found || found.request.status !== "confirmed" || !bookingId) {
+      res.status(404).json({ error: "The confirmation is ready once your booking is confirmed." });
+      return;
+    }
+    const built = await buildConfirmation(bookingId);
+    if (!built.ok) {
+      res.status(built.status).json({ error: built.error });
+      return;
+    }
+    res.set({
+      "Content-Type": "application/pdf",
+      "Content-Disposition": `attachment; filename="${built.invoice.filename}"`,
+      "X-Content-Type-Options": "nosniff",
+    });
+    res.send(Buffer.from(built.invoice.pdf));
+  } catch (error) {
+    logger.error({ err: error }, "Could not build the confirmation PDF for the guest");
+    res.status(500).json({ error: "Could not prepare the PDF just now. It has also been sent to you by WhatsApp or email." });
   }
 });
 

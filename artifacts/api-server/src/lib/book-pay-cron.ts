@@ -11,6 +11,7 @@ import { expiredMessage } from "./book-pay-messages";
 import { sendEmail, sendWhatsappTemplate } from "./book-pay-notify";
 import { SITE_ORIGIN } from "./seo";
 import { reconcileOnlinePayments } from "./cashfree-service";
+import { retryConfirmations } from "./invoices";
 
 /**
  * Every five minutes: close unpaid Book & Pay holds whose time is up and tell
@@ -62,6 +63,9 @@ export async function runBookPayExpiry(now = new Date()): Promise<number> {
 
     // Online payments: catch any webhook Cashfree failed to deliver.
     await reconcileOnlinePayments(now);
+
+    // Booking confirmation PDFs that reached nobody because a send failed.
+    await retryConfirmations(now);
     return closed.length;
   } catch (error) {
     if (!isNotMigrated(error)) logger.error({ err: error }, "Book & Pay expiry run failed");
