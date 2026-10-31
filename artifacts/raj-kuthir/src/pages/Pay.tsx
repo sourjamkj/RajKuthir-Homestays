@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState, type ChangeEvent, type FormEvent } from 'react';
-import { AlertCircle, CheckCircle2, Clock, Copy, Loader2, Smartphone, Upload } from 'lucide-react';
+import { AlertCircle, CheckCircle2, Clock, Copy, CreditCard, Download, Loader2, ShieldCheck, Smartphone, Upload } from 'lucide-react';
 
 import { formatRupees } from '@/lib/rates';
 import { CONFIG, basePath, phoneHref } from '@/lib/site';
@@ -35,11 +35,56 @@ type PayData = {
   payee: { upiId: string; name: string } | null;
   upiUrl: string | null;
   qrSvg: string | null;
+  onlinePay?: boolean;
+  confirmationReady?: boolean;
 };
+
+type CashfreeCheckout = { checkout: (options: { paymentSessionId: string; redirectTarget: '_self' }) => Promise<unknown> };
+declare global {
+  interface Window {
+    Cashfree?: (options: { mode: 'sandbox' | 'production' }) => CashfreeCheckout;
+  }
+}
+
+const TOKEN_KEY = 'rk-pay-token';
+const CASHFREE_SDK = 'https://sdk.cashfree.com/js/v3/cashfree.js';
 
 function tokenFromFragment(): string {
   if (typeof window === 'undefined') return '';
   return decodeURIComponent(window.location.hash.replace(/^#/, '')).trim();
+}
+
+/**
+ * The token from the fragment, or — on the way back from the Cashfree
+ * checkout, whose return URL carries only the order id — from this tab's
+ * session storage, where it was put just before leaving.
+ */
+function initialToken(): string {
+  const fromHash = tokenFromFragment();
+  try {
+    if (fromHash) sessionStorage.setItem(TOKEN_KEY, fromHash);
+    return fromHash || sessionStorage.getItem(TOKEN_KEY) || '';
+  } catch {
+    return fromHash;
+  }
+}
+
+function returningOrderId(): string | null {
+  if (typeof window === 'undefined') return null;
+  const id = new URLSearchParams(window.location.search).get('order_id');
+  return id && /^[A-Za-z0-9_-]{3,50}$/.test(id) ? id : null;
+}
+
+function loadCashfree(): Promise<NonNullable<Window['Cashfree']>> {
+  if (window.Cashfree) return Promise.resolve(window.Cashfree);
+  return new Promise((resolve, reject) => {
+    const script = document.createElement('script');
+    script.src = CASHFREE_SDK;
+    script.async = true;
+    script.onload = () => (window.Cashfree ? resolve(window.Cashfree) : reject(new Error('Cashfree did not load')));
+    script.onerror = () => reject(new Error('Cashfree did not load'));
+    document.head.appendChild(script);
+  });
 }
 
 function pretty(iso: string | null): string {
@@ -68,7 +113,13 @@ function readAsBase64(file: File): Promise<string> {
 }
 
 export default function Pay() {
-  const [token] = useState(tokenFromFragment);
+  const [token] = useState(initialToken);
+  const [returnOrder, setReturnOrder] = useState<string | null>(returningOrderId);
+  const [verifying, setVerifying] = useState(false);
+  const [onlineNote, setOnlineNote] = useState<string | null>(null);
+  const [opening, setOpening] = useState(false);
+  const [downloading, setDownloading] = useState(false);
+  const [downloadError, setDownloadError] = useState<string | null>(null);
   const [data, setData] = useState<PayData | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [left, setLeft] = useState(0);
@@ -114,6 +165,57 @@ export default function Pay() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  // Back from the Cashfree checkout: ask the server (which asks Cashfree)
+  // what happened. A payment can take a minute to settle, so keep asking
+  // for a little while before handing over to the "we'll confirm" message.
+  useEffect(() => {
+    if (!returnOrder || !token) return;
+    let tries = 0;
+    let stopped = false;
+    let timer: number | undefined;
+    setVerifying(true);
+
+    const check = async () => {
+      tries += 1;
+      try {
+        const response = await fetch('/api/book/pay/cashfree/verify', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ token, orderId: returnOrder }),
+        });
+        const body = await response.json().catch(() => ({}));
+        if (stopped) return;
+        if (!response.ok) {
+          setOnlineNote(body.error ?? 'We could not check the payment just now.');
+        } else if (body.status === 'pending' && tries < 18) {
+          setOnlineNote('Waiting for the bank to confirm your payment…');
+          timer = window.setTimeout(() => void check(), 10_000);
+          return;
+        } else if (body.status === 'pending') {
+          setOnlineNote('Your bank has not confirmed the payment yet. If money has left your account, it is safe: we will confirm by WhatsApp or email shortly.');
+        } else if (body.status === 'closed') {
+          setOnlineNote('That payment was not completed. You can try again below.');
+        } else {
+          setOnlineNote(null);
+        }
+      } catch {
+        if (!stopped) setOnlineNote('Could not reach the server. Please refresh in a moment.');
+      }
+      if (stopped) return;
+      setVerifying(false);
+      setReturnOrder(null);
+      // Back to the plain /pay#token address, so a refresh works as before.
+      window.history.replaceState(null, '', `${window.location.pathname}#${encodeURIComponent(token)}`);
+      void load();
+    };
+
+    void check();
+    return () => {
+      stopped = true;
+      if (timer) window.clearTimeout(timer);
+    };
+  }, [returnOrder, token, load]);
 
   // Countdown, and a refresh the moment it reaches zero so the page shows
   // what the server now says rather than a stale "pay now".
@@ -174,6 +276,69 @@ export default function Pay() {
     }
   };
 
+  const payOnline = async () => {
+    setOnlineNote(null);
+    setOpening(true);
+    try {
+      const response = await fetch('/api/book/pay/cashfree/order', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token }),
+      });
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        setOnlineNote(body.error ?? 'Online payment is not available just now. Please pay by UPI below.');
+        if (response.status === 410) void load();
+        return;
+      }
+      try {
+        sessionStorage.setItem(TOKEN_KEY, token);
+      } catch {
+        /* the return page then asks for the link again; payment still settles */
+      }
+      const Cashfree = await loadCashfree();
+      await Cashfree({ mode: body.mode === 'production' ? 'production' : 'sandbox' }).checkout({
+        paymentSessionId: body.paymentSessionId,
+        redirectTarget: '_self',
+      });
+    } catch {
+      setOnlineNote('The secure checkout could not open. Please check your connection, or pay by UPI below.');
+    } finally {
+      setOpening(false);
+    }
+  };
+
+  const downloadConfirmation = async () => {
+    setDownloadError(null);
+    setDownloading(true);
+    try {
+      const response = await fetch('/api/book/pay/confirmation', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token }),
+      });
+      if (!response.ok) {
+        const body = await response.json().catch(() => ({}));
+        setDownloadError(body.error ?? 'Could not prepare the PDF just now. Please try again.');
+        return;
+      }
+      const blob = await response.blob();
+      const name = /filename="([^"]+)"/.exec(response.headers.get('Content-Disposition') ?? '')?.[1] ?? `Booking-Confirmation-${data?.reference ?? ''}.pdf`;
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = name;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.setTimeout(() => URL.revokeObjectURL(url), 10_000);
+    } catch {
+      setDownloadError('Could not reach the server. Please try again.');
+    } finally {
+      setDownloading(false);
+    }
+  };
+
   const copyUpi = async () => {
     if (!data?.payee) return;
     try {
@@ -186,6 +351,7 @@ export default function Pay() {
   };
 
   const payable = data?.status === 'awaiting_payment' && left > 0 && data.upiUrl;
+  const online = data?.status === 'awaiting_payment' && left > 0 && data.onlinePay && !verifying;
 
   return (
     <div className="min-h-[100dvh] bg-background px-4 py-10 text-foreground">
@@ -230,11 +396,60 @@ export default function Pay() {
               </span>
             </p>
 
-            {payable && (
+            {data.status === 'confirmed' && data.confirmationReady && (
+              <section className="mt-6" aria-label="Booking confirmation">
+                <button
+                  type="button"
+                  onClick={downloadConfirmation}
+                  disabled={downloading}
+                  className="flex w-full items-center justify-center gap-2 rounded-full bg-primary px-5 py-4 text-sm font-bold uppercase tracking-[.1em] text-primary-foreground disabled:opacity-60"
+                  data-testid="button-download-confirmation"
+                >
+                  {downloading ? <Loader2 size={17} className="animate-spin" /> : <Download size={17} />} Download booking confirmation (PDF)
+                </button>
+                <p className="mt-3 text-center text-xs text-muted-foreground">We've also sent it to your WhatsApp and email. Keep it handy for check-in.</p>
+                {downloadError && <p className="mt-2 text-center text-[13px] text-[#A65E45]" role="alert">{downloadError}</p>}
+              </section>
+            )}
+
+            {verifying && (
+              <p className="mt-5 flex items-center gap-2 rounded-xl bg-card p-4 text-sm text-primary" role="status" data-testid="text-pay-verifying">
+                <Loader2 size={16} className="animate-spin" /> {onlineNote ?? 'Checking your payment…'}
+              </p>
+            )}
+            {!verifying && onlineNote && (
+              <p className="mt-5 flex items-start gap-2 rounded-xl border border-border bg-card p-4 text-sm text-primary" role="status" data-testid="text-pay-online-note">
+                <AlertCircle size={16} className="mt-0.5 shrink-0" /> {onlineNote}
+              </p>
+            )}
+
+            {online && (
+              <section className="mt-6" aria-label="Pay online">
+                <button
+                  type="button"
+                  onClick={payOnline}
+                  disabled={opening}
+                  className="flex w-full items-center justify-center gap-2 rounded-full bg-primary px-5 py-4 text-sm font-bold uppercase tracking-[.1em] text-primary-foreground disabled:opacity-60"
+                  data-testid="button-pay-online"
+                >
+                  {opening ? <Loader2 size={17} className="animate-spin" /> : <CreditCard size={17} />} Pay {formatRupees(data.advancePaise)} online
+                </button>
+                <p className="mt-3 flex items-center justify-center gap-1.5 text-center text-xs text-muted-foreground">
+                  <ShieldCheck size={13} /> UPI, cards or net banking · secure checkout by Cashfree · booking confirmed instantly
+                </p>
+                {payable && (
+                  <p className="mt-6 flex items-center gap-3 text-[11px] uppercase tracking-[.12em] text-muted-foreground">
+                    <span className="h-px flex-1 bg-border" /> or pay directly by UPI <span className="h-px flex-1 bg-border" />
+                  </p>
+                )}
+              </section>
+            )}
+
+            {payable && !verifying && (
               <section className="mt-6 space-y-5" aria-label="Pay by UPI">
                 <a
                   href={data.upiUrl!}
-                  className={`flex w-full items-center justify-center gap-2 rounded-full bg-primary px-5 py-4 text-sm font-bold uppercase tracking-[.1em] text-primary-foreground ${mobile ? '' : 'md:hidden'}`}
+                  className={`flex w-full items-center justify-center gap-2 rounded-full px-5 py-4 text-sm font-bold uppercase tracking-[.1em] ${data.onlinePay ? 'border border-primary/25 text-primary' : 'bg-primary text-primary-foreground'} ${mobile ? '' : 'md:hidden'}`}
                   data-testid="link-pay-upi"
                 >
                   <Smartphone size={17} /> Pay {formatRupees(data.advancePaise)} with UPI app
