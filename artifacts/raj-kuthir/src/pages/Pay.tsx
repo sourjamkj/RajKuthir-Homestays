@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState, type ChangeEvent, type FormEvent } from 'react';
-import { AlertCircle, CheckCircle2, Clock, Copy, Loader2, Smartphone, Upload } from 'lucide-react';
+import { AlertCircle, CheckCircle2, Clock, Copy, Download, FileText, Loader2, MessageCircle, Share2, Smartphone, Upload } from 'lucide-react';
 
 import { formatRupees } from '@/lib/rates';
 import { CONFIG, basePath, phoneHref } from '@/lib/site';
@@ -35,6 +35,8 @@ type PayData = {
   payee: { upiId: string; name: string } | null;
   upiUrl: string | null;
   qrSvg: string | null;
+  /** The PDF this guest can download now: summary (payment pending) or confirmation. */
+  document?: 'summary' | 'confirmation' | null;
 };
 
 function tokenFromFragment(): string {
@@ -77,6 +79,8 @@ export default function Pay() {
   const [sending, setSending] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [docBusy, setDocBusy] = useState<'download' | 'share' | null>(null);
+  const [docError, setDocError] = useState<string | null>(null);
   const mobile = isMobile();
 
   useEffect(() => {
@@ -174,6 +178,69 @@ export default function Pay() {
     }
   };
 
+  // The booking PDF: summary (QR for the advance) or, once confirmed, the
+  // confirmation. POSTed with the token, never put in a URL.
+  const fetchDocument = async (): Promise<{ blob: Blob; filename: string } | null> => {
+    setDocError(null);
+    const response = await fetch('/api/book/pay/document', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token }),
+    });
+    if (!response.ok) {
+      const body = await response.json().catch(() => ({}));
+      setDocError(body.error ?? 'Could not get the PDF just now. Please try again.');
+      return null;
+    }
+    const filename =
+      /filename="([^"]+)"/.exec(response.headers.get('Content-Disposition') ?? '')?.[1] ?? `Booking-${data?.reference ?? 'Raj-Kuthir'}.pdf`;
+    return { blob: await response.blob(), filename };
+  };
+
+  const downloadDocument = async () => {
+    setDocBusy('download');
+    try {
+      const doc = await fetchDocument();
+      if (!doc) return;
+      const url = URL.createObjectURL(doc.blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = doc.filename;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.setTimeout(() => URL.revokeObjectURL(url), 10_000);
+    } catch {
+      setDocError('Could not reach the server. Please check your connection and try again.');
+    } finally {
+      setDocBusy(null);
+    }
+  };
+
+  // On phones: the share sheet with the PDF attached, so it can go straight
+  // into a WhatsApp chat. Where files cannot be shared, it downloads instead.
+  const shareDocument = async () => {
+    setDocBusy('share');
+    try {
+      const doc = await fetchDocument();
+      if (!doc) return;
+      const file = new File([doc.blob], doc.filename, { type: 'application/pdf' });
+      if (navigator.canShare?.({ files: [file] })) {
+        await navigator.share({ files: [file], title: doc.filename });
+      } else {
+        const url = URL.createObjectURL(doc.blob);
+        window.open(url, '_blank', 'noopener');
+        window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
+      }
+    } catch (error) {
+      if (!(error instanceof DOMException && error.name === 'AbortError')) {
+        setDocError('Could not share the PDF. Please use Download instead.');
+      }
+    } finally {
+      setDocBusy(null);
+    }
+  };
+
   const copyUpi = async () => {
     if (!data?.payee) return;
     try {
@@ -186,6 +253,25 @@ export default function Pay() {
   };
 
   const payable = data?.status === 'awaiting_payment' && left > 0 && data.upiUrl;
+
+  // The guest's own WhatsApp, opened on a chat with us, the booking already typed.
+  const ownerWhatsappUrl = data
+    ? `https://wa.me/${CONFIG.hostPhone.replace(/\D/g, '')}?text=${encodeURIComponent(
+        [
+          data.status === 'confirmed'
+            ? `Hello Raj Kuthir, this is ${data.guestFirstName}. My booking ${data.reference} is confirmed — thank you!`
+            : `Hello Raj Kuthir, this is ${data.guestFirstName}. I have booked Sobuj Potro.`,
+          `Booking reference: ${data.reference}`,
+          `Check-in: ${pretty(data.checkIn)} · Check-out: ${pretty(data.checkOut)}`,
+          `Guests: ${data.guests}${data.pets ? ` · Pets: ${data.pets}` : ''}`,
+          `Advance: ${formatRupees(data.advancePaise)} of ${formatRupees(data.totalPaise)}`,
+          data.status === 'awaiting_payment' ? "I'm paying the advance with the QR now and will send the payment screenshot here." : '',
+          data.status === 'submitted' ? "I've paid the advance — the payment screenshot is attached." : '',
+        ]
+          .filter(Boolean)
+          .join('\n'),
+      )}`
+    : '';
 
   return (
     <div className="min-h-[100dvh] bg-background px-4 py-10 text-foreground">
@@ -229,6 +315,52 @@ export default function Pay() {
                 {data.status === 'awaiting_payment' && left > 0 && <strong className="ml-1 tabular-nums" data-testid="text-pay-countdown"> {clock(left)} left.</strong>}
               </span>
             </p>
+
+            {data.document && (
+              <section className="mt-5 rounded-2xl border border-border bg-card p-5" aria-label="Your booking document" data-testid="pay-document">
+                <p className="flex items-center gap-2 text-sm font-bold text-primary">
+                  <FileText size={16} /> {data.document === 'confirmation' ? 'Your booking confirmation' : 'Your booking summary'}
+                </p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  {data.document === 'confirmation'
+                    ? 'Your reference, what you have paid and the balance due at check-in.'
+                    : 'Your dates, the amount and a QR code to pay the advance. Payment pending — the booking is confirmed once the advance reaches us.'}
+                </p>
+                <div className="mt-4 grid gap-2 sm:grid-cols-2">
+                  <button
+                    type="button"
+                    onClick={downloadDocument}
+                    disabled={docBusy !== null}
+                    className="flex items-center justify-center gap-2 rounded-full bg-primary px-4 py-3 text-xs font-bold uppercase tracking-[.1em] text-primary-foreground disabled:opacity-60"
+                    data-testid="button-download-document"
+                  >
+                    {docBusy === 'download' ? <Loader2 size={15} className="animate-spin" /> : <Download size={15} />} Download PDF
+                  </button>
+                  <button
+                    type="button"
+                    onClick={shareDocument}
+                    disabled={docBusy !== null}
+                    className="flex items-center justify-center gap-2 rounded-full border border-primary/25 px-4 py-3 text-xs font-bold uppercase tracking-[.1em] text-primary disabled:opacity-60"
+                    data-testid="button-share-document"
+                  >
+                    {docBusy === 'share' ? <Loader2 size={15} className="animate-spin" /> : <Share2 size={15} />} Share PDF
+                  </button>
+                </div>
+                <a
+                  href={ownerWhatsappUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="mt-2 flex items-center justify-center gap-2 rounded-full bg-[#1f7a4d] px-4 py-3 text-xs font-bold uppercase tracking-[.1em] text-white"
+                  data-testid="link-whatsapp-owner"
+                >
+                  <MessageCircle size={15} /> WhatsApp your booking to us
+                </a>
+                <p className="mt-2 text-center text-[11px] text-muted-foreground">
+                  Opens your WhatsApp with your booking details typed in. To send the PDF too, tap Share PDF and choose our chat ({CONFIG.hostPhone}).
+                </p>
+                {docError && <p className="mt-2 text-center text-[13px] text-[#A65E45]" role="alert">{docError}</p>}
+              </section>
+            )}
 
             {payable && (
               <section className="mt-6 space-y-5" aria-label="Pay by UPI">

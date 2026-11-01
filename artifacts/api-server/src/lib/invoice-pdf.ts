@@ -70,13 +70,43 @@ function wrap(text: string, font: PDFFont, size: number, width: number): string[
 /** For a booking confirmation: how to pay the balance, with a UPI QR. */
 export type BalancePayment = { upiId: string; payeeName: string; qrPng: Uint8Array; note: string };
 
+/**
+ * For a booking summary (dates held, advance not yet paid): the advance due
+ * now and when the hold runs out. Never says "confirmed".
+ */
+export type SummaryDetails = { advancePaise: number; advancePercent: number; payBy: Date | null };
+
+const AMBER = rgb(0xa6 / 255, 0x5e / 255, 0x45 / 255);
+
+/** "1 Nov 2026, 6:30 pm" in India time. */
+function istDateTime(at: Date): string {
+  return new Intl.DateTimeFormat("en-IN", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+    timeZone: "Asia/Kolkata",
+  }).format(at);
+}
+
 export async function renderInvoicePdf(
   invoice: InvoiceContent,
-  options: { kind?: "invoice" | "confirmation"; payment?: BalancePayment | null } = {},
+  options: {
+    kind?: "invoice" | "confirmation" | "summary";
+    payment?: BalancePayment | null;
+    /** Required for kind "summary". */
+    summary?: SummaryDetails;
+  } = {},
 ): Promise<Uint8Array> {
-  const confirmation = options.kind === "confirmation";
+  // A summary shares the confirmation's layout (guest, stay, QR) but is about
+  // the ADVANCE, and is clearly marked as not yet confirmed.
+  const summary = options.kind === "summary" ? (options.summary ?? null) : null;
+  const confirmation = options.kind === "confirmation" || summary !== null;
   const pdf = await PDFDocument.create();
-  pdf.setTitle(confirmation ? `Booking confirmation ${invoice.number}` : `Invoice ${invoice.number}`);
+  pdf.setTitle(
+    summary ? `Booking summary ${invoice.number}` : confirmation ? `Booking confirmation ${invoice.number}` : `Invoice ${invoice.number}`,
+  );
   pdf.setAuthor(BUSINESS.name);
   pdf.setCreator(BUSINESS.website);
 
@@ -107,7 +137,10 @@ export async function renderInvoicePdf(
     page.drawText(pdfSafe(line), { x: textX, y: headerY, size: 9, font: regular, color: MUTED });
     headerY -= 12;
   }
-  if (confirmation) {
+  if (summary) {
+    rightText(page, "BOOKING", right, y + 12, 9, bold, MUTED);
+    rightText(page, "SUMMARY", right, y - 4, 16, bold, GREEN);
+  } else if (confirmation) {
     rightText(page, "BOOKING", right, y + 12, 9, bold, MUTED);
     rightText(page, "CONFIRMATION", right, y - 4, 16, bold, GREEN);
   } else {
@@ -115,6 +148,13 @@ export async function renderInvoicePdf(
   }
   rightText(page, confirmation ? `Ref: ${invoice.number}` : invoice.number, right, y - 24, 10, bold);
   rightText(page, `Date: ${prettyDate(invoice.issuedOn)}`, right, y - 38, 9, regular, MUTED);
+  if (summary) {
+    // Not a confirmation until the advance arrives: said where it cannot be missed.
+    const label = "PAYMENT PENDING";
+    const labelWidth = bold.widthOfTextAtSize(label, 9);
+    page.drawRectangle({ x: right - labelWidth - 16, y: y - 63, width: labelWidth + 16, height: 17, color: AMBER });
+    page.drawText(label, { x: right - labelWidth - 8, y: y - 58, size: 9, font: bold, color: rgb(1, 1, 1) });
+  }
 
   y -= 110;
 
@@ -164,11 +204,40 @@ export async function renderInvoicePdf(
     rightText(page, value, right, y, strong ? 11 : 10, strong ? bold : regular);
   };
   row("Total", money(invoice.totalPaise), true);
-  row(confirmation ? "Advance received" : "Amount paid", money(invoice.paidPaise));
-  row(confirmation ? "Balance (at check-in)" : "Balance due", money(invoice.balancePaise), invoice.balancePaise > 0);
+  if (summary) {
+    row(`Advance now (${summary.advancePercent}%)`, money(summary.advancePaise), true);
+    row("Balance (at check-in)", money(invoice.totalPaise - summary.advancePaise));
+  } else {
+    row(confirmation ? "Advance received" : "Amount paid", money(invoice.paidPaise));
+    row(confirmation ? "Balance (at check-in)" : "Balance due", money(invoice.balancePaise), invoice.balancePaise > 0);
+  }
+
+  // Summary: how to pay the ADVANCE now — scan the QR or use the UPI ID.
+  if (summary && options.payment) {
+    const qr = await pdf.embedPng(options.payment.qrPng);
+    const top = y - 34;
+    page.drawText(pdfSafe("PAY THE ADVANCE TO CONFIRM"), { x: left, y: top, size: 8, font: bold, color: MUTED });
+    page.drawImage(qr, { x: left, y: top - 132, width: 122, height: 122 });
+    const info = [
+      `Scan with any UPI app (GPay, PhonePe, Paytm)`,
+      `UPI ID: ${options.payment.upiId}`,
+      `Name: ${options.payment.payeeName}`,
+      `Amount: ${money(summary.advancePaise)}`,
+      `Note: ${options.payment.note}`,
+      summary.payBy ? `Pay by ${istDateTime(summary.payBy)} to keep these dates.` : "Pay soon to keep these dates.",
+      `Then send the payment screenshot on WhatsApp to ${BUSINESS.phone}.`,
+    ];
+    let infoY = top - 22;
+    for (const [index, line] of info.entries()) {
+      const strong = index === 1 || index === 3 || index === 5;
+      page.drawText(pdfSafe(line), { x: left + 134, y: infoY, size: strong ? 10 : 9, font: strong ? bold : regular, color: index === 5 ? AMBER : strong ? INK : MUTED });
+      infoY -= 15;
+    }
+    y = Math.min(y, top - 140);
+  }
 
   // Confirmation: how to pay the balance — scan the QR or use the UPI ID.
-  if (confirmation && invoice.balancePaise > 0 && options.payment) {
+  if (!summary && confirmation && invoice.balancePaise > 0 && options.payment) {
     const qr = await pdf.embedPng(options.payment.qrPng);
     const top = y - 34;
     page.drawText(pdfSafe("PAY THE BALANCE"), { x: left, y: top, size: 8, font: bold, color: MUTED });
@@ -189,14 +258,20 @@ export async function renderInvoicePdf(
     y = Math.min(y, top - 140);
   }
 
-  if (invoice.balancePaise === 0) {
+  if (!summary && invoice.balancePaise === 0) {
     y -= 26;
     page.drawRectangle({ x: totalsX - 8, y: y - 6, width: right - totalsX + 8, height: 22, color: GREEN });
     page.drawText(pdfSafe("PAID IN FULL"), { x: totalsX, y, size: 10, font: bold, color: rgb(1, 1, 1) });
   }
 
   // Footer
-  const footer = confirmation
+  const footer = summary
+    ? [
+        "Your dates are held. The booking is confirmed once we receive the advance.",
+        `After paying, send us the payment screenshot on WhatsApp: ${BUSINESS.phone}. We then send your booking confirmation.`,
+        "This summary is not a confirmation or a tax invoice. " + GST_NOTE.replace(" on this invoice", ""),
+      ]
+    : confirmation
     ? [
         "Your stay is confirmed. We look forward to welcoming you to Sobuj Potro.",
         `Check-in from 12 noon, check-out by 11 am. Questions: ${BUSINESS.phone} (call or WhatsApp).`,

@@ -170,3 +170,22 @@ test("the logo carried in the code is a real JPEG, and a bad one never fails the
   const bytes = await renderInvoicePdf(content, { kind: "confirmation" });
   assert.equal(Buffer.from(bytes.slice(0, 5)).toString(), "%PDF-");
 });
+
+test("the booking summary renders with a QR for the advance and no paid band", async () => {
+  const QRCode = (await import("qrcode")).default;
+  const content = invoiceContent({ booking: booking({ receivedPaise: 0 }), number: "RK-18NOV-AB12C", issuedOn: "2026-10-28", email: null });
+  const qrPng = new Uint8Array(await QRCode.toBuffer("upi://pay?pa=test@ybl&am=1680.00", { type: "png" }));
+  const bytes = await renderInvoicePdf(content, {
+    kind: "summary",
+    payment: { upiId: "test@ybl", payeeName: "Raj Kuthir Homestays", qrPng, note: "RK-18NOV-AB12C" },
+    summary: { advancePaise: 168000, advancePercent: 30, payBy: ist("2026-10-28", 18) },
+  });
+  assert.equal(Buffer.from(bytes.slice(0, 5)).toString(), "%PDF-");
+  // No deadline (a submitted request) still renders.
+  const noDeadline = await renderInvoicePdf(content, {
+    kind: "summary",
+    payment: { upiId: "test@ybl", payeeName: "Raj Kuthir Homestays", qrPng, note: "RK-18NOV-AB12C" },
+    summary: { advancePaise: 168000, advancePercent: 30, payBy: null },
+  });
+  assert.equal(Buffer.from(noDeadline.slice(0, 5)).toString(), "%PDF-");
+});

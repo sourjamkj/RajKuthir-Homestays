@@ -1,5 +1,5 @@
 import { and, desc, eq, gte, inArray, isNotNull, lte } from "drizzle-orm";
-import { bookings, db, enquiries, pool, type Booking } from "@workspace/db";
+import { bookings, db, enquiries, pool, type Booking, type Enquiry, type PaymentRequest } from "@workspace/db";
 
 import { logger } from "./logger";
 import { sendEmail } from "./book-pay-notify";
@@ -199,6 +199,71 @@ export async function buildConfirmation(
   }
   const pdf = await renderInvoicePdf(content, { kind: "confirmation", payment });
   return { ok: true, invoice: { content, pdf, filename: `Booking-Confirmation-${reference.replace(/[^\w-]+/g, "-")}.pdf` } };
+}
+
+/**
+ * The booking SUMMARY: what a guest gets the moment they book, before paying.
+ * The same layout as the confirmation, titled BOOKING SUMMARY and marked
+ * PAYMENT PENDING, with the advance due now, a UPI QR for exactly that
+ * advance (the booking reference as the note) and the time the hold runs
+ * out. Built from the Book & Pay request — no booking exists yet — and never
+ * stored. Never says "confirmed".
+ */
+export async function buildBookingSummary(
+  found: { request: PaymentRequest; enquiry: Enquiry },
+  now = new Date(),
+): Promise<{ ok: true; invoice: BuiltInvoice } | { ok: false; status: number; error: string }> {
+  const { request, enquiry } = found;
+  if (!enquiry.checkIn || !enquiry.checkOut) return { ok: false, status: 409, error: "This booking has no dates." };
+
+  const content = invoiceContent({
+    booking: {
+      id: request.id,
+      reference: request.reference,
+      source: "direct",
+      status: "confirmed",
+      guestName: enquiry.name,
+      guestPhone: enquiry.phone,
+      checkIn: enquiry.checkIn,
+      checkOut: enquiry.checkOut,
+      guests: (enquiry.adults ?? 0) + (enquiry.children ?? 0),
+      pets: enquiry.pets ?? 0,
+      grossPaise: request.totalPaise,
+      receivedPaise: 0,
+    },
+    number: request.reference,
+    issuedOn: istDateOf(now),
+    email: enquiry.email,
+  });
+
+  const upi = upiDetails();
+  const payment = upi
+    ? {
+        upiId: upi.id,
+        payeeName: upi.name,
+        note: request.reference,
+        qrPng: new Uint8Array(
+          await QRCode.toBuffer(
+            upiIntentUrl({ upiId: upi.id, payeeName: upi.name, amountPaise: request.advancePaise, note: request.reference }),
+            { type: "png", errorCorrectionLevel: "M", margin: 1, width: 360 },
+          ),
+        ),
+      }
+    : null;
+
+  const pdf = await renderInvoicePdf(content, {
+    kind: "summary",
+    payment,
+    summary: {
+      advancePaise: request.advancePaise,
+      advancePercent: request.advancePercent,
+      payBy: request.status === "awaiting_payment" ? request.holdExpiresAt : null,
+    },
+  });
+  return {
+    ok: true,
+    invoice: { content, pdf, filename: `Booking-Summary-${request.reference.replace(/[^\w-]+/g, "-")}.pdf` },
+  };
 }
 
 /** Emails the invoice. `to` overrides the address on file (the owner may type one). */
