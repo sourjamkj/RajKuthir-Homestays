@@ -52,6 +52,7 @@ const CONTENT: Record<Exclude<PolicyKind, 'contact'>, Section[]> = {
         'Prices are shown in Indian rupees on the Rates page and in the booking form before you pay. The price you are quoted when you book is the price you pay.',
         `A booking is confirmed once the advance (${advance} of the stay) has been received. The balance is paid at check-in.`,
         'When you pay online, the payment is processed by Cashfree Payments, a payment gateway regulated by the Reserve Bank of India. We never see or store your card details or UPI PIN.',
+        'Paying online by UPI is free. Paying online by card or net banking may carry a convenience fee, a percentage of the advance that covers the bank charges; when it applies, it is shown before you pay, and you can always choose UPI instead. The convenience fee is not refundable.',
         'Dates are held for a short time while you pay. If the payment is not completed in that time, the dates are released.',
       ],
     },
@@ -142,6 +143,7 @@ const CONTENT: Record<Exclude<PolicyKind, 'contact'>, Section[]> = {
       title: 'How refunds are paid',
       lines: [
         'Refunds go back to the original payment method. Online payments (UPI, card or net banking through Cashfree) are refunded through Cashfree and usually reach you within 5 to 7 working days, depending on your bank.',
+        'Any convenience fee paid on a card or net banking payment is not refundable; the refund is worked out on the advance only.',
         'Payments made directly to our UPI ID are refunded to the same UPI ID or bank account within 5 to 7 working days.',
         'To cancel, message or call us with your booking reference. We confirm the cancellation and the refund amount in writing.',
       ],

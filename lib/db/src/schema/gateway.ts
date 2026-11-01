@@ -23,7 +23,10 @@ export const gatewayOrders = pgTable(
     orderId: text("order_id").notNull(),
     /** Cashfree's own id for the order. */
     cfOrderId: text("cf_order_id"),
+    /** What the guest is charged at Cashfree: the advance plus any convenience fee. */
     amountPaise: integer("amount_paise").notNull(),
+    /** The convenience fee inside amountPaise (card / net banking only). Not refundable. */
+    feePaise: integer("fee_paise").notNull().default(0),
     /** ACTIVE | PAID | EXPIRED | TERMINATED | TERMINATION_REQUESTED */
     status: text("status").notNull().default("ACTIVE"),
     expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),

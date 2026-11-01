@@ -45,9 +45,9 @@ import { ownerEmail, sendEmail, sendWhatsappTemplate } from "../lib/book-pay-not
 import { confirmPaymentRequest, waLink } from "../lib/book-pay-confirm";
 import { buildConfirmation } from "../lib/invoices";
 import { CashfreeError, cashfreeConfig } from "../lib/cashfree-client";
-import { looksLikeOrderId, orderIdFromWebhook, verifyWebhook } from "../lib/cashfree-rules";
+import { checkoutMethod, looksLikeOrderId, orderIdFromWebhook, verifyWebhook } from "../lib/cashfree-rules";
 import { findOrder, gatewayInfoFor } from "../lib/cashfree-repo";
-import { onlinePaymentMode, refundOnline, settleOrder, startCheckout } from "../lib/cashfree-service";
+import { cardFeeFor, onlinePaymentMode, refundOnline, settleOrder, startCheckout } from "../lib/cashfree-service";
 
 /**
  * Self-serve Book & Pay by UPI, on top of the existing enquiry pipeline:
@@ -376,6 +376,11 @@ router.post("/book/pay", async (req, res) => {
       confirmationReady: request.status === "confirmed" && Boolean(enquiry.convertedBookingId),
       // Pay online (UPI, card, net banking) through Cashfree, when switched on.
       onlinePay: request.status === "awaiting_payment" && live && onlinePaymentMode() !== null,
+      // Card / net banking convenience fee (0 = none; UPI is always free).
+      cardFee:
+        request.status === "awaiting_payment" && live && onlinePaymentMode() !== null
+          ? await cardFeeFor(request.advancePaise)
+          : { feePaise: 0, percent: 0 },
       upiUrl,
       qrSvg: upiUrl
         ? await QRCode.toString(upiUrl, { type: "svg", errorCorrectionLevel: "M", margin: 1 })
@@ -532,12 +537,19 @@ router.post("/book/pay/cashfree/order", async (req, res) => {
       res.status(404).json({ error: "This payment link is not valid." });
       return;
     }
-    const result = await startCheckout(found);
+    // "upi" (free) or "card" (cards + net banking, with the convenience fee).
+    const result = await startCheckout(found, checkoutMethod(req.body?.method));
     if (!result.ok) {
       res.status(result.status).json({ error: result.error });
       return;
     }
-    res.json({ paymentSessionId: result.paymentSessionId, orderId: result.orderId, mode: result.mode });
+    res.json({
+      paymentSessionId: result.paymentSessionId,
+      orderId: result.orderId,
+      mode: result.mode,
+      feePaise: result.feePaise,
+      amountPaise: result.amountPaise,
+    });
   } catch (error) {
     if (isNotMigrated(error)) {
       res.status(503).json({ error: "Online payment is not switched on yet. Please pay by UPI below." });
@@ -659,6 +671,7 @@ router.put("/admin/book-pay/settings", requireAdmin, async (req, res) => {
   const settings: BookPaySettings = {
     advancePercent: Number(req.body?.advancePercent),
     holdMinutes: Number(req.body?.holdMinutes),
+    cardFeePercent: req.body?.cardFeePercent === undefined ? 0 : Number(req.body?.cardFeePercent),
   };
   const problem = settingsProblem(settings);
   if (problem) {

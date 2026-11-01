@@ -112,14 +112,17 @@ function istDateTime(at: Date): string {
  * null when we have nothing more to say than "Advance received".
  */
 export function advanceReceiptLine(source: {
-  online: { method: string; paidAt: Date | null; cfPaymentId: string | null } | null;
+  online: { method: string; paidAt: Date | null; cfPaymentId: string | null; feePaise?: number } | null;
   utr: string | null;
 }): string | null {
   if (source.online) {
+    const fee = source.online.feePaise ?? 0;
     return [
       `Paid online${source.online.paidAt ? ` ${istDateTime(source.online.paidAt)}` : ""}`,
       source.online.method,
       source.online.cfPaymentId ? `Cashfree payment ID ${source.online.cfPaymentId}` : null,
+      // Paid on top of the advance; not part of the stay's total or balance.
+      fee > 0 ? `plus convenience fee ₹${(fee / 100).toLocaleString("en-IN", { maximumFractionDigits: 2 })} (not refundable)` : null,
     ]
       .filter(Boolean)
       .join(" · ");

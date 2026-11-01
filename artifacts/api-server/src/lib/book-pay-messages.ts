@@ -122,6 +122,8 @@ export function ownerOnlinePaymentAlert(input: {
   confirmed: boolean;
   problem: string | null;
   adminUrl: string;
+  /** Card / net banking convenience fee inside amountPaise, if any. */
+  feePaise?: number;
 }): { subject: string; text: string } {
   const head = input.confirmed
     ? `Paid online and booked: ₹${rupees(input.amountPaise)} — ${input.guestName} (${input.reference})`
@@ -134,7 +136,8 @@ export function ownerOnlinePaymentAlert(input: {
         : `${input.guestName} (${input.guestPhone}) paid the advance online, but the booking was NOT made automatically.`,
       ...(input.problem ? ["", input.confirmed ? `Note: ${input.problem}` : `Why: ${input.problem}`] : []),
       "",
-      `Amount: ₹${rupees(input.amountPaise)} (${input.method})`,
+      `Amount: ₹${rupees(input.amountPaise)} (${input.method})` +
+        (input.feePaise ? ` — includes ₹${rupees(input.feePaise)} convenience fee (not refundable)` : ""),
       `Cashfree payment ID: ${input.cfPaymentId ?? "—"}`,
       `Stay: ${prettyDate(input.checkIn)} → ${prettyDate(input.checkOut)}`,
       "",

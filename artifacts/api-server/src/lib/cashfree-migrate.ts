@@ -22,6 +22,7 @@ CREATE TABLE IF NOT EXISTS gateway_orders (
   order_id           text NOT NULL,
   cf_order_id        text,
   amount_paise       integer NOT NULL,
+  fee_paise          integer NOT NULL DEFAULT 0,
   status             text NOT NULL DEFAULT 'ACTIVE',
   expires_at         timestamptz NOT NULL,
   cf_payment_id      text,

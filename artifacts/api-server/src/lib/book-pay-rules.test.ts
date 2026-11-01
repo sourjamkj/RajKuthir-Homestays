@@ -247,7 +247,7 @@ test("advance percentage is a setting, default 50, never above the total", () =>
   assert.equal(settingsProblem({ advancePercent: 50, holdMinutes: 30 }), null);
   assert.match(settingsProblem({ advancePercent: 5, holdMinutes: 30 }) ?? "", /advance/);
   assert.match(settingsProblem({ advancePercent: 50, holdMinutes: 2 }) ?? "", /hold/);
-  assert.deepEqual(parseSettings('{"advancePercent":40}'), { advancePercent: 40, holdMinutes: 30 });
+  assert.deepEqual(parseSettings('{"advancePercent":40}'), { advancePercent: 40, holdMinutes: 30, cardFeePercent: 0 });
   assert.deepEqual(parseSettings("garbage"), DEFAULT_BOOK_PAY_SETTINGS);
   assert.deepEqual(parseSettings('{"advancePercent":3}'), DEFAULT_BOOK_PAY_SETTINGS);
 });
@@ -327,4 +327,16 @@ test("the boot-time migration is exactly src/db/book-and-pay.sql", () => {
   assert.equal(embedded, sql);
   // Additive only: nothing that could touch existing data.
   assert.doesNotMatch(sql, /^\s*(DROP|ALTER|DELETE|TRUNCATE|UPDATE)\b/im);
+});
+
+test("settings: the card convenience fee is 0–5% with at most two decimals, and old settings mean no fee", () => {
+  const base = { advancePercent: 50, holdMinutes: 30 };
+  assert.equal(settingsProblem({ ...base, cardFeePercent: 0 }), null);
+  assert.equal(settingsProblem({ ...base, cardFeePercent: 2.3 }), null);
+  assert.equal(settingsProblem({ ...base, cardFeePercent: 1.95 }), null);
+  for (const bad of [-1, 5.5, 2.345, Number.NaN]) {
+    assert.match(settingsProblem({ ...base, cardFeePercent: bad }) ?? "", /convenience fee/, String(bad));
+  }
+  assert.equal(parseSettings(JSON.stringify(base)).cardFeePercent, 0, "settings saved before the fee existed");
+  assert.equal(parseSettings(JSON.stringify({ ...base, cardFeePercent: 2.3 })).cardFeePercent, 2.3);
 });

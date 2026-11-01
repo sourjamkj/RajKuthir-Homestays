@@ -111,3 +111,15 @@ test("confirmation_deliveries is in the boot migration and the schema", () => {
   const confirm = readFileSync(path.join(here, "book-pay-confirm.ts"), "utf8");
   assert.match(confirm, /logPaymentEvent\(request\.id, "confirmation_sent"/);
 });
+
+test("receipt line: a card payment's convenience fee is shown, and marked not refundable", () => {
+  const line = advanceReceiptLine({
+    online: { method: "Credit card", paidAt: null, cfPaymentId: "88", feePaise: 6500 },
+    utr: null,
+  });
+  assert.equal(line, "Paid online · Credit card · Cashfree payment ID 88 · plus convenience fee ₹65 (not refundable)");
+  assert.equal(
+    advanceReceiptLine({ online: { method: "UPI", paidAt: null, cfPaymentId: null, feePaise: 0 }, utr: null }),
+    "Paid online · UPI",
+  );
+});

@@ -71,6 +71,8 @@ export function createOrder(
   input: {
     orderId: string;
     amountRupees: number;
+    /** order_meta.payment_methods, e.g. "upi" or "cc,dc,nb" (cashfree-rules paymentMethodsFor). */
+    paymentMethods: string;
     customer: { id: string; name: string; phone: string; email: string | null };
     returnUrl: string;
     notifyUrl: string;
@@ -96,9 +98,10 @@ export function createOrder(
       order_meta: {
         return_url: input.returnUrl,
         notify_url: input.notifyUrl,
-        // UPI, cards and net banking: the methods the 0% offer covers. No
-        // pay-later or EMI, which carry their own fees.
-        payment_methods: "upi,cc,dc,nb",
+        // Only the methods the guest chose: UPI alone (free), or cards and
+        // net banking (with the convenience fee), or all three when there is
+        // no fee. Never pay-later or EMI, which carry their own fees.
+        payment_methods: input.paymentMethods,
       },
       order_expiry_time: input.expiresAtIso,
       order_note: input.note.slice(0, 200),

@@ -1,6 +1,6 @@
 import { logger } from "./logger";
 import { SITE_ORIGIN } from "./seo";
-import { findById, logPaymentEvent, type RequestWithEnquiry } from "./book-pay-repo";
+import { findById, getBookPaySettings, logPaymentEvent, type RequestWithEnquiry } from "./book-pay-repo";
 import { confirmPaymentRequest } from "./book-pay-confirm";
 import { ownerOnlinePaymentAlert } from "./book-pay-messages";
 import { ownerEmail, sendEmail, sendWhatsappTemplate } from "./book-pay-notify";
@@ -15,8 +15,12 @@ import {
   getRefund,
 } from "./cashfree-client";
 import {
+  checkoutCharge,
   checkoutWindow,
+  convenienceFeePaise,
   istIso,
+  refundableBase,
+  type CheckoutMethod,
   methodLabel,
   orderIdFor,
   paiseFromRupees,
@@ -63,10 +67,25 @@ export function onlinePaymentMode(): CashfreeEnv | null {
 }
 
 export type CheckoutResult =
-  | { ok: true; paymentSessionId: string; orderId: string; mode: CashfreeEnv }
+  | { ok: true; paymentSessionId: string; orderId: string; mode: CashfreeEnv; feePaise: number; amountPaise: number }
   | { ok: false; status: number; error: string };
 
-export async function startCheckout(found: RequestWithEnquiry, now = new Date()): Promise<CheckoutResult> {
+/** The card / net banking convenience fee this request would carry now (0 when off). */
+export async function cardFeeFor(advancePaise: number): Promise<{ feePaise: number; percent: number }> {
+  const { cardFeePercent } = await getBookPaySettings();
+  return { feePaise: convenienceFeePaise(advancePaise, cardFeePercent), percent: cardFeePercent };
+}
+
+/**
+ * Opens a Cashfree checkout. `method` is the guest's choice when a
+ * convenience fee is configured: "upi" (free) or "card" (cards and net
+ * banking, plus the fee). With no fee, one checkout offers every method.
+ */
+export async function startCheckout(
+  found: RequestWithEnquiry,
+  method: CheckoutMethod | null = null,
+  now = new Date(),
+): Promise<CheckoutResult> {
   const config = cashfreeConfig();
   if (!config) return { ok: false, status: 503, error: "Online payment is not switched on yet. Please pay by UPI below." };
 
@@ -85,13 +104,19 @@ export async function startCheckout(found: RequestWithEnquiry, now = new Date())
     if (!stretched) return { ok: false, status: 410, error: "This hold has just expired. Please start the booking again." };
   }
 
+  // The fee is worked out here, from the owner's setting and the advance the
+  // server stored — never from anything the browser sent.
+  const { cardFeePercent } = await getBookPaySettings();
+  const charge = checkoutCharge(request.advancePaise, cardFeePercent, method);
+
   const attempt = await nextAttempt(request.id);
   const orderId = orderIdFor(request.reference, attempt);
   const digits = phone.replace(/\D/g, "").slice(-10);
 
   const created = await createOrder(config, {
     orderId,
-    amountRupees: rupeesFromPaise(request.advancePaise),
+    amountRupees: rupeesFromPaise(charge.totalPaise),
+    paymentMethods: charge.methods,
     customer: {
       id: `guest_${request.id.replace(/-/g, "").slice(0, 24)}`,
       name: enquiry.name.slice(0, 100),
@@ -101,7 +126,9 @@ export async function startCheckout(found: RequestWithEnquiry, now = new Date())
     returnUrl: `${SITE_ORIGIN}/pay?order_id={order_id}`,
     notifyUrl: `${SITE_ORIGIN}/api/book/cashfree/webhook`,
     expiresAtIso: istIso(window.orderExpiresAt),
-    note: `Advance ${request.reference} ${enquiry.checkIn ?? ""} to ${enquiry.checkOut ?? ""}`,
+    note:
+      `Advance ${request.reference} ${enquiry.checkIn ?? ""} to ${enquiry.checkOut ?? ""}` +
+      (charge.feePaise ? ` + convenience fee ${rupeesFromPaise(charge.feePaise)}` : ""),
     tags: { reference: request.reference },
   });
 
@@ -109,12 +136,24 @@ export async function startCheckout(found: RequestWithEnquiry, now = new Date())
     paymentRequestId: request.id,
     orderId,
     cfOrderId: created.cf_order_id != null ? String(created.cf_order_id) : null,
-    amountPaise: request.advancePaise,
+    amountPaise: charge.totalPaise,
+    feePaise: charge.feePaise,
     expiresAt: window.orderExpiresAt,
   });
-  await logPaymentEvent(request.id, "online_checkout", `Cashfree order ${orderId}`);
+  await logPaymentEvent(
+    request.id,
+    "online_checkout",
+    `Cashfree order ${orderId}` + (charge.feePaise ? ` (card/net banking, convenience fee ₹${rupeesFromPaise(charge.feePaise)})` : ""),
+  );
 
-  return { ok: true, paymentSessionId: created.payment_session_id, orderId, mode: config.env };
+  return {
+    ok: true,
+    paymentSessionId: created.payment_session_id,
+    orderId,
+    mode: config.env,
+    feePaise: charge.feePaise,
+    amountPaise: charge.totalPaise,
+  };
 }
 
 export type SettleResult = {
@@ -239,6 +278,7 @@ async function alertOwner(
   try {
     const found = await findById(paymentRequestId);
     if (!found) return;
+    const paidOrder = await paidOrderFor(paymentRequestId).catch(() => null);
     const alert = ownerOnlinePaymentAlert({
       guestName: found.enquiry.name,
       guestPhone: found.enquiry.phone,
@@ -251,6 +291,7 @@ async function alertOwner(
       confirmed,
       problem,
       adminUrl: `${SITE_ORIGIN}/admin/guests#payments`,
+      feePaise: paidOrder?.feePaise ?? 0,
     });
     await sendEmail(await ownerEmail(), alert.subject, alert.text);
     await sendWhatsappTemplate(process.env["OWNER_WHATSAPP_NUMBER"], "WHATSAPP_OWNER_ALERT_TEMPLATE", [
@@ -319,7 +360,8 @@ export async function refundOnline(paymentRequestId: string, amountPaise: unknow
   if (!found || !order) return { ok: false, status: 404, error: "There is no online payment on this booking to refund." };
 
   const existing = await refundsFor(order.id);
-  const refundable = refundablePaise(order.amountPaise, existing);
+  // The convenience fee is not refundable (Cancellation & Refund Policy).
+  const refundable = refundablePaise(refundableBase(order), existing);
   const problem = refundProblem(amountPaise, refundable);
   if (problem) return { ok: false, status: 400, error: problem };
 

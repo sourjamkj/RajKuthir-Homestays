@@ -36,6 +36,8 @@ type PayData = {
   upiUrl: string | null;
   qrSvg: string | null;
   onlinePay?: boolean;
+  /** Convenience fee on card / net banking (0 = none). UPI is always free. */
+  cardFee?: { feePaise: number; percent: number };
   confirmationReady?: boolean;
 };
 
@@ -117,7 +119,8 @@ export default function Pay() {
   const [returnOrder, setReturnOrder] = useState<string | null>(returningOrderId);
   const [verifying, setVerifying] = useState(false);
   const [onlineNote, setOnlineNote] = useState<string | null>(null);
-  const [opening, setOpening] = useState(false);
+  // Which checkout is opening: 'all' (no fee configured), 'upi' or 'card'.
+  const [opening, setOpening] = useState<'all' | 'upi' | 'card' | null>(null);
   const [downloading, setDownloading] = useState(false);
   const [downloadError, setDownloadError] = useState<string | null>(null);
   const [data, setData] = useState<PayData | null>(null);
@@ -276,14 +279,14 @@ export default function Pay() {
     }
   };
 
-  const payOnline = async () => {
+  const payOnline = async (method?: 'upi' | 'card') => {
     setOnlineNote(null);
-    setOpening(true);
+    setOpening(method ?? 'all');
     try {
       const response = await fetch('/api/book/pay/cashfree/order', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ token }),
+        body: JSON.stringify(method ? { token, method } : { token }),
       });
       const body = await response.json().catch(() => ({}));
       if (!response.ok) {
@@ -304,7 +307,7 @@ export default function Pay() {
     } catch {
       setOnlineNote('The secure checkout could not open. Please check your connection, or pay by UPI below.');
     } finally {
-      setOpening(false);
+      setOpening(null);
     }
   };
 
@@ -425,17 +428,46 @@ export default function Pay() {
 
             {online && (
               <section className="mt-6" aria-label="Pay online">
-                <button
-                  type="button"
-                  onClick={payOnline}
-                  disabled={opening}
-                  className="flex w-full items-center justify-center gap-2 rounded-full bg-primary px-5 py-4 text-sm font-bold uppercase tracking-[.1em] text-primary-foreground disabled:opacity-60"
-                  data-testid="button-pay-online"
-                >
-                  {opening ? <Loader2 size={17} className="animate-spin" /> : <CreditCard size={17} />} Pay {formatRupees(data.advancePaise)} online
-                </button>
+                {data.cardFee && data.cardFee.feePaise > 0 ? (
+                  <>
+                    {/* With a convenience fee: UPI (free) and card / net banking
+                        (plus the fee, shown before the guest pays) are separate. */}
+                    <button
+                      type="button"
+                      onClick={() => payOnline('upi')}
+                      disabled={opening !== null}
+                      className="flex w-full items-center justify-center gap-2 rounded-full bg-primary px-5 py-4 text-sm font-bold uppercase tracking-[.1em] text-primary-foreground disabled:opacity-60"
+                      data-testid="button-pay-online-upi"
+                    >
+                      {opening === 'upi' ? <Loader2 size={17} className="animate-spin" /> : <Smartphone size={17} />} Pay {formatRupees(data.advancePaise)} by UPI
+                    </button>
+                    <p className="mt-2 text-center text-xs text-muted-foreground">No convenience fee on UPI.</p>
+                    <button
+                      type="button"
+                      onClick={() => payOnline('card')}
+                      disabled={opening !== null}
+                      className="mt-4 flex w-full items-center justify-center gap-2 rounded-full border border-primary/25 px-5 py-4 text-sm font-bold uppercase tracking-[.1em] text-primary disabled:opacity-60"
+                      data-testid="button-pay-online-card"
+                    >
+                      {opening === 'card' ? <Loader2 size={17} className="animate-spin" /> : <CreditCard size={17} />} Card or net banking · {formatRupees(data.advancePaise + data.cardFee.feePaise)}
+                    </button>
+                    <p className="mt-2 text-center text-xs text-muted-foreground" data-testid="text-card-fee">
+                      Includes a {formatRupees(data.cardFee.feePaise)} convenience fee ({data.cardFee.percent}% for card and net banking payments). The fee is not refundable.
+                    </p>
+                  </>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => payOnline()}
+                    disabled={opening !== null}
+                    className="flex w-full items-center justify-center gap-2 rounded-full bg-primary px-5 py-4 text-sm font-bold uppercase tracking-[.1em] text-primary-foreground disabled:opacity-60"
+                    data-testid="button-pay-online"
+                  >
+                    {opening ? <Loader2 size={17} className="animate-spin" /> : <CreditCard size={17} />} Pay {formatRupees(data.advancePaise)} online
+                  </button>
+                )}
                 <p className="mt-3 flex items-center justify-center gap-1.5 text-center text-xs text-muted-foreground">
-                  <ShieldCheck size={13} /> UPI, cards or net banking · secure checkout by Cashfree · booking confirmed instantly
+                  <ShieldCheck size={13} /> {data.cardFee && data.cardFee.feePaise > 0 ? 'Secure checkout by Cashfree' : 'UPI, cards or net banking · secure checkout by Cashfree'} · booking confirmed instantly
                 </p>
                 {payable && (
                   <p className="mt-6 flex items-center gap-3 text-[11px] uppercase tracking-[.12em] text-muted-foreground">

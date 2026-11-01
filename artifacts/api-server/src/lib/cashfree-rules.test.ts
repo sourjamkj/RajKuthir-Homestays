@@ -21,6 +21,11 @@ import {
   successfulPayment,
   verifyWebhook,
   webhookSignature,
+  checkoutCharge,
+  checkoutMethod,
+  convenienceFeePaise,
+  paymentMethodsFor,
+  refundableBase,
 } from "./cashfree-rules.ts";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -184,4 +189,42 @@ test("the boot-time migration is exactly src/db/cashfree.sql, and matches the sc
   for (const column of [...sql.matchAll(/^\s{2}([a-z_]+)\s+(?:uuid|text|integer|timestamptz|jsonb)/gm)].map((m) => m[1])) {
     assert.match(schema, new RegExp(`"${column}"`), `schema is missing ${column}`);
   }
+});
+
+/* --------------------------- convenience fee --------------------------- */
+
+test("fee: a percentage of the advance, rounded up to a whole rupee, 0 when off", () => {
+  assert.equal(convenienceFeePaise(280000, 2.3), 6500, "2.3% of ₹2,800 is ₹64.40 → ₹65");
+  assert.equal(convenienceFeePaise(320000, 1.95), 6300, "₹62.40 → ₹63");
+  assert.equal(convenienceFeePaise(300000, 2), 6000, "exact rupees stay exact");
+  assert.equal(convenienceFeePaise(280000, 0), 0);
+  assert.equal(convenienceFeePaise(0, 2.3), 0);
+});
+
+test("fee: only card and net banking pay it; UPI is always free", () => {
+  assert.deepEqual(checkoutCharge(280000, 2.3, "card"), { methods: "cc,dc,nb", feePaise: 6500, totalPaise: 286500 });
+  assert.deepEqual(checkoutCharge(280000, 2.3, "upi"), { methods: "upi", feePaise: 0, totalPaise: 280000 });
+  // A checkout with no choice when a fee is set is the free UPI one, never a card checkout without its fee.
+  assert.deepEqual(checkoutCharge(280000, 2.3, null), { methods: "upi", feePaise: 0, totalPaise: 280000 });
+  // No fee configured: one checkout with every method, exactly as before.
+  assert.deepEqual(checkoutCharge(280000, 0, null), { methods: "upi,cc,dc,nb", feePaise: 0, totalPaise: 280000 });
+  assert.deepEqual(checkoutCharge(280000, 0, "card"), { methods: "cc,dc,nb", feePaise: 0, totalPaise: 280000 });
+  assert.equal(paymentMethodsFor("upi"), "upi");
+  assert.equal(checkoutMethod("card"), "card");
+  assert.equal(checkoutMethod("wallet"), null, "anything else the browser sends is ignored");
+});
+
+test("fee: a card payment with a fee settles on the full amount charged", () => {
+  const { totalPaise } = checkoutCharge(280000, 2.3, "card");
+  assert.deepEqual(settlementFor({ order_status: "PAID", order_amount: 2865 }, totalPaise), { kind: "paid" });
+  assert.equal(settlementFor({ order_status: "PAID", order_amount: 2800 }, totalPaise).kind, "amount_mismatch");
+});
+
+test("fee: never refundable — refunds are capped at the advance", () => {
+  const order = { amountPaise: 286500, feePaise: 6500 };
+  assert.equal(refundableBase(order), 280000);
+  assert.equal(refundablePaise(refundableBase(order), []), 280000);
+  assert.equal(refundablePaise(refundableBase(order), [{ amountPaise: 100000, status: "SUCCESS" }]), 180000);
+  assert.match(refundProblem(286500, refundablePaise(refundableBase(order), [])) ?? "", /At most ₹2800\.00/);
+  assert.equal(refundableBase({ amountPaise: 280000, feePaise: null }), 280000);
 });

@@ -31,6 +31,7 @@ export async function insertOrder(input: {
   orderId: string;
   cfOrderId: string | null;
   amountPaise: number;
+  feePaise: number;
   expiresAt: Date;
 }): Promise<GatewayOrder> {
   const [row] = await db.insert(gatewayOrders).values({ ...input, status: "ACTIVE" }).returning();
@@ -190,6 +191,8 @@ export async function pendingRefunds(): Promise<Array<GatewayRefund & { orderId:
 export type AdminGatewayInfo = {
   orderId: string;
   amountPaise: number;
+  /** Convenience fee inside amountPaise; not refundable. */
+  feePaise: number;
   paymentGroup: string | null;
   cfPaymentId: string | null;
   bankReference: string | null;
@@ -216,6 +219,7 @@ export async function gatewayInfoFor(paymentRequestIds: string[]): Promise<Map<s
     out.set(order.paymentRequestId, {
       orderId: order.orderId,
       amountPaise: order.amountPaise,
+      feePaise: order.feePaise,
       paymentGroup: order.paymentGroup,
       cfPaymentId: order.cfPaymentId,
       bankReference: order.bankReference,
@@ -236,7 +240,7 @@ export async function gatewayInfoFor(paymentRequestIds: string[]): Promise<Map<s
 export async function paymentSourceForBooking(bookingId: string): Promise<{
   paymentRequestId: string | null;
   utr: string | null;
-  online: { paymentGroup: string | null; paidAt: Date | null; cfPaymentId: string | null } | null;
+  online: { paymentGroup: string | null; paidAt: Date | null; cfPaymentId: string | null; feePaise: number } | null;
 }> {
   try {
     const [request] = await db
@@ -251,7 +255,9 @@ export async function paymentSourceForBooking(bookingId: string): Promise<{
     return {
       paymentRequestId: request.id,
       utr: request.utr,
-      online: order ? { paymentGroup: order.paymentGroup, paidAt: order.paidAt, cfPaymentId: order.cfPaymentId } : null,
+      online: order
+        ? { paymentGroup: order.paymentGroup, paidAt: order.paidAt, cfPaymentId: order.cfPaymentId, feePaise: order.feePaise }
+        : null,
     };
   } catch {
     return { paymentRequestId: null, utr: null, online: null };

@@ -210,7 +210,12 @@ export async function buildConfirmation(
     content.paidPaise > 0
       ? advanceReceiptLine({
           online: source.online
-            ? { method: methodLabel(source.online.paymentGroup), paidAt: source.online.paidAt, cfPaymentId: source.online.cfPaymentId }
+            ? {
+                method: methodLabel(source.online.paymentGroup),
+                paidAt: source.online.paidAt,
+                cfPaymentId: source.online.cfPaymentId,
+                feePaise: source.online.feePaise,
+              }
             : null,
           utr: source.utr,
         })

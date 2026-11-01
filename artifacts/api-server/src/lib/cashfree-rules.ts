@@ -235,3 +235,51 @@ export function refundIdFor(reference: string, n: number): string {
 }
 
 export const REFUND_PENDING = new Set(["PENDING", "PENDING_APPROVAL", "ONHOLD"]);
+
+/* --------------------------- convenience fee --------------------------- */
+
+/**
+ * How the guest chose to pay online. "upi" is always free; "card" covers
+ * credit cards, debit cards and net banking and carries the convenience fee.
+ * Card network rules in India do not allow a plain card surcharge: the fee
+ * is defensible only because UPI is offered free alongside it and the fee is
+ * shown before the guest pays.
+ */
+export type CheckoutMethod = "upi" | "card";
+
+export function checkoutMethod(raw: unknown): CheckoutMethod | null {
+  return raw === "upi" || raw === "card" ? raw : null;
+}
+
+/** Cashfree's order_meta.payment_methods for each choice. */
+export function paymentMethodsFor(method: CheckoutMethod | "all"): string {
+  return method === "upi" ? "upi" : method === "card" ? "cc,dc,nb" : "upi,cc,dc,nb";
+}
+
+/** The fee on an advance at a percentage, rounded UP to a whole rupee. 0 when off. */
+export function convenienceFeePaise(advancePaise: number, percent: number): number {
+  if (!(percent > 0) || !(advancePaise > 0)) return 0;
+  return Math.ceil((advancePaise * percent) / 100 / 100) * 100;
+}
+
+/**
+ * What one checkout charges. With no fee configured the guest gets one
+ * checkout with every method, as before; with a fee, UPI and card are
+ * separate checkouts so the fee is only ever on card or net banking.
+ */
+export function checkoutCharge(
+  advancePaise: number,
+  feePercent: number,
+  method: CheckoutMethod | null,
+): { methods: string; feePaise: number; totalPaise: number } {
+  const feeOn = convenienceFeePaise(advancePaise, feePercent) > 0;
+  if (!feeOn) return { methods: paymentMethodsFor(method ?? "all"), feePaise: 0, totalPaise: advancePaise };
+  const chosen = method ?? "upi";
+  const feePaise = chosen === "card" ? convenienceFeePaise(advancePaise, feePercent) : 0;
+  return { methods: paymentMethodsFor(chosen), feePaise, totalPaise: advancePaise + feePaise };
+}
+
+/** The convenience fee is not refundable: only what was paid towards the stay is. */
+export function refundableBase(order: { amountPaise: number; feePaise: number | null }): number {
+  return Math.max(0, order.amountPaise - (order.feePaise ?? 0));
+}
