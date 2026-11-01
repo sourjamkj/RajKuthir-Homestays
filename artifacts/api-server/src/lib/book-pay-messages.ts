@@ -104,3 +104,53 @@ export function ownerUtrAlert(input: {
     ].join("\n"),
   };
 }
+
+/**
+ * The moment a guest books, before paying: the summary email to the guest
+ * (PDF attached, QR for the advance inside) and a heads-up to the owner.
+ * The guest's never says "confirmed" — it says what to do to confirm.
+ */
+export function bookingSummaryMessages(input: {
+  guestName: string;
+  guestPhone: string;
+  reference: string;
+  checkIn: string | null;
+  checkOut: string | null;
+  totalPaise: number;
+  advancePaise: number;
+  payBy: Date;
+  adminUrl: string;
+}): { guest: { subject: string; text: string }; owner: { subject: string; text: string } } {
+  const deadline = formatDeadline(input.payBy);
+  return {
+    guest: {
+      subject: `Your booking summary — ${input.reference} (pay the advance to confirm)`,
+      text: [
+        `Hello ${firstName(input.guestName)}, thank you for booking Raj Kuthir Homestays – Sobuj Potro.`,
+        "",
+        `Booking reference: ${input.reference}`,
+        `Check-in: ${prettyDate(input.checkIn)} (from 12 noon)`,
+        `Check-out: ${prettyDate(input.checkOut)} (by 11 am)`,
+        `Total: ₹${rupees(input.totalPaise)}`,
+        `Advance to pay now: ₹${rupees(input.advancePaise)}`,
+        "",
+        `Your dates are held until ${deadline}. Pay the advance with the QR code in the attached booking summary (any UPI app), with ${input.reference} as the note.`,
+        `Then send the payment screenshot on WhatsApp to ${HOST_PHONE}. We confirm the booking as soon as we see it.`,
+        "",
+        "Team Raj Kuthir Homestays",
+      ].join("\n"),
+    },
+    owner: {
+      subject: `New booking, payment pending: ${input.guestName} — ${prettyDate(input.checkIn)} (${input.reference})`,
+      text: [
+        `${input.guestName} (${input.guestPhone}) booked online. Not paid yet.`,
+        "",
+        `Stay: ${prettyDate(input.checkIn)} → ${prettyDate(input.checkOut)}`,
+        `Total ₹${rupees(input.totalPaise)} · advance due ₹${rupees(input.advancePaise)}`,
+        `Dates held until ${deadline}.`,
+        "",
+        `The guest has the booking summary with the QR and a button to WhatsApp you. Confirm once the money is in: ${input.adminUrl}`,
+      ].join("\n"),
+    },
+  };
+}

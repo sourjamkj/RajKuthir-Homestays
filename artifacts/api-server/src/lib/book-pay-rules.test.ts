@@ -328,3 +328,39 @@ test("the boot-time migration is exactly src/db/book-and-pay.sql", () => {
   // Additive only: nothing that could touch existing data.
   assert.doesNotMatch(sql, /^\s*(DROP|ALTER|DELETE|TRUNCATE|UPDATE)\b/im);
 });
+
+test("the guest gets a summary while payment is pending, the confirmation once confirmed", async () => {
+  const { guestDocument } = await import("./book-pay-rules.ts");
+  const now = new Date("2026-11-01T10:00:00Z");
+  const live = new Date("2026-11-01T10:20:00Z");
+  const gone = new Date("2026-11-01T09:50:00Z");
+  assert.equal(guestDocument({ status: "awaiting_payment", holdExpiresAt: live }, null, now), "summary");
+  assert.equal(guestDocument({ status: "awaiting_payment", holdExpiresAt: gone }, null, now), null);
+  assert.equal(guestDocument({ status: "submitted", holdExpiresAt: gone }, null, now), "summary");
+  assert.equal(guestDocument({ status: "confirmed", holdExpiresAt: gone }, "b1", now), "confirmation");
+  assert.equal(guestDocument({ status: "confirmed", holdExpiresAt: gone }, null, now), null);
+  assert.equal(guestDocument({ status: "expired", holdExpiresAt: gone }, null, now), null);
+  assert.equal(guestDocument({ status: "rejected", holdExpiresAt: live }, null, now), null);
+});
+
+test("the booking summary messages never call the booking confirmed", async () => {
+  const { bookingSummaryMessages } = await import("./book-pay-messages.ts");
+  const m = bookingSummaryMessages({
+    guestName: "Rana Datta",
+    guestPhone: "+91 98300 40042",
+    reference: "RK-18NOV-AB12C",
+    checkIn: "2026-11-18",
+    checkOut: "2026-11-20",
+    totalPaise: 560000,
+    advancePaise: 168000,
+    payBy: new Date("2026-11-01T10:30:00Z"),
+    adminUrl: "https://rajkuthirhomestays.casa/admin/book-pay",
+  });
+  assert.match(m.guest.subject, /pay the advance to confirm/);
+  assert.match(m.guest.text, /^Hello Rana,/);
+  assert.match(m.guest.text, /Advance to pay now: ₹1,680/);
+  assert.match(m.guest.text, /\+91 62903 99165/);
+  assert.doesNotMatch(m.guest.text, /is confirmed|booking confirmed/i);
+  assert.match(m.owner.subject, /payment pending/);
+  assert.match(m.owner.text, /Not paid yet/);
+});

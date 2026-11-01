@@ -302,6 +302,27 @@ export function checkScreenshot(input: { mimeType?: unknown; dataBase64?: unknow
   return { ok: true, mime: mime as ScreenshotMime, bytes };
 }
 
+/* ------------------------- the guest's document ------------------------ */
+
+/**
+ * Which PDF the guest can download from /pay:
+ * - "confirmation" once the owner has confirmed and the booking exists;
+ * - "summary" while the dates are held (awaiting payment, or the guest has
+ *   said they paid) — titled BOOKING SUMMARY, marked PAYMENT PENDING, with
+ *   the QR for the advance;
+ * - null for an expired or rejected request: those dates are not theirs.
+ */
+export function guestDocument(
+  request: Pick<HoldRow, "status" | "holdExpiresAt">,
+  convertedBookingId: string | null,
+  now: Date,
+): "confirmation" | "summary" | null {
+  if (request.status === "confirmed") return convertedBookingId ? "confirmation" : null;
+  if (request.status === "submitted") return "summary";
+  if (request.status === "awaiting_payment" && holdBlocks(request, now)) return "summary";
+  return null;
+}
+
 /* ------------------------- what the guest sees ------------------------- */
 
 /**
