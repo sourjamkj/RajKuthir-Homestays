@@ -9,7 +9,7 @@ import { CONFIG, basePath, phoneHref, track } from '@/lib/site';
  *
  * The dates, minimum stay and price are never typed into the page: they are
  * read from the live rate plan's peak period whose id starts with `peakId`,
- * the same entry the calendar and the enquiry estimate price from. When the
+ * the same entry the calendar and the booking form price from. When the
  * owner rolls a peak over to next year in the console, this page follows.
  * Prerendered HTML shows the loading line; the browser fills in the figures.
  */
@@ -162,7 +162,7 @@ export function FestivalStay(props: FestivalStayProps) {
               <PeakFacts peakId={props.peakId} festival={props.festival} />
             </div>
             <p className="mt-8 max-w-[640px] text-sm leading-6 text-muted-foreground">
-              These are the same figures the availability calendar and the enquiry estimate use. Festival weeks are the first to fill, and the whole villa is let to one party, so there is only ever one booking for these nights.
+              These are the same figures the availability calendar and the booking form use. Festival weeks are the first to fill, and the whole villa is let to one party, so there is only ever one booking for these nights.
             </p>
           </div>
         </section>
@@ -217,7 +217,7 @@ export function FestivalStay(props: FestivalStayProps) {
                 Check availability              </a>
               <a
                 href={`https://wa.me/916290399165?text=${encodeURIComponent(
-                  `Hello Raj Kuthir, we are coming to Shantiniketan for ${props.festival} and would like to enquire about a stay at Sobuj Potro.`,
+                  `Hello Raj Kuthir, we are coming to Shantiniketan for ${props.festival} and have a question about staying at Sobuj Potro.`,
                 )}`}
                 target="_blank"
                 rel="noreferrer"

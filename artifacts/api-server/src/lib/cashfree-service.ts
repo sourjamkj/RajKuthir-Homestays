@@ -3,7 +3,8 @@ import { SITE_ORIGIN } from "./seo";
 import { findById, getBookPaySettings, logPaymentEvent, type RequestWithEnquiry } from "./book-pay-repo";
 import { confirmPaymentRequest } from "./book-pay-confirm";
 import { ownerOnlinePaymentAlert } from "./book-pay-messages";
-import { ownerEmail, sendEmail, sendWhatsappTemplate } from "./book-pay-notify";
+import { sendWhatsappTemplate } from "./book-pay-notify";
+import { notifyOwner } from "./owner-alerts";
 import { holdBlocks } from "./book-pay-rules";
 import { normaliseMobile } from "./phone";
 import {
@@ -293,7 +294,18 @@ async function alertOwner(
       adminUrl: `${SITE_ORIGIN}/admin/guests#payments`,
       feePaise: paidOrder?.feePaise ?? 0,
     });
-    await sendEmail(await ownerEmail(), alert.subject, alert.text);
+    // One place for owner alerts: the app's list, a push to the phone, and the
+    // email (if email is on for "payment" alerts in Settings).
+    await notifyOwner({
+      event: "payment_submitted",
+      title: confirmed
+        ? `Paid online and booked: ${found.enquiry.name}`
+        : `Paid online, needs your check: ${found.enquiry.name}`,
+      body: `₹${(amountPaise / 100).toLocaleString("en-IN")} · ${methodLabel(paymentGroup)} · ${found.request.reference}${problem ? ` · ${problem}` : ""}`,
+      href: `/admin/guests#payment-${paymentRequestId}`,
+      dedupeKey: `online-paid:${paymentRequestId}:${cfPaymentId ?? "?"}`,
+      email: { subject: alert.subject, text: alert.text },
+    });
     await sendWhatsappTemplate(process.env["OWNER_WHATSAPP_NUMBER"], "WHATSAPP_OWNER_ALERT_TEMPLATE", [
       found.enquiry.name,
       `₹${amountPaise / 100}`,

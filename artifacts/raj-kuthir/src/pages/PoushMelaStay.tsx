@@ -43,7 +43,7 @@ export default function PoushMelaStay() {
             <p className="border-l-2 border-accent/40 pl-5 text-sm leading-6">
               The university announces the dates and arrangements afresh each year. Check
               its notice before you fix your travel. We will tell you what we know
-              when you enquire, but we would rather not guess on a web page.
+              when you message us, but we would rather not guess on a web page.
             </p>
           </>
         ),

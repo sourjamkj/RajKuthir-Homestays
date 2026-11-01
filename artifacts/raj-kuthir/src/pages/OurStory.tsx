@@ -160,7 +160,7 @@ export default function OurStory() {
               </p>
               <p>
                 A caretaker looks after arrivals, meals that need arranging,
-                and the car for a day out. Enquiries come
+                and the car for a day out. Bookings and questions come
                 straight to the owner. There is no front desk and no
                 agent in between.
               </p>
@@ -201,7 +201,7 @@ export default function OurStory() {
                 Check availability              </a>
               <a
                 href={`https://wa.me/916290399165?text=${encodeURIComponent(
-                  'Hello Raj Kuthir, I have been reading about Sobuj Potro and would like to enquire about a stay.',
+                  'Hello Raj Kuthir, I have been reading about Sobuj Potro and have a question about a stay.',
                 )}`}
                 target="_blank"
                 rel="noreferrer"

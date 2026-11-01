@@ -44,6 +44,7 @@ import CafeSoi from '@/pages/CafeSoi';
 import Rates from '@/pages/Rates';
 import Welcome from '@/pages/Welcome';
 import AdminGuestInfo from '@/pages/AdminGuestInfo';
+import AdminCaretakerConsole from '@/pages/AdminCaretakerConsole';
 import PreArrival from '@/pages/PreArrival';
 import Pay from '@/pages/Pay';
 import GuestInvoice from '@/pages/GuestInvoice';
@@ -177,7 +178,7 @@ const faqs = [
   },
   {
     question: 'Can we bring our pet?',
-    answer: 'Yes, the stay is genuinely pet-welcoming. Please mention your pet count and anything we should know in the enquiry form so the caretaker can prepare.',
+    answer: 'Yes, the stay is genuinely pet-welcoming. Please add your pets and anything we should know in the booking form so the caretaker can prepare.',
   },
   {
     question: 'Can we cook at the homestay?',
@@ -194,7 +195,7 @@ const faqs = [
   },
   {
     question: 'How do I confirm a booking?',
-    answer: 'Send an enquiry with your preferred dates. The host will confirm availability and share the final booking details directly. The estimate below is for planning only and does not take payment.',
+    answer: 'Pick your dates on the calendar, hold them and pay the advance by UPI. We confirm as soon as we see the payment, and the balance is paid at check-in. For six or more guests, or stays over 30 nights, message us on WhatsApp.',
   },
 ];
 
@@ -270,7 +271,6 @@ function Home() {
     };
   }, []);
   const [openFaq, setOpenFaq] = useState<number | null>(0);
-  const [submitted, setSubmitted] = useState(false);
   const [calendarMonth, setCalendarMonth] = useState(() => new Date(new Date().getFullYear(), new Date().getMonth(), 1));
   const publicCalendar = useGetPublicCalendar({
     query: {
@@ -302,7 +302,6 @@ function Home() {
 
   const updateForm = (key: keyof typeof form, value: string) => {
     setForm((current) => ({ ...current, [key]: value }));
-    if (submitted) setSubmitted(false);
   };
 
   // Everyone staying counts towards occupancy pricing, children included.
@@ -433,7 +432,6 @@ function Home() {
 
   const applySelection = (next: StaySelection) => {
     setForm((current) => ({ ...current, checkIn: next.checkIn, checkOut: next.checkOut }));
-    if (submitted) setSubmitted(false);
     setSubmitError(null);
   };
 
@@ -546,23 +544,17 @@ function Home() {
     setSubmitError(null);
   };
   /*
-   * The WhatsApp message, written from what the guest has actually typed.
-   *
-   * It used to fill every blank with "To be shared" / "To be confirmed", so
-   * tapping the sticky WhatsApp bar without touching the form sent the host a
-   * message with a name of "To be shared" and no dates — an enquiry that could
-   * not be answered and, because that button never talks to the server, was
-   * never recorded either. The first real enquiry this site received arrived
-   * that way.
-   *
-   * Now a field that is empty is left out. A message sent from a blank form is
-   * a plain hello, which is at least honestly a plain hello; once the guest has
-   * given a name or dates, the details ride along.
+   * WhatsApp is for questions now, not for booking: the form books. A message
+   * from a blank form is a plain hello; once the guest has given a name or
+   * dates, the details ride along so the host can answer without asking back.
+   * The same text, opened with "I would like to book", is how a party the site
+   * cannot book online (six or more, over thirty nights, online booking
+   * paused) reaches the host. Nothing is filed as an enquiry either way.
    */
   const hasEnquiryDetail = Boolean(form.name.trim() || (form.checkIn && form.checkOut));
 
-  const whatsappMessage = (() => {
-    const lines = ['Hello Raj Kuthir, I would like to enquire about Sobuj Potro.'];
+  const whatsappText = (opening: string) => {
+    const lines = [opening];
     if (!hasEnquiryDetail) return lines.join('\n');
 
     if (form.name.trim()) lines.push(`Name: ${form.name.trim()}`);
@@ -574,9 +566,10 @@ function Home() {
     lines.push(`Guests: ${form.adults} adults, ${form.children} children, ${form.pets} pets`);
     if (form.phone.trim()) lines.push(`Phone: ${form.phone.trim()}`);
     return lines.join('\n');
-  })();
+  };
 
-  const whatsappUrl = `https://wa.me/916290399165?text=${encodeURIComponent(whatsappMessage)}`;
+  const whatsappUrl = `https://wa.me/916290399165?text=${encodeURIComponent(whatsappText('Hello Raj Kuthir, I have a question about staying at Sobuj Potro.'))}`;
+  const bookByWhatsappUrl = `https://wa.me/916290399165?text=${encodeURIComponent(whatsappText('Hello Raj Kuthir, I would like to book Sobuj Potro.'))}`;
 
   /*
    * "Check availability" means the calendar, not the section it sits in.
@@ -590,85 +583,17 @@ function Home() {
     setMenuOpen(false);
   };
 
-  /**
-   * Which button in the form was pressed.
-   *
-   * Both of them submit. The WhatsApp one used to be a bare link that opened
-   * wa.me straight from an empty form, so an enquiry made that way never
-   * reached /api/enquiries and never existed as far as the owner's console was
-   * concerned. It is a submit button now: the enquiry is recorded first, and
-   * WhatsApp is offered afterwards.
-   */
-  const [handOffToWhatsApp, setHandOffToWhatsApp] = useState(false);
-
-  const submitEnquiry = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    setSubmitError(null);
-
-    /*
-      This used to be fire-and-forget, on the reasoning that a guest who filled
-      the form should see the thank-you whatever the server did. That was fine
-      while the only failures were ours. It stopped being fine the moment the
-      server began refusing dates that are already booked: the guest was shown
-      a thank-you for an enquiry that had been rejected and never stored, and
-      the owner never saw it either. Nobody found out until somebody went
-      looking.
-
-      So a refusal the guest can act on is now shown to them. Everything else
-      — a dropped connection, a 500 — still ends in the thank-you, because
-      those are not the guest's fault and the WhatsApp route still works.
-    */
-    try {
-      const response = await fetch('/api/enquiries', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: form.name,
-          phone: form.phone,
-          email: form.email || null,
-          checkIn: form.checkIn || null,
-          checkOut: form.checkOut || null,
-          adults: form.adults || null,
-          children: form.children || null,
-          pets: form.pets || null,
-          requests: form.requests || null,
-        }),
-      });
-
-      if (response.status === 409 || response.status === 400) {
-        const body = await response.json().catch(() => ({}) as { error?: string });
-        setSubmitError(
-          typeof body.error === 'string'
-            ? body.error
-            : 'Those dates are not available. Please try different ones.',
-        );
-        void publicCalendar.refetch();
-        return;
-      }
-    } catch {
-      /* the guest is not the right person to show a dropped connection to */
-    }
-
-    setSubmitted(true);
-
-    // The enquiry is stored either way. WhatsApp is a convenience on top of
-    // it, so a blocked popup costs nothing — the success panel that just
-    // appeared carries the same link, one real click away.
-    if (handOffToWhatsApp) {
-      window.open(whatsappUrl, '_blank', 'noopener,noreferrer');
-      setHandOffToWhatsApp(false);
-    }
-  };
-
   /*
-    ONE FORM, TWO WAYS TO FINISH.
+    ONE FORM, ONE WAY TO FINISH: BOOK.
 
     The guest fills dates, party, name and phone once. The server prices it
     (/api/book/quote — the same quoteForEnquiry the owner's quotes use) and
-    the form leads with "Hold dates & pay", with "Send enquiry" and WhatsApp
-    underneath. Parties above five, and stays over thirty nights, cannot be
-    booked online, so for them the pay button simply is not offered and the
-    enquiry becomes the only action.
+    the only button is "Hold dates & pay". There is no "send an enquiry" any
+    more (the owner's decision, November 2026). Parties above five, stays over
+    thirty nights, and times the owner has paused online booking cannot be
+    booked here, so for those the button becomes "Message us on WhatsApp to
+    book", with the dates and party already typed. Nothing is filed as an
+    enquiry from this form.
   */
   type ServerQuote = {
     available: boolean;
@@ -715,6 +640,21 @@ function Home() {
   const canPayOnline = Boolean(
     serverQuote?.available && serverQuote.onlineBooking && serverQuote.advancePaise && !enquiryOnly && !dateConflict && !shortStay,
   );
+  const bookingPaused = Boolean(serverQuote?.available && serverQuote.onlineBooking === false);
+  /** The site cannot book this one: the host books it over WhatsApp instead. */
+  const bookByMessage = (enquiryOnly && nights > 0) || bookingPaused;
+  const bookingNote = enquiryOnly && nights > 0
+    ? `${partySize > 5 ? `For ${partySize} guests` : 'For stays over 30 nights'} we book by message. WhatsApp opens with your dates and party already filled in.`
+    : bookingPaused
+      ? 'Online booking is paused just now. Message us on WhatsApp and we will book these dates for you.'
+      : serverQuote && !serverQuote.available && serverQuote.reason && !dateConflict && !shortStay
+        ? serverQuote.reason
+        : null;
+  const bookButtonIdle = !form.checkIn || !form.checkOut
+    ? 'Choose your dates to book'
+    : dateConflict || shortStay || (serverQuote && !serverQuote.available)
+      ? 'Choose other dates'
+      : 'Checking the price…';
 
   const startBooking = async () => {
     setSubmitError(null);
@@ -742,10 +682,10 @@ function Home() {
         window.location.assign(`${basePath}${body.payUrl}`);
         return;
       }
-      setSubmitError(body.error ?? 'Could not hold those dates. Please try again, or send an enquiry.');
+      setSubmitError(body.error ?? 'Could not hold those dates. Please try again, or message us on WhatsApp.');
       if (response.status === 409) void publicCalendar.refetch();
     } catch {
-      setSubmitError('Could not reach the server. Please check your connection, or send an enquiry.');
+      setSubmitError('Could not reach the server. Please check your connection, or message us on WhatsApp.');
     } finally {
       setPaying(false);
     }
@@ -962,9 +902,9 @@ function Home() {
                 </h2>
                 <p className="mt-8 max-w-[430px] text-sm leading-6 text-primary/75">
                   The calendar below combines every channel Sobuj Potro is listed
-                  on, so what shows as free really is. Found your dates? Send the
-                  enquiry underneath and skip the platform fees. The host
-                  confirms directly, and no payment is taken here.
+                  on, so what shows as free really is. Found your dates? Book them
+                  right here: hold the nights, pay the advance by UPI and skip the
+                  platform fees. The balance is paid at check-in.
                 </p>
 
                 {/* Said before anybody asks. A family arriving to find two
@@ -1064,7 +1004,7 @@ function Home() {
 
                 <p className="mt-3 text-xs leading-5 text-muted-foreground" data-testid="text-large-party-note">
                   Staying with more than {ratePlan.data?.maxGuests ?? 5}? Put the
-                  numbers into the enquiry form below and the estimate there works
+                  numbers into the booking form below and the estimate there works
                   out the whole party, children and pets included.
                 </p>
               </div>
@@ -1224,11 +1164,11 @@ function Home() {
                 </div>
               )}
 
-              <p className="mt-6 border-t border-border pt-5 text-xs leading-4 text-muted-foreground">Tap a date for your check-in and another for your check-out, or drag across the nights you want. Either way, they fill the enquiry form. Once a stay is set you can drag either end to adjust it. Dates marked as booked are unavailable, though a checkout day remains open for a new arrival.</p>
+              <p className="mt-6 border-t border-border pt-5 text-xs leading-4 text-muted-foreground">Tap a date for your check-in and another for your check-out, or drag across the nights you want. Either way, they fill the booking form. Once a stay is set you can drag either end to adjust it. Dates marked as booked are unavailable, though a checkout day remains open for a new arrival.</p>
            </div>
 
             <div ref={enquiryCardRef} className="scroll-mt-24 rounded-[1.5rem] bg-background p-6 shadow-lg md:p-8">
-              {submitted ?<div className="flex min-h-[530px] flex-col items-center justify-center text-center" data-testid="status-enquiry-success"><span className="grid h-16 w-16 place-items-center rounded-full bg-primary text-secondary"><CheckIcon size="md" /></span><p className="eyebrow mt-7 text-accent">Enquiry received</p><h3 className="mt-3 font-journal text-4xl text-primary">Thank you, {form.name || 'friend'}.</h3><p className="mt-4 max-w-[390px] text-sm leading-6 text-muted-foreground">Your enquiry is ready to share with the host. For the quickest reply, you can also send the selected details on WhatsApp.</p><div className="mt-8 flex flex-wrap justify-center gap-3"><a href={whatsappUrl} target="_blank" rel="noreferrer" className="flex items-center gap-2 rounded-full bg-primary px-5 py-3 text-sm font-semibold text-primary-foreground" data-testid="link-success-whatsapp"><WhatsappIcon /> Send on WhatsApp</a><button onClick={() => setSubmitted(false)} className="rounded-full border border-border px-5 py-3 text-sm font-semibold text-primary" data-testid="button-new-enquiry">New enquiry</button></div></div> : <form ref={formRef} onSubmit={submitEnquiry} className="space-y-6" data-testid="form-booking-enquiry"><div className="flex items-center justify-between border-b border-border pb-5"><div><p className="font-journal text-3xl text-primary">Book your stay</p><p className="mt-1 text-xs text-muted-foreground">Hold the dates and pay the advance by UPI now, or just send an enquiry.</p></div></div><div className="grid gap-5 sm:grid-cols-2"><label className="block sm:col-span-2"><span className="eyebrow text-muted-foreground">Your name *</span><input required minLength={2} maxLength={80} autoComplete="name" ref={nameFieldRef} value={form.name} onChange={(event) => updateForm('name', event.target.value)} className="mt-2 w-full border-b border-border bg-transparent px-0 py-3 text-sm text-primary placeholder:text-muted-foreground/60 focus:border-primary" placeholder="Name" data-testid="input-guest-name" /></label><label className="block"><span className="eyebrow text-muted-foreground">Phone *</span><input required type="tel" inputMode="tel" autoComplete="tel" maxLength={20} pattern="(\+?91[- ]?|0)?[6-9][0-9]{9}" title="A 10-digit Indian mobile number, with or without +91" value={form.phone} onChange={(event) => updateForm('phone', event.target.value)} className="mt-2 w-full border-b border-border bg-transparent px-0 py-3 text-sm text-primary placeholder:text-muted-foreground/60 focus:border-primary" placeholder="+91 98765 43210" data-testid="input-guest-phone" /></label><label className="block"><span className="eyebrow text-muted-foreground">Email</span><input type="email" autoComplete="email" maxLength={200} value={form.email} onChange={(event) => updateForm('email', event.target.value)} className="mt-2 w-full border-b border-border bg-transparent px-0 py-3 text-sm text-primary placeholder:text-muted-foreground/60 focus:border-primary" placeholder="you@example.com" data-testid="input-guest-email" /></label><label className="block"><span className="eyebrow text-muted-foreground">Check-in *</span><input required type="date" min={new Date().toISOString().split('T')[0]} value={form.checkIn} onChange={(event) => updateForm('checkIn', event.target.value)} className="mt-2 w-full border-b border-border bg-transparent px-0 py-3 text-sm text-primary focus:border-primary" data-testid="input-check-in" /></label><label className="block"><span className="eyebrow text-muted-foreground">Check-out *</span><input required type="date" min={form.checkIn || new Date().toISOString().split('T')[0]} value={form.checkOut} onChange={(event) => updateForm('checkOut', event.target.value)} className="mt-2 w-full border-b border-border bg-transparent px-0 py-3 text-sm text-primary focus:border-primary" data-testid="input-check-out" /></label></div>{dateConflict && <p className="flex items-start gap-2 rounded-xl border border-terracotta/40 bg-terracotta/5 px-4 py-3 text-[13px] leading-6 text-terracotta" role="alert" data-testid="text-date-conflict"><AlertIcon className="mt-0.5 shrink-0" /><span>Those nights are already taken: {shortDate(eventDateKey(dateConflict.startDate))} to {shortDate(eventDateKey(dateConflict.endDate))} is booked. Pick other dates and the estimate will update.</span></p>}{shortStay && <p className="flex items-start gap-2 rounded-xl border border-terracotta/40 bg-terracotta/5 px-4 py-3 text-[13px] leading-6 text-terracotta" role="alert" data-testid="text-minimum-stay"><AlertIcon className="mt-0.5 shrink-0" /><span>{shortStay.label} has a {shortStay.minNights}-night minimum stay. Add a night and the estimate will update.</span></p>}<div className="grid grid-cols-3 gap-3"><label className="block rounded-xl border border-border p-3"><span className="flex items-center gap-1.5 text-[13px] font-medium text-muted-foreground">Adults</span><input required type="number" min="1" value={form.adults} onChange={(event) => updateForm('adults', event.target.value)} className="mt-2 w-full bg-transparent text-lg font-bold text-primary" data-testid="input-adults" /></label><label className="block rounded-xl border border-border p-3"><span className="flex items-center gap-1.5 text-[13px] font-medium text-muted-foreground">Children</span><input type="number" min="0" value={form.children} onChange={(event) => updateForm('children', event.target.value)} className="mt-2 w-full bg-transparent text-lg font-bold text-primary" data-testid="input-children" /></label><label className="block rounded-xl border border-border p-3"><span className="flex items-center gap-1.5 text-[13px] font-medium text-muted-foreground">Pets</span><input type="number" min="0" value={form.pets} onChange={(event) => updateForm('pets', event.target.value)} className="mt-2 w-full bg-transparent text-lg font-bold text-primary" data-testid="input-pets" /></label></div><label className="block"><span className="eyebrow text-muted-foreground">Special requests</span><textarea rows={3} value={form.requests} onChange={(event) => updateForm('requests', event.target.value)} className="mt-2 w-full resize-none border-b border-border bg-transparent px-0 py-3 text-sm text-primary placeholder:text-muted-foreground/60 focus:border-primary" placeholder="Arrival notes, pet details, meal preferences..." data-testid="input-special-requests" /></label><div className="rounded-xl bg-card p-4"><div className="flex items-center justify-between"><p className="text-sm font-bold text-primary">Planning estimate</p><p className="font-mono-ui text-xs text-muted-foreground">{nights ? `${nights} night${nights === 1 ? '' : 's'}` : 'Select dates'}</p></div><div className="mt-3 flex items-end justify-between"><div><p className="text-[13px] text-muted-foreground">{fromRate === null ? 'Check availability & current rate' : `From ${currency(fromRate)} / night`}</p><p className="mt-1 text-xs text-muted-foreground">{(serverQuote?.advancePercent ?? 0) >= 100 ? 'Peak dates: paid in full at booking' : `Advance ${serverQuote?.advancePercent ?? Math.round(CONFIG.advanceShare * 100)}% now · balance at check-in`}</p></div><p className="font-journal text-3xl text-primary" data-testid="text-estimate-total">{serverQuote?.available && serverQuote.totalPaise ? currency(serverQuote.totalPaise / 100) : nights > 0 && fromRate !== null ? currency(total) : '—'}</p></div>{nights > 0 && extrasPaise > 0 && <p className="mt-3 border-t border-border pt-3 text-xs leading-5 text-muted-foreground" data-testid="text-estimate-extras">Includes {currency(Math.round(extrasPaise / 100))} for {[breakdown.extraChildren + breakdown.extraAdults > 0 ? `${breakdown.extraChildren + breakdown.extraAdults} guest${breakdown.extraChildren + breakdown.extraAdults === 1 ? '' : 's'} above ${ratePlan.data?.maxGuests ?? 5}` : null, breakdown.pets > 0 ? `${breakdown.pets} pet${breakdown.pets === 1 ? '' : 's'}` : null].filter(Boolean).join(' and ')}.</p>}{nights > 0 && stay.discounted && <p className="mt-3 border-t border-border pt-3 text-xs leading-5 text-muted-foreground" data-testid="text-estimate-weekly">Includes the {ratePlan.data?.ladder?.weeklyDiscountPercent ?? 10}% weekly-stay discount.</p>}{nights > 0 && <div className="mt-3 flex justify-between border-t border-border pt-3 text-xs text-muted-foreground"><span>Advance: {currency(serverQuote?.available && serverQuote.advancePaise ? serverQuote.advancePaise / 100 : advance)}</span><span>Balance: {currency(serverQuote?.available && serverQuote.balancePaise !== undefined ? serverQuote.balancePaise / 100 : balance)}</span></div>}</div>{submitError && <p className="flex items-start gap-2 rounded-xl border border-terracotta/40 bg-terracotta/5 px-4 py-3 text-[13px] leading-6 text-terracotta" role="alert" data-testid="text-submit-error"><AlertIcon className="mt-0.5 shrink-0" /><span>{submitError}</span></p>}{enquiryOnly && nights > 0 && <p className="rounded-xl bg-secondary/60 px-4 py-3 text-[12px] leading-5 text-primary" data-testid="text-enquiry-only">{partySize > 5 ? `For ${partySize} guests` : 'For stays over 30 nights'} we confirm by message. Send an enquiry and we'll reply with a quote.</p>}{canPayOnline && serverQuote?.advancePaise ? <button type="button" onClick={startBooking} disabled={paying} className="flex w-full items-center justify-center gap-2 rounded-full bg-primary px-5 py-4 text-sm font-semibold text-primary-foreground transition-transform hover:-translate-y-0.5 active:scale-95 disabled:opacity-50" data-testid="button-book-pay">{paying ?'Holding your dates…' : <>Hold dates &amp; pay {currency(serverQuote.advancePaise / 100)}</>}</button> : null}<div className="flex flex-col gap-3 sm:flex-row"><button type="submit" disabled={Boolean(dateConflict) || Boolean(shortStay)} className={canPayOnline ? 'flex flex-1 items-center justify-center gap-2 rounded-full border border-primary/25 px-5 py-3.5 text-sm font-semibold text-primary transition-colors hover:bg-primary/5 disabled:cursor-not-allowed disabled:opacity-40' : 'flex flex-1 items-center justify-center gap-2 rounded-full bg-primary px-5 py-4 text-sm font-semibold text-primary-foreground transition-transform hover:-translate-y-0.5 active:scale-95 disabled:translate-y-0 disabled:cursor-not-allowed disabled:opacity-40'} data-testid="button-submit-enquiry">{canPayOnline ? 'Just send an enquiry' : <>Send enquiry</>}</button><button type="submit" onClick={() => setHandOffToWhatsApp(true)} disabled={Boolean(dateConflict) || Boolean(shortStay)} className="flex items-center justify-center gap-2 rounded-full border border-primary/25 px-5 py-3.5 text-sm font-semibold text-primary transition-colors hover:bg-primary/5 disabled:cursor-not-allowed disabled:opacity-40" data-testid="link-booking-whatsapp"><WhatsappIcon /> WhatsApp</button></div>{canPayOnline && <p className="text-center text-xs leading-5 text-muted-foreground" data-testid="text-hold-note">Paying holds these dates for {serverQuote?.holdMinutes ?? 30} minutes. We confirm as soon as we see the payment.</p>}<p className="text-center text-xs leading-4 text-muted-foreground">By booking or sending an enquiry you agree to our <a href={`${basePath}/house-rules`} className="underline decoration-accent decoration-1 underline-offset-2 hover:text-primary" data-testid="link-form-house-rules">house rules</a>.</p></form>}
+              <form ref={formRef} onSubmit={(event) => { event.preventDefault(); if (canPayOnline) void startBooking(); }} className="space-y-6" data-testid="form-booking-enquiry"><div className="flex items-center justify-between border-b border-border pb-5"><div><p className="font-journal text-3xl text-primary">Book your stay</p><p className="mt-1 text-xs text-muted-foreground">Hold the dates and pay the advance by UPI. The balance is paid at check-in.</p></div></div><div className="grid gap-5 sm:grid-cols-2"><label className="block sm:col-span-2"><span className="eyebrow text-muted-foreground">Your name *</span><input required minLength={2} maxLength={80} autoComplete="name" ref={nameFieldRef} value={form.name} onChange={(event) => updateForm('name', event.target.value)} className="mt-2 w-full border-b border-border bg-transparent px-0 py-3 text-sm text-primary placeholder:text-muted-foreground/60 focus:border-primary" placeholder="Name" data-testid="input-guest-name" /></label><label className="block"><span className="eyebrow text-muted-foreground">Phone *</span><input required type="tel" inputMode="tel" autoComplete="tel" maxLength={20} pattern="(\+?91[- ]?|0)?[6-9][0-9]{9}" title="A 10-digit Indian mobile number, with or without +91" value={form.phone} onChange={(event) => updateForm('phone', event.target.value)} className="mt-2 w-full border-b border-border bg-transparent px-0 py-3 text-sm text-primary placeholder:text-muted-foreground/60 focus:border-primary" placeholder="+91 98765 43210" data-testid="input-guest-phone" /></label><label className="block"><span className="eyebrow text-muted-foreground">Email</span><input type="email" autoComplete="email" maxLength={200} value={form.email} onChange={(event) => updateForm('email', event.target.value)} className="mt-2 w-full border-b border-border bg-transparent px-0 py-3 text-sm text-primary placeholder:text-muted-foreground/60 focus:border-primary" placeholder="you@example.com" data-testid="input-guest-email" /></label><label className="block"><span className="eyebrow text-muted-foreground">Check-in *</span><input required type="date" min={new Date().toISOString().split('T')[0]} value={form.checkIn} onChange={(event) => updateForm('checkIn', event.target.value)} className="mt-2 w-full border-b border-border bg-transparent px-0 py-3 text-sm text-primary focus:border-primary" data-testid="input-check-in" /></label><label className="block"><span className="eyebrow text-muted-foreground">Check-out *</span><input required type="date" min={form.checkIn || new Date().toISOString().split('T')[0]} value={form.checkOut} onChange={(event) => updateForm('checkOut', event.target.value)} className="mt-2 w-full border-b border-border bg-transparent px-0 py-3 text-sm text-primary focus:border-primary" data-testid="input-check-out" /></label></div>{dateConflict && <p className="flex items-start gap-2 rounded-xl border border-terracotta/40 bg-terracotta/5 px-4 py-3 text-[13px] leading-6 text-terracotta" role="alert" data-testid="text-date-conflict"><AlertIcon className="mt-0.5 shrink-0" /><span>Those nights are already taken: {shortDate(eventDateKey(dateConflict.startDate))} to {shortDate(eventDateKey(dateConflict.endDate))} is booked. Pick other dates and the estimate will update.</span></p>}{shortStay && <p className="flex items-start gap-2 rounded-xl border border-terracotta/40 bg-terracotta/5 px-4 py-3 text-[13px] leading-6 text-terracotta" role="alert" data-testid="text-minimum-stay"><AlertIcon className="mt-0.5 shrink-0" /><span>{shortStay.label} has a {shortStay.minNights}-night minimum stay. Add a night and the estimate will update.</span></p>}<div className="grid grid-cols-3 gap-3"><label className="block rounded-xl border border-border p-3"><span className="flex items-center gap-1.5 text-[13px] font-medium text-muted-foreground">Adults</span><input required type="number" min="1" value={form.adults} onChange={(event) => updateForm('adults', event.target.value)} className="mt-2 w-full bg-transparent text-lg font-bold text-primary" data-testid="input-adults" /></label><label className="block rounded-xl border border-border p-3"><span className="flex items-center gap-1.5 text-[13px] font-medium text-muted-foreground">Children</span><input type="number" min="0" value={form.children} onChange={(event) => updateForm('children', event.target.value)} className="mt-2 w-full bg-transparent text-lg font-bold text-primary" data-testid="input-children" /></label><label className="block rounded-xl border border-border p-3"><span className="flex items-center gap-1.5 text-[13px] font-medium text-muted-foreground">Pets</span><input type="number" min="0" value={form.pets} onChange={(event) => updateForm('pets', event.target.value)} className="mt-2 w-full bg-transparent text-lg font-bold text-primary" data-testid="input-pets" /></label></div><label className="block"><span className="eyebrow text-muted-foreground">Special requests</span><textarea rows={3} value={form.requests} onChange={(event) => updateForm('requests', event.target.value)} className="mt-2 w-full resize-none border-b border-border bg-transparent px-0 py-3 text-sm text-primary placeholder:text-muted-foreground/60 focus:border-primary" placeholder="Arrival notes, pet details, meal preferences..." data-testid="input-special-requests" /></label><div className="rounded-xl bg-card p-4"><div className="flex items-center justify-between"><p className="text-sm font-bold text-primary">Planning estimate</p><p className="font-mono-ui text-xs text-muted-foreground">{nights ? `${nights} night${nights === 1 ? '' : 's'}` : 'Select dates'}</p></div><div className="mt-3 flex items-end justify-between"><div><p className="text-[13px] text-muted-foreground">{fromRate === null ? 'Check availability & current rate' : `From ${currency(fromRate)} / night`}</p><p className="mt-1 text-xs text-muted-foreground">{(serverQuote?.advancePercent ?? 0) >= 100 ? 'Peak dates: paid in full at booking' : `Advance ${serverQuote?.advancePercent ?? Math.round(CONFIG.advanceShare * 100)}% now · balance at check-in`}</p></div><p className="font-journal text-3xl text-primary" data-testid="text-estimate-total">{serverQuote?.available && serverQuote.totalPaise ? currency(serverQuote.totalPaise / 100) : nights > 0 && fromRate !== null ? currency(total) : '—'}</p></div>{nights > 0 && extrasPaise > 0 && <p className="mt-3 border-t border-border pt-3 text-xs leading-5 text-muted-foreground" data-testid="text-estimate-extras">Includes {currency(Math.round(extrasPaise / 100))} for {[breakdown.extraChildren + breakdown.extraAdults > 0 ? `${breakdown.extraChildren + breakdown.extraAdults} guest${breakdown.extraChildren + breakdown.extraAdults === 1 ? '' : 's'} above ${ratePlan.data?.maxGuests ?? 5}` : null, breakdown.pets > 0 ? `${breakdown.pets} pet${breakdown.pets === 1 ? '' : 's'}` : null].filter(Boolean).join(' and ')}.</p>}{nights > 0 && stay.discounted && <p className="mt-3 border-t border-border pt-3 text-xs leading-5 text-muted-foreground" data-testid="text-estimate-weekly">Includes the {ratePlan.data?.ladder?.weeklyDiscountPercent ?? 10}% weekly-stay discount.</p>}{nights > 0 && <div className="mt-3 flex justify-between border-t border-border pt-3 text-xs text-muted-foreground"><span>Advance: {currency(serverQuote?.available && serverQuote.advancePaise ? serverQuote.advancePaise / 100 : advance)}</span><span>Balance: {currency(serverQuote?.available && serverQuote.balancePaise !== undefined ? serverQuote.balancePaise / 100 : balance)}</span></div>}</div>{submitError && <p className="flex items-start gap-2 rounded-xl border border-terracotta/40 bg-terracotta/5 px-4 py-3 text-[13px] leading-6 text-terracotta" role="alert" data-testid="text-submit-error"><AlertIcon className="mt-0.5 shrink-0" /><span>{submitError}</span></p>}{bookingNote && <p className="rounded-xl bg-secondary/60 px-4 py-3 text-[13px] leading-5 text-primary" data-testid="text-booking-note">{bookingNote}</p>}{bookByMessage ? <a href={bookByWhatsappUrl} target="_blank" rel="noreferrer" onClick={() => track('book_by_whatsapp')} className="flex w-full items-center justify-center gap-2 rounded-full bg-primary px-5 py-4 text-sm font-semibold text-primary-foreground transition-transform hover:-translate-y-0.5 active:scale-95" data-testid="link-book-by-whatsapp"><WhatsappIcon /> Message us on WhatsApp to book</a> : <button type="submit" disabled={!canPayOnline || paying} className="flex w-full items-center justify-center gap-2 rounded-full bg-primary px-5 py-4 text-sm font-semibold text-primary-foreground transition-transform hover:-translate-y-0.5 active:scale-95 disabled:translate-y-0 disabled:cursor-not-allowed disabled:opacity-50" data-testid="button-book-pay">{paying ? 'Holding your dates…' : canPayOnline && serverQuote?.advancePaise ? <>Hold dates &amp; pay {currency(serverQuote.advancePaise / 100)}</> : bookButtonIdle}</button>}{canPayOnline && <p className="text-center text-xs leading-5 text-muted-foreground" data-testid="text-hold-note">Paying holds these dates for {serverQuote?.holdMinutes ?? 30} minutes. We confirm as soon as we see the payment.</p>}<p className="text-center text-xs leading-4 text-muted-foreground">By booking you agree to our <a href={`${basePath}/house-rules`} className="underline decoration-accent decoration-1 underline-offset-2 hover:text-primary" data-testid="link-form-house-rules">house rules</a>.</p></form>
             </div>
             </div>
           </div>
@@ -1238,10 +1178,9 @@ function Home() {
 
             On a narrow screen the calendar and the form are stacked, so the
             price scrolls off the moment the guest looks at anything else. This
-            bar follows them down until they act on it — hidden once the
-            enquiry is sent, and never shown on desktop, where the strip beside
+            bar follows them down until they act on it, and is never shown on desktop, where the strip beside
             the calendar is already on screen next to the form. */}
-        {quotedStay && !submitted && (
+        {quotedStay && (
           <div
             className="fixed inset-x-0 bottom-0 z-40 flex items-center justify-between gap-4 border-t border-border bg-background px-5 py-3 shadow-[0_-6px_24px_rgba(0,0,0,.08)] lg:hidden"
             data-testid="bar-mobile-reserve"
@@ -1544,7 +1483,7 @@ function Home() {
           scrolling beneath it. It appears once the hero photo has gone (the
           hero has its own buttons) and steps aside while the quote bar above
           is showing. */}
-      {pastHero && !(quotedStay && !submitted) && (
+      {pastHero && !quotedStay && (
         <div className="glass-bar fixed inset-x-3 bottom-3 z-40 flex items-center gap-2 rounded-full p-2 md:hidden" data-testid="mobile-contact-bar">
           <a href={phoneHref(CONFIG.hostPhone)} className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-secondary text-primary" aria-label={`Call the host on ${CONFIG.hostPhone}`} data-testid="button-sticky-call">
             <PhoneIcon size="md" />
@@ -1749,6 +1688,7 @@ function Router() {
         <Route path="/admin/guests" component={AdminGuests} />
         <Route path="/admin/reviews" component={AdminReviews} />
         <Route path="/admin/guest-info" component={AdminGuestInfo} />
+        <Route path="/admin/caretaker" component={AdminCaretakerConsole} />
         {/* Legacy sign-in path, kept so existing bookmarks still land somewhere useful. */}
         <Route path="/sign-in/*?" component={AdminLogin} />
         <Route component={NotFound} />

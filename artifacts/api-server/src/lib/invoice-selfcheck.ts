@@ -2,6 +2,7 @@ import { logger } from "./logger";
 import { ownerEmail, sendEmail } from "./book-pay-notify";
 import { alertFor, runInvoiceSelfCheck, type SelfCheckResult } from "./invoice-selfcheck-core";
 import { upiDetails } from "./whatsapp-templates";
+import { notifyOwner } from "./owner-alerts";
 
 /**
  * The invoice self-check: every hour the server makes a test invoice and a
@@ -40,9 +41,14 @@ async function checkAndAlert(now = new Date()): Promise<void> {
   if (!next.ok) logger.error({ steps: next.steps }, "Invoice self-check failed");
   const alert = alertFor(previous, next);
   if (!alert) return;
-  const to = await ownerEmail();
-  const sent = await sendEmail(to, alert.subject, alert.text);
-  logger.info({ sent, subject: alert.subject }, "Invoice self-check alert");
+  const told = await notifyOwner({
+    event: "invoice_check_failed",
+    title: alert.subject,
+    body: alert.text.split("\n").find((line) => line.trim())?.slice(0, 200) ?? alert.subject,
+    href: "/admin",
+    email: { subject: alert.subject, text: alert.text },
+  });
+  logger.info({ emailed: told.emailed, pushed: told.pushed, subject: alert.subject }, "Invoice self-check alert");
 }
 
 let started = false;

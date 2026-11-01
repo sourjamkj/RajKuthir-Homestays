@@ -173,7 +173,7 @@ export default function WeekendFromKolkata() {
                 Book the house,<br /><em>then the train.</em>
               </h2>
               <p className="mt-7 max-w-[470px] text-lg leading-8 text-primary-foreground/70">
-                Two bedrooms, a private garden and parking on the premises. Weekends go first, so dates are worth asking about early. Enquire direct: no platform fee, and the host confirms.
+                Two bedrooms, a private garden and parking on the premises. Weekends go first, so dates are worth asking about early. Book direct: no platform fee, and the host confirms.
               </p>
               <p className="mt-5 flex flex-wrap gap-x-6 gap-y-3 text-[13px] font-medium">
                 <a href={`${basePath}/rates`} className="underline decoration-secondary decoration-2 underline-offset-4 hover:text-secondary" data-testid="link-weekend-rates">
@@ -197,7 +197,7 @@ export default function WeekendFromKolkata() {
                 Check availability              </a>
               <a
                 href={`https://wa.me/916290399165?text=${encodeURIComponent(
-                  'Hello Raj Kuthir, we are planning a weekend in Shantiniketan from Kolkata and would like to enquire about a stay at Sobuj Potro.',
+                  'Hello Raj Kuthir, we are planning a weekend in Shantiniketan from Kolkata and have a question about staying at Sobuj Potro.',
                 )}`}
                 target="_blank"
                 rel="noreferrer"

@@ -154,7 +154,7 @@ export type PageMeta = {
 const PET_FRIENDLY_FAQ = [
   {
     q: 'Are pets actually allowed, or just tolerated?',
-    a: 'Genuinely allowed. Pets are written into our published house rules, not granted as an exception at the door. Tell us who is coming when you enquire so the caretaker can have the house ready.',
+    a: 'Genuinely allowed. Pets are written into our published house rules, not granted as an exception at the door. Tell us who is coming when you book so the caretaker can have the house ready.',
   },
   {
     q: 'Is the garden fenced?',
@@ -162,7 +162,7 @@ const PET_FRIENDLY_FAQ = [
   },
   {
     q: 'Is there an extra charge for bringing a pet?',
-    a: 'Yes, per pet, and it depends on how long you stay: for one or two nights it is a single charge for the whole stay; from three nights it is charged per night. The amounts come from our current rate plan: it is shown on the rates page and in the booking section of the homepage, and the enquiry form adds it to your estimate when you enter your pets. Separately, pet damage or soiling is charged from ₹1,000, and that is on the house rules page along with everything else.',
+    a: 'Yes, per pet, and it depends on how long you stay: for one or two nights it is a single charge for the whole stay; from three nights it is charged per night. The amounts come from our current rate plan: it is shown on the rates page and in the booking section of the homepage, and the booking form adds it to your estimate when you enter your pets. Separately, pet damage or soiling is charged from ₹1,000, and that is on the house rules page along with everything else.',
   },
   {
     q: 'Can we leave our dog in the villa while we go out?',
@@ -556,6 +556,7 @@ const CLIENT_ROUTES = new Set([
   "/admin/guests",
   "/admin/reviews",
   "/admin/guest-info",
+  "/admin/caretaker",
   "/pre-arrival",
   "/management-documents",
   "/pay",

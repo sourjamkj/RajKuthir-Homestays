@@ -24,6 +24,8 @@ export type ActivityItem = {
   detail: string;
   /** Where in the console to deal with it: a page plus the #id of the exact row. */
   href: string;
+  /** Booking or calendar source (direct, bookingCom, airbnb, makeMyTrip), where there is one. */
+  source?: string;
 };
 
 /** Never look back further than this, whatever the last-seen marker says. */
@@ -125,6 +127,7 @@ export function buildActivity(rows: ActivityRows): ActivityItem[] {
     items.push({
       id: `booking_new:${b.id}`,
       kind: "booking_new",
+      source: b.source,
       at: b.createdAt.toISOString(),
       title: `New ${sourceLabel(b.source)} booking`,
       detail:
@@ -138,6 +141,7 @@ export function buildActivity(rows: ActivityRows): ActivityItem[] {
     items.push({
       id: `booking_cancelled:${b.id}:${b.updatedAt.toISOString()}`,
       kind: "booking_cancelled",
+      source: b.source,
       at: b.updatedAt.toISOString(),
       title: `${sourceLabel(b.source)} booking cancelled`,
       detail: `${b.guestName ?? "Unnamed guest"} · ${stay(b.checkIn, b.checkOut)}`,
@@ -149,6 +153,7 @@ export function buildActivity(rows: ActivityRows): ActivityItem[] {
     items.push({
       id: `ota_block:${e.id}`,
       kind: "ota_block",
+      source: e.source,
       at: e.createdAt.toISOString(),
       title: `${sourceLabel(e.source)} blocked dates`,
       detail: `${stay(e.startDate, e.endDate)} · from the ${sourceLabel(e.source)} calendar feed`,

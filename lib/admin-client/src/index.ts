@@ -102,6 +102,7 @@ export const OWNER_EVENTS = [
   'message_failed',
   'documents_uploaded',
   'invoice_check_failed',
+  'review_received',
 ] as const;
 export type OwnerEvent = (typeof OWNER_EVENTS)[number];
 export type SettingSource = 'console' | 'railway' | 'default';
@@ -113,6 +114,8 @@ export type SettingsView = {
     alertEmail: Resolved<string | null>;
     ownerWhatsapp: Resolved<string>;
     caretakerWhatsapp: Resolved<string>;
+    caretakerName: Resolved<string | null>;
+    ownerSignature: Resolved<string>;
   };
   whatsapp: {
     mode: Resolved<WhatsappMode>;
@@ -120,7 +123,14 @@ export type SettingsView = {
     readiness: { ready: boolean; missing: string[]; warnings: string[] };
     requireApproval: boolean;
   };
-  alerts: { push: Record<OwnerEvent, boolean>; email: Record<OwnerEvent, boolean> };
+  alerts: {
+    push: Record<OwnerEvent, boolean>;
+    email: Record<OwnerEvent, boolean>;
+    /** IST "HH:MM"; alerts arrive without sound inside it. Null: always with sound. */
+    quietHours: { start: string; end: string } | null;
+    /** Labels and descriptions for the Settings list, in display order. */
+    events: { event: OwnerEvent; label: string; description: string }[];
+  };
   railway: { name: string; group: string; set: boolean; value: string | null }[];
   sensitiveFields: readonly string[];
 };
@@ -129,6 +139,9 @@ export type SettingsPatch = Partial<{
   alertEmail: string | null;
   ownerWhatsapp: string | null;
   caretakerWhatsapp: string | null;
+  caretakerName: string | null;
+  ownerSignature: string | null;
+  quietHours: { start: string; end: string } | null;
   whatsappAutoreply: boolean | null;
   whatsappMode: WhatsappMode;
   pushEvents: Partial<Record<OwnerEvent, boolean>>;
@@ -167,3 +180,93 @@ export const markMessageSentManually = (id: string) => adminFetch<OutboxMessage>
 export function manualWhatsappLink(toPhone: string, text: string): string {
   return `https://wa.me/${toPhone.replace(/\D/g, '')}?text=${encodeURIComponent(text)}`;
 }
+
+/* -------------------------------------------------- caretaker console */
+
+export type CaretakerMessageKind = 'salary_credited' | 'bonus_credited' | 'day_off' | 'notice';
+export type CaretakerFieldSpec = {
+  key: string;
+  label: string;
+  type: 'month' | 'date' | 'choice' | 'text' | 'longtext';
+  required: boolean;
+  options?: readonly string[];
+  max?: number;
+  hint?: string;
+};
+export type CaretakerTemplate = { kind: CaretakerMessageKind; title: string; description: string; fields: CaretakerFieldSpec[] };
+export type CaretakerMessage = {
+  id: string;
+  kind: CaretakerMessageKind;
+  fields: Record<string, string>;
+  body: string;
+  toPhone: string;
+  via: 'web' | 'app';
+  createdAt: string;
+  sentAt: string | null;
+};
+export type CaretakerConsole = {
+  caretaker: { name: string | null; phone: string };
+  signature: string;
+  templates: CaretakerTemplate[];
+  /** Today in India, YYYY-MM-DD: the default "paid on" date. */
+  today: string;
+  history: CaretakerMessage[];
+};
+export type CaretakerDraft = { kind: CaretakerMessageKind; fields: Record<string, string> };
+
+export const getCaretakerConsole = () => adminFetch<CaretakerConsole>('/api/admin/caretaker/messages');
+export const previewCaretakerMessage = (draft: CaretakerDraft) =>
+  adminFetch<{ body: string }>('/api/admin/caretaker/messages/preview', json('POST', draft));
+/** Saves it to the history and returns the wa.me link that opens your WhatsApp on her chat with it typed. */
+export const createCaretakerMessage = (draft: CaretakerDraft) =>
+  adminFetch<{ message: CaretakerMessage; whatsappUrl: string }>('/api/admin/caretaker/messages', json('POST', draft));
+export const markCaretakerMessageSent = (id: string) =>
+  adminFetch<CaretakerMessage>(`/api/admin/caretaker/messages/${encodeURIComponent(id)}/sent`, json('POST'));
+
+/* ----------------------------------------------------- month calendar */
+
+export type CalendarDayStatus = 'past' | 'free' | 'booked' | 'blocked' | 'held';
+export type CalendarDay = {
+  date: string;
+  weekday: number;
+  status: CalendarDayStatus;
+  source: string | null;
+  label: string | null;
+  checkIn: boolean;
+  checkOut: boolean;
+  pricePaise: number | null;
+  peak: string | null;
+  minNights: number | null;
+};
+export type CalendarMonth = {
+  month: string;
+  previous: string;
+  next: string;
+  today: string;
+  days: CalendarDay[];
+  summary: { bookedNights: number; heldNights: number; blockedNights: number; freeNights: number; occupancyAheadPercent: number | null };
+};
+/** month is YYYY-MM; omit it for this month. */
+export const getCalendarMonth = (month?: string) =>
+  adminFetch<CalendarMonth>(`/api/admin/calendar/month${month ? `?month=${encodeURIComponent(month)}` : ''}`);
+
+/* --------------------------------------------------------------- alerts */
+
+export type OwnerAlert = {
+  id: string;
+  event: OwnerEvent | 'test' | string;
+  title: string;
+  body: string;
+  /** Console path to open: map it to an app screen (e.g. /admin/guests#payments → Payments). */
+  href: string;
+  createdAt: string;
+  read: boolean;
+  pushed: boolean;
+  emailed: boolean;
+};
+
+export const getAlerts = (limit = 50) => adminFetch<{ alerts: OwnerAlert[]; unread: number }>(`/api/admin/alerts?limit=${limit}`);
+/** Omit ids to mark everything read. */
+export const markAlertsRead = (ids?: string[]) => adminFetch<void>('/api/admin/alerts/read', json('POST', ids ? { ids } : {}));
+/** From the app: a test push to this phone. From the web: to every signed-in phone. */
+export const sendTestAlert = () => adminFetch<{ sent: number; quiet: boolean; signedOutPhones: number }>('/api/admin/alerts/test', json('POST'));

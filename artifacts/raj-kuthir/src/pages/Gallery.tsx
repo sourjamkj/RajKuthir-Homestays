@@ -317,10 +317,10 @@ export default function Gallery() {
                 className="flex items-center gap-2 rounded-full bg-secondary px-5 py-3 text-sm font-semibold text-primary transition-transform hover:-translate-y-0.5"
                 data-testid="link-gallery-cta-book"
               >
-                Enquire to stay              </a>
+                Book your stay              </a>
               <a
                 href={`https://wa.me/916290399165?text=${encodeURIComponent(
-                  'Hello Raj Kuthir, I have been looking at the photos of Sobuj Potro and would like to enquire about a stay.',
+                  'Hello Raj Kuthir, I have been looking at the photos of Sobuj Potro and have a question about a stay.',
                 )}`}
                 target="_blank"
                 rel="noreferrer"

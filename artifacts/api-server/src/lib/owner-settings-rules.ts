@@ -28,13 +28,34 @@ export const OWNER_EVENTS = [
   "message_failed",
   "documents_uploaded",
   "invoice_check_failed",
+  "review_received",
 ] as const;
 export type OwnerEvent = (typeof OWNER_EVENTS)[number];
+
+/** How each alert is named in Settings, and whether it is on until the owner says otherwise. */
+export const OWNER_EVENT_INFO: Record<OwnerEvent, { label: string; description: string; push: boolean; email: boolean }> = {
+  booking_hold: { label: "New booking, payment pending", description: "A guest held dates on the website and has the QR to pay.", push: true, email: true },
+  payment_submitted: { label: "Payment to confirm", description: "A guest says they have paid and sent the UPI reference.", push: true, email: true },
+  enquiry: { label: "New enquiry", description: "An enquiry was added (you, or WhatsApp).", push: true, email: false },
+  ota_booking: { label: "New OTA booking", description: "Booking.com, Airbnb or MakeMyTrip booked or closed nights.", push: true, email: false },
+  ota_cancellation: { label: "Booking cancelled", description: "A booking was cancelled on any channel.", push: true, email: false },
+  checkin_tomorrow: { label: "Check-in tomorrow", description: "Every evening at 6 pm, for guests arriving the next day.", push: true, email: false },
+  message_draft: { label: "WhatsApp messages to send", description: "Guest messages are waiting for you to approve or send.", push: true, email: false },
+  message_failed: { label: "WhatsApp message failed", description: "A message to a guest could not be delivered.", push: true, email: false },
+  documents_uploaded: { label: "Guest ID uploaded", description: "A guest uploaded their ID before arrival.", push: true, email: false },
+  invoice_check_failed: { label: "Invoices failing", description: "The hourly test of the invoice and confirmation PDFs failed, or recovered.", push: true, email: true },
+  review_received: { label: "New Google review", description: "A new review, with a reply drafted for you.", push: true, email: true },
+};
 
 export type StoredOwnerSettings = {
   alertEmail?: string | null;
   ownerWhatsapp?: string | null;
   caretakerWhatsapp?: string | null;
+  /** How messages to the caretaker greet her, and how they are signed. */
+  caretakerName?: string | null;
+  ownerSignature?: string | null;
+  /** Quiet hours for phone alerts (IST, "HH:MM"): alerts still arrive, without sound. */
+  quietHours?: { start: string; end: string } | null;
   whatsappAutoreply?: boolean | null;
   whatsappMode?: WhatsappMode | null;
   pushEvents?: Partial<Record<OwnerEvent, boolean>>;
@@ -44,6 +65,7 @@ export type StoredOwnerSettings = {
 /** Built-in defaults the code used before this console existed. */
 export const DEFAULT_OWNER_WHATSAPP = "+91 62903 99165";
 export const DEFAULT_CARETAKER_WHATSAPP = "+91 78726 85558";
+export const DEFAULT_OWNER_SIGNATURE = "Sourja Mukherjee";
 
 export type Env = Record<string, string | undefined>;
 
@@ -72,6 +94,24 @@ export function resolveCaretakerWhatsapp(stored: StoredOwnerSettings, env: Env):
   if (stored.caretakerWhatsapp) return { value: stored.caretakerWhatsapp, source: "console" };
   const railway = fromEnv(env, "CARETAKER_WHATSAPP");
   return railway ? { value: railway, source: "railway" } : { value: DEFAULT_CARETAKER_WHATSAPP, source: "default" };
+}
+
+/** A person's name as typed: trimmed, single-spaced, no control characters or WhatsApp formatting marks. */
+export function cleanPersonName(raw: unknown): string | null {
+  if (typeof raw !== "string") return null;
+  // eslint-disable-next-line no-control-regex
+  const name = raw.replace(/[\u0000-\u001f\u007f*_~`]/g, "").replace(/\s+/g, " ").trim();
+  return name.length >= 2 && name.length <= 60 ? name : null;
+}
+
+export function resolveCaretakerName(stored: StoredOwnerSettings): Resolved<string | null> {
+  return stored.caretakerName ? { value: stored.caretakerName, source: "console" } : { value: null, source: "default" };
+}
+
+export function resolveOwnerSignature(stored: StoredOwnerSettings): Resolved<string> {
+  return stored.ownerSignature
+    ? { value: stored.ownerSignature, source: "console" }
+    : { value: DEFAULT_OWNER_SIGNATURE, source: "default" };
 }
 
 export function resolveAutoreply(stored: StoredOwnerSettings, env: Env): Resolved<boolean> {
@@ -108,8 +148,29 @@ export function resolveWhatsappMode(stored: StoredOwnerSettings, env: Env): Reso
   return { value: whatsappReadiness(env).ready ? "api" : "manual", source: "default" };
 }
 
-export function eventEnabled(map: Partial<Record<OwnerEvent, boolean>> | undefined, event: OwnerEvent): boolean {
-  return map?.[event] !== false;
+export function eventEnabled(map: Partial<Record<OwnerEvent, boolean>> | undefined, event: OwnerEvent, channel: "push" | "email" = "push"): boolean {
+  const saved = map?.[event];
+  return typeof saved === "boolean" ? saved : OWNER_EVENT_INFO[event][channel];
+}
+
+const HHMM = /^([01]\d|2[0-3]):([0-5]\d)$/;
+
+/** Inside quiet hours right now (IST)? A window may run past midnight, e.g. 22:00 to 07:00. */
+export function inQuietHours(quiet: StoredOwnerSettings["quietHours"], now: Date): boolean {
+  if (!quiet || !HHMM.test(quiet.start) || !HHMM.test(quiet.end) || quiet.start === quiet.end) return false;
+  const ist = new Date(now.getTime() + 330 * 60_000);
+  const minutes = ist.getUTCHours() * 60 + ist.getUTCMinutes();
+  const toMin = (v: string) => Number(v.slice(0, 2)) * 60 + Number(v.slice(3));
+  const start = toMin(quiet.start);
+  const end = toMin(quiet.end);
+  return start < end ? minutes >= start && minutes < end : minutes >= start || minutes < end;
+}
+
+function quietFrom(value: unknown): { start: string; end: string } | null | undefined {
+  if (value === null) return null;
+  if (!value || typeof value !== "object") return undefined;
+  const { start, end } = value as Record<string, unknown>;
+  return typeof start === "string" && typeof end === "string" && HHMM.test(start) && HHMM.test(end) && start !== end ? { start, end } : undefined;
 }
 
 /* ------------------------------------------------------------------ *
@@ -152,6 +213,10 @@ export function parseStoredSettings(raw: string | null | undefined): StoredOwner
   if (typeof data.alertEmail === "string" && EMAIL.test(data.alertEmail)) out.alertEmail = data.alertEmail;
   if (typeof data.ownerWhatsapp === "string") out.ownerWhatsapp = normaliseIndianMobile(data.ownerWhatsapp);
   if (typeof data.caretakerWhatsapp === "string") out.caretakerWhatsapp = normaliseIndianMobile(data.caretakerWhatsapp);
+  if (cleanPersonName(data.caretakerName)) out.caretakerName = cleanPersonName(data.caretakerName);
+  if (cleanPersonName(data.ownerSignature)) out.ownerSignature = cleanPersonName(data.ownerSignature);
+  const quiet = quietFrom(data.quietHours);
+  if (quiet) out.quietHours = quiet;
   if (typeof data.whatsappAutoreply === "boolean") out.whatsappAutoreply = data.whatsappAutoreply;
   if (data.whatsappMode === "manual" || data.whatsappMode === "api") out.whatsappMode = data.whatsappMode;
   const push = eventMap(data.pushEvents);
@@ -179,7 +244,7 @@ export function applySettingsPatch(current: StoredOwnerSettings, body: unknown, 
   }
   const input = { ...(body as Record<string, unknown>) };
   delete input.confirmPassword;
-  const allowed = new Set(["alertEmail", "ownerWhatsapp", "caretakerWhatsapp", "whatsappAutoreply", "whatsappMode", "pushEvents", "emailEvents"]);
+  const allowed = new Set(["alertEmail", "ownerWhatsapp", "caretakerWhatsapp", "caretakerName", "ownerSignature", "quietHours", "whatsappAutoreply", "whatsappMode", "pushEvents", "emailEvents"]);
   const unknown = Object.keys(input).filter((k) => !allowed.has(k));
   if (unknown.length) return { ok: false, status: 400, error: `Unknown setting: ${unknown.join(", ")}.` };
 
@@ -199,6 +264,18 @@ export function applySettingsPatch(current: StoredOwnerSettings, body: unknown, 
     if (blank(v)) next[field] = null;
     else if (typeof v === "string" && normaliseIndianMobile(v)) next[field] = normaliseIndianMobile(v);
     else return { ok: false, status: 400, error: `${field === "ownerWhatsapp" ? "Your" : "The caretaker's"} WhatsApp number must be a 10-digit Indian mobile.` };
+  }
+  for (const field of ["caretakerName", "ownerSignature"] as const) {
+    if (!(field in input)) continue;
+    const v = input[field];
+    if (blank(v)) next[field] = null;
+    else if (cleanPersonName(v)) next[field] = cleanPersonName(v);
+    else return { ok: false, status: 400, error: `${field === "caretakerName" ? "The caretaker's name" : "Your signature"} should be 2 to 60 letters.` };
+  }
+  if ("quietHours" in input) {
+    const q = quietFrom(input.quietHours);
+    if (q === undefined) return { ok: false, status: 400, error: "Quiet hours need a start and an end time, like 22:00 and 07:00." };
+    next.quietHours = q;
   }
   if ("whatsappAutoreply" in input) {
     const v = input.whatsappAutoreply;
@@ -275,13 +352,15 @@ export function railwayStatus(env: Env) {
 
 /** The whole Settings view: effective values, where each came from, and readiness. */
 export function settingsView(stored: StoredOwnerSettings, env: Env) {
-  const events = (map: StoredOwnerSettings["pushEvents"]) =>
-    Object.fromEntries(OWNER_EVENTS.map((e) => [e, eventEnabled(map, e)])) as Record<OwnerEvent, boolean>;
+  const events = (map: StoredOwnerSettings["pushEvents"], channel: "push" | "email") =>
+    Object.fromEntries(OWNER_EVENTS.map((e) => [e, eventEnabled(map, e, channel)])) as Record<OwnerEvent, boolean>;
   return {
     contacts: {
       alertEmail: resolveAlertEmail(stored, env),
       ownerWhatsapp: resolveOwnerWhatsapp(stored, env),
       caretakerWhatsapp: resolveCaretakerWhatsapp(stored, env),
+      caretakerName: resolveCaretakerName(stored),
+      ownerSignature: resolveOwnerSignature(stored),
     },
     whatsapp: {
       mode: resolveWhatsappMode(stored, env),
@@ -289,7 +368,12 @@ export function settingsView(stored: StoredOwnerSettings, env: Env) {
       readiness: whatsappReadiness(env),
       requireApproval: env["WHATSAPP_REQUIRE_APPROVAL"] !== "false",
     },
-    alerts: { push: events(stored.pushEvents), email: events(stored.emailEvents) },
+    alerts: {
+      push: events(stored.pushEvents, "push"),
+      email: events(stored.emailEvents, "email"),
+      quietHours: stored.quietHours ?? null,
+      events: OWNER_EVENTS.map((event) => ({ event, label: OWNER_EVENT_INFO[event].label, description: OWNER_EVENT_INFO[event].description })),
+    },
     railway: railwayStatus(env),
     sensitiveFields: SENSITIVE_FIELDS,
   };
