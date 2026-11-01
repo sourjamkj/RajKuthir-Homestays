@@ -45,11 +45,13 @@ export async function markActivitySeen(at: Date): Promise<void> {
 
 const OTA_SOURCES = ["bookingCom", "airbnb", "makeMyTrip"] as const;
 
-export async function listActivity(now = new Date()): Promise<{
+export async function listActivity(now = new Date(), sinceOverride?: Date): Promise<{
   since: string;
   items: ActivityItem[];
 }> {
-  const since = activityWindowStart(await readSeenAt(), now);
+  // sinceOverride: the owner-alert watcher keeps its own cursor, so pushing an
+  // alert never marks the bell as read (and reading the bell never skips a push).
+  const since = sinceOverride ?? activityWindowStart(await readSeenAt(), now);
   /*
     Postgres keeps timestamps to the microsecond; a JS Date (and so the stored
     marker) only to the millisecond. An item created at 04:17:17.394136 is

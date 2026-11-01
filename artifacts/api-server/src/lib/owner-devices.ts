@@ -167,3 +167,19 @@ export async function recentAudit(limit = 50): Promise<AuditEntry[]> {
   );
   return rows.map((r) => ({ at: r.at.toISOString(), via: r.via, action: r.action, detail: r.detail }));
 }
+
+/** Expo says these phones no longer exist: stop sending to them. */
+export async function forgetPushTokens(tokens: string[]): Promise<void> {
+  if (tokens.length === 0) return;
+  await pool.query(`UPDATE owner_devices SET push_token = NULL WHERE push_token = ANY($1::text[])`, [tokens]).catch(() => undefined);
+}
+
+/** Push tokens of the phones given (for "send a test to this phone"). */
+export async function pushTokenOf(deviceId: string): Promise<string | null> {
+  await ensureOwnerAppTables();
+  const { rows } = await pool.query<{ push_token: string | null }>(
+    `SELECT push_token FROM owner_devices WHERE id = $1 AND revoked_at IS NULL`,
+    [deviceId],
+  );
+  return rows[0]?.push_token ?? null;
+}

@@ -27,6 +27,8 @@ import { getReviewSource, type FetchedReview } from "./review-source";
 import { ensureReviewTables } from "./reviews-migrate";
 import { SITE_ORIGIN } from "./seo";
 import { isWhatsappEnabled, sendText, toWhatsappNumber } from "./whatsapp-client";
+import { notifyOwner } from "./owner-alerts";
+import { reviewAlert } from "./owner-alert-rules";
 
 /**
  * Google reviews in, reply drafts out, and the owner's approve / post / skip.
@@ -145,7 +147,15 @@ async function alertOwner(review: GoogleReview): Promise<void> {
       logger.warn({ err: error instanceof Error ? error.message : error }, "Owner WhatsApp window check failed");
     }
   }
-  if (!sent) sent = await sendEmail(await ownerEmail(), alert.subject, alert.text);
+  // The app's alert list and a push always; the email only if WhatsApp did not reach the owner.
+  const told = await notifyOwner({
+    event: "review_received",
+    ...reviewAlert({ reviewerName: review.reviewerName, rating: review.rating, text: review.text }),
+    href: "/admin/reviews",
+    dedupeKey: `review:${review.id}`,
+    email: sent ? undefined : { subject: alert.subject, text: alert.text },
+  });
+  if (!sent) sent = told.emailed || told.pushed > 0;
 
   if (sent) {
     await db.update(googleReviews).set({ ownerAlertedAt: new Date() }).where(eq(googleReviews.id, review.id));
