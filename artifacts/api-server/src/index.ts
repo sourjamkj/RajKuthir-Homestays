@@ -14,6 +14,8 @@ import { startInvoiceEmails } from "./lib/invoices";
 import { startInvoiceSelfCheck } from "./lib/invoice-selfcheck";
 import { runSchemaCheck } from "./lib/schema-check";
 import { ensureWaInboundTables } from "./lib/wa-webhook";
+import { ensureOwnerAppTables } from "./lib/owner-devices";
+import { startOwnerSettingsRefresh } from "./lib/owner-settings";
 
 const rawPort = process.env["PORT"];
 
@@ -78,6 +80,12 @@ app.listen(port, (err) => {
   // WhatsApp inbound: creates wa_inbound_messages and wa_conversations
   // tables if missing. Additive, idempotent — like caretaker_alerts.
   void ensureWaInboundTables();
+
+  // Owner phone app and Settings console: creates owner_devices and
+  // owner_audit if missing (additive), and loads the owner's settings, which
+  // then refresh every minute. Until loaded, Railway values apply.
+  void ensureOwnerAppTables();
+  startOwnerSettingsRefresh();
 
   // Google reviews: queues review-request drafts for stays that just ended
   // and drafts replies to new reviews. Creates its tables (and the WhatsApp

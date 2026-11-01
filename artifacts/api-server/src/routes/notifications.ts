@@ -1,11 +1,15 @@
 import { Router, type IRouter } from "express";
-import { requireAdmin } from "../lib/admin-auth";
+import { requireAdmin, sessionOf } from "../lib/admin-auth";
+import { audit } from "../lib/owner-devices";
 import {
   listRecentMessages,
+  markSentManually,
   setMessageStatus,
 } from "../lib/notifications-repo";
 import { runNotifications, scheduleUpcoming } from "../lib/notifications";
-import { isWhatsappConfigured, isWhatsappEnabled } from "../lib/whatsapp-client";
+import { isWhatsappConfigured } from "../lib/whatsapp-client";
+import { guestApiSendingOn } from "../lib/whatsapp-mode";
+import { whatsappMode } from "../lib/owner-settings-state";
 
 const router: IRouter = Router();
 
@@ -28,7 +32,8 @@ router.get("/notifications", async (_req, res) => {
   res.setHeader("Cache-Control", "no-store");
   res.json({
     configured: isWhatsappConfigured(),
-    enabled: isWhatsappEnabled(),
+    enabled: guestApiSendingOn(),
+    mode: whatsappMode(),
     messages: await listRecentMessages(100),
   });
 });
@@ -67,6 +72,35 @@ router.post("/notifications/:id/cancel", async (req, res) => {
     return;
   }
 
+  res.json(updated);
+});
+
+/**
+ * Manual mode: the owner sent this from their own WhatsApp. Marks it sent so
+ * the API can never send it again later, and logs who did it.
+ */
+router.post("/notifications/:id/sent-manually", async (req, res) => {
+  const id = idFrom(req.params.id);
+
+  if (!isUuid(id)) {
+    res.status(400).json({ error: "Invalid message id." });
+    return;
+  }
+
+  const session = sessionOf(res);
+  const updated = await markSentManually(id, session.via);
+
+  if (!updated) {
+    res.status(409).json({ error: "That message was already sent or cancelled." });
+    return;
+  }
+
+  void audit({
+    via: session.via,
+    deviceId: session.via === "app" ? session.deviceId : null,
+    action: "whatsapp.sent_manually",
+    detail: { messageId: id, kind: updated.kind },
+  });
   res.json(updated);
 });
 

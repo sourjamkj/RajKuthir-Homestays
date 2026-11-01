@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { ArrowLeft, ArrowUpRight, Landmark, Leaf, MessageCircle, Phone } from 'lucide-react';
+import { BackIcon, LeafIcon, PhoneIcon, WhatsappIcon } from '@/components/icons';
 
 import { CONFIG, NEIGHBOURHOOD, basePath, phoneHref, track } from '@/lib/site';
 
@@ -53,30 +53,30 @@ export default function PlacesToVisit() {
 
   return (
     <div className="min-h-[100dvh] bg-background text-foreground">
-      <header className="sticky top-0 z-50 border-b border-foreground/10 bg-background/90 backdrop-blur-md">
+      <header className="sticky top-0 z-50 border-b border-foreground/10 bg-background">
         <div className="section-shell flex h-[74px] items-center justify-between gap-6">
           <a href={`${basePath}/`} className="flex shrink-0 items-center gap-3" data-testid="link-places-brand">
             <span className="grid h-10 w-10 place-items-center rounded-full bg-primary text-primary-foreground">
-              <Leaf size={19} strokeWidth={1.7} />
+              <LeafIcon size="md" />
             </span>
             <span className="leading-none">
-              <span className="block font-mono-ui text-[10px] font-medium tracking-[.18em] text-muted-foreground">RAJ KUTHIR</span>
+              <span className="block font-mono-ui text-xs font-medium tracking-[.18em] text-muted-foreground">RAJ KUTHIR</span>
               <span className="font-journal text-[19px] text-primary">Homestays</span>
             </span>
           </a>
           <a
             href={`${basePath}/`}
-            className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-[.1em] text-muted-foreground transition-colors hover:text-primary"
+            className="flex items-center gap-2 text-[13px] font-medium text-muted-foreground transition-colors hover:text-primary"
             data-testid="link-places-back"
           >
-            <ArrowLeft size={15} /> Back to the stay
+            <BackIcon /> Back to the stay
           </a>
         </div>
       </header>
 
       {/* Breadcrumb, matching the BreadcrumbList the server emits. */}
       <nav aria-label="Breadcrumb" className="section-shell pt-8">
-        <ol className="flex flex-wrap items-center gap-2 font-mono-ui text-[10px] uppercase tracking-[.14em] text-muted-foreground">
+        <ol className="flex flex-wrap items-center gap-2 text-[13px] text-muted-foreground">
           <li><a href={`${basePath}/`} className="hover:text-primary" data-testid="link-places-crumb-home">Home</a></li>
           <li aria-hidden="true">/</li>
           <li aria-current="page" className="text-primary">Places to visit</li>
@@ -86,15 +86,12 @@ export default function PlacesToVisit() {
       <main>
         {/* ---------------------------------------------------------- hero */}
         <section className="section-shell pb-14 pt-10 md:pb-20 md:pt-14" aria-labelledby="places-title">
-          <p className="eyebrow mb-5 text-accent">The neighbourhood</p>
           <h1 id="places-title" className="max-w-[880px] font-journal text-[clamp(2.8rem,7vw,5.6rem)] leading-[.94] tracking-[-.035em] text-primary">
             Places to visit<br /><em>in Shantiniketan.</em>
           </h1>
           <p className="mt-8 max-w-[620px] text-lg leading-8 text-primary/75">
-            {placeCount} of them, with the distance by road from our doorstep in
-            Bolpur rather than from the town in general &mdash; because
-            &ldquo;near Shantiniketan&rdquo; can mean a five-minute toto ride or
-            a two-hour drive, and it matters which.
+            {placeCount} of them, each with the distance by road from our doorstep in Bolpur, because
+            &ldquo;near Shantiniketan&rdquo; can mean a five-minute toto ride or a two-hour drive.
           </p>
           <p className="mt-4 max-w-[620px] text-sm leading-6 text-muted-foreground">
             Shantiniketan (also spelt Santiniketan) is best met in fragments: a red-earth path, a market
@@ -118,7 +115,7 @@ export default function PlacesToVisit() {
                       className="flex items-center gap-5 border-b border-border py-5"
                       data-testid={`place-${place.title.toLowerCase().replace(/[^a-z]+/g, '-')}`}
                     >
-                      <Landmark size={19} className="shrink-0 text-primary/60" strokeWidth={1.4} />
+                     
                       <div className="min-w-0 flex-1">
                         <p className="font-journal text-xl text-primary md:text-2xl">{place.title}</p>
                         <p className="mt-1 text-xs leading-5 text-muted-foreground">{place.note}</p>
@@ -137,7 +134,7 @@ export default function PlacesToVisit() {
           <p className="max-w-[640px] pt-4 text-sm leading-6 text-muted-foreground" data-testid="text-places-pets">
             Travelling with a dog? Whether a particular market, temple or
             sanctuary lets pets in changes from season to season, and we have
-            not verified it for any of the places above &mdash; ask the
+            not verified it for any of the places above, so ask the
             caretaker before you set out. Everything about the house itself is
             on the page for our{' '}
             <a href={`${basePath}/pet-friendly-homestay-shantiniketan`} className="text-primary underline decoration-accent decoration-2 underline-offset-4" data-testid="link-places-pet">
@@ -154,7 +151,7 @@ export default function PlacesToVisit() {
         <section className="border-t border-border py-16 md:py-24" aria-labelledby="places-plan-title">
           <div className="section-shell">
             <h2 id="places-plan-title" className="max-w-[680px] font-journal text-4xl leading-[.95] text-primary md:text-5xl">
-              Now fit it<br /><em>into your days.</em>
+              Now fit it<br />into your days.
             </h2>
             <p className="mt-7 max-w-[640px] text-[15px] leading-7 text-muted-foreground md:text-[17px]">
               Eighteen places is more than a short trip holds. Two things decide
@@ -214,9 +211,8 @@ export default function PlacesToVisit() {
         <section className="border-y border-border bg-card py-20 md:py-28" aria-labelledby="places-faq-title">
           <div className="section-shell grid gap-12 lg:grid-cols-[.7fr_1.3fr] lg:gap-20">
             <div>
-              <p className="eyebrow mb-5 text-accent">Before you plan</p>
               <h2 id="places-faq-title" className="font-journal text-4xl leading-[.95] text-primary md:text-5xl">
-                The practical<br /><em>questions.</em>
+                The practical<br />questions.
               </h2>
             </div>
             <dl className="space-y-8">
@@ -231,19 +227,18 @@ export default function PlacesToVisit() {
         </section>
 
         {/* ------------------------------------------------------- closing */}
-        <section className="bg-primary py-20 text-primary-foreground md:py-28" aria-labelledby="places-cta">
+        <section className="on-dark bg-primary py-20 text-primary-foreground md:py-28" aria-labelledby="places-cta">
           <div className="section-shell grid gap-10 lg:grid-cols-[1.1fr_.9fr] lg:items-end">
             <div>
-              <p className="eyebrow mb-5 text-secondary">Somewhere to come back to</p>
               <h2 id="places-cta" className="max-w-[560px] font-journal text-4xl leading-[.94] md:text-6xl">
                 A whole villa,<br /><em>at the end of the day.</em>
               </h2>
               <p className="mt-7 max-w-[470px] text-lg leading-8 text-primary-foreground/70">
                 Two bedrooms, a private garden and parking on the premises, in
-                Bolpur &mdash; near Prantik station and a short ride from the
+                Bolpur, near Prantik station and a short ride from the
                 Tagore campus.
               </p>
-              <p className="mt-5 flex flex-wrap gap-x-6 gap-y-3 text-xs font-bold uppercase tracking-[.1em]">
+              <p className="mt-5 flex flex-wrap gap-x-6 gap-y-3 text-[13px] font-medium">
                 <a href={`${basePath}/gallery`} className="underline decoration-secondary decoration-2 underline-offset-4 hover:text-secondary" data-testid="link-places-gallery">
                   See the villa
                 </a>
@@ -256,11 +251,10 @@ export default function PlacesToVisit() {
               <a
                 href={`${basePath}/#availability`}
                 onClick={() => track('check_availability', { placement: 'places_to_visit' })}
-                className="flex items-center gap-2 rounded-full bg-secondary px-5 py-3 text-xs font-bold uppercase tracking-[.1em] text-primary transition-transform hover:-translate-y-0.5"
+                className="flex items-center gap-2 rounded-full bg-secondary px-5 py-3 text-sm font-semibold text-primary transition-transform hover:-translate-y-0.5"
                 data-testid="link-places-book"
               >
-                Check availability <ArrowUpRight size={15} />
-              </a>
+                Check availability              </a>
               <a
                 href={`https://wa.me/916290399165?text=${encodeURIComponent(
                   'Hello Raj Kuthir, I am planning a trip to Shantiniketan and would like to enquire about a stay at Sobuj Potro.',
@@ -268,40 +262,40 @@ export default function PlacesToVisit() {
                 target="_blank"
                 rel="noreferrer"
                 onClick={() => track('whatsapp_click', { placement: 'places_to_visit' })}
-                className="flex items-center gap-2 rounded-full border border-primary-foreground/25 px-5 py-3 text-xs font-bold uppercase tracking-[.1em] text-primary-foreground transition-colors hover:bg-primary-foreground/10"
+                className="flex items-center gap-2 rounded-full border border-primary-foreground/25 px-5 py-3 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary-foreground/10"
                 data-testid="link-places-whatsapp"
               >
-                <MessageCircle size={15} /> WhatsApp
+                <WhatsappIcon /> WhatsApp
               </a>
               <a
                 href={phoneHref(CONFIG.caretakerPhone)}
-                className="flex items-center gap-2 rounded-full border border-primary-foreground/25 px-5 py-3 text-xs font-bold uppercase tracking-[.1em] text-primary-foreground transition-colors hover:bg-primary-foreground/10"
+                className="flex items-center gap-2 rounded-full border border-primary-foreground/25 px-5 py-3 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary-foreground/10"
                 data-testid="link-places-caretaker"
               >
-                <Phone size={15} /> Caretaker
+                <PhoneIcon /> Caretaker
               </a>
             </div>
           </div>
         </section>
       </main>
 
-      <footer className="bg-[#172d25] py-14 text-[#f5eadb]">
+      <footer className="on-dark bg-forest py-14 text-footer-ink">
         <div className="section-shell flex flex-col justify-between gap-6 sm:flex-row sm:items-center">
           <div>
             <p className="font-journal text-2xl">Raj Kuthir Homestays</p>
-            <p className="mt-2 max-w-[420px] text-sm text-[#f5eadb]/60">
-              Sobuj Potro &mdash; a private two-bedroom villa with a garden in Bolpur / Shantiniketan.
+            <p className="mt-2 max-w-[420px] text-sm text-footer-ink/60">
+              Sobuj Potro, a private two-bedroom villa with a garden in Bolpur / Shantiniketan.
             </p>
           </div>
-          <div className="flex flex-col gap-2 text-sm text-[#f5eadb]/70 sm:text-right">
-            <a href={`${basePath}/`} className="hover:text-[#e4c9a4]">The stay</a>
-            <a href={`${basePath}/pet-friendly-homestay-shantiniketan`} className="hover:text-[#e4c9a4]">Staying with a pet</a>
-            <a href={`${basePath}/gallery`} className="hover:text-[#e4c9a4]">Photos</a>
-            <a href={`${basePath}/our-story`} className="hover:text-[#e4c9a4]">Our story</a>
-            <a href={`${basePath}/house-rules`} className="hover:text-[#e4c9a4]">House rules</a>
-            <a href={`${basePath}/rates`} className="hover:text-[#e4c9a4]">Rates</a>
-            <a href={`${basePath}/poush-mela-stay-shantiniketan`} className="hover:text-[#e4c9a4]">Poush Mela stay</a>
-            <a href={`${basePath}/basanta-utsav-stay-shantiniketan`} className="hover:text-[#e4c9a4]">Basanta Utsav stay</a>
+          <div className="flex flex-col gap-2 text-sm text-footer-ink/70 sm:text-right">
+            <a href={`${basePath}/`} className="hover:text-sand">The stay</a>
+            <a href={`${basePath}/pet-friendly-homestay-shantiniketan`} className="hover:text-sand">Staying with a pet</a>
+            <a href={`${basePath}/gallery`} className="hover:text-sand">Photos</a>
+            <a href={`${basePath}/our-story`} className="hover:text-sand">Our story</a>
+            <a href={`${basePath}/house-rules`} className="hover:text-sand">House rules</a>
+            <a href={`${basePath}/rates`} className="hover:text-sand">Rates</a>
+            <a href={`${basePath}/poush-mela-stay-shantiniketan`} className="hover:text-sand">Poush Mela stay</a>
+            <a href={`${basePath}/basanta-utsav-stay-shantiniketan`} className="hover:text-sand">Basanta Utsav stay</a>
           </div>
         </div>
       </footer>

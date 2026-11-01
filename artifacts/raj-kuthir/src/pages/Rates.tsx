@@ -1,20 +1,5 @@
 import { useEffect, useMemo } from 'react';
-import {
-  AirVent,
-  ArrowLeft,
-  ArrowUpRight,
-  Bath,
-  BedDouble,
-  CalendarDays,
-  Car,
-  CookingPot,
-  Leaf,
-  MapPin,
-  MessageCircle,
-  PawPrint,
-  Phone,
-  Wifi,
-} from 'lucide-react';
+import { BackIcon, CalendarIcon, LeafIcon, MapPinIcon, PhoneIcon, WhatsappIcon } from '@/components/icons';
 
 import { formatRupees, petChargeText, useRatePlan } from '@/lib/rates';
 import { BookAndPay } from '@/components/BookAndPay';
@@ -44,13 +29,13 @@ import { CONFIG, basePath, phoneHref, track } from '@/lib/site';
  */
 
 const COVERED = [
-  { icon: BedDouble, label: 'The entire villa — two bedrooms, two king beds' },
-  { icon: AirVent, label: 'Air conditioning in both bedrooms' },
-  { icon: Bath, label: 'Two bathrooms' },
-  { icon: CookingPot, label: 'A kitchen with induction setup, microwave, refrigerator and water filter' },
-  { icon: Leaf, label: 'The private garden' },
-  { icon: Car, label: 'On-premise parking' },
-  { icon: Wifi, label: 'Wi-Fi' },
+  { label: 'The entire villa: two bedrooms, two king beds' },
+  { label: 'Air conditioning in both bedrooms' },
+  { label: 'Two bathrooms' },
+  { label: 'A kitchen with induction setup, microwave, refrigerator and water filter' },
+  { label: 'The private garden' },
+  { label: 'On-premise parking' },
+  { label: 'Wi-Fi' },
 ];
 
 export default function Rates() {
@@ -84,30 +69,30 @@ export default function Rates() {
 
   return (
     <div className="min-h-[100dvh] bg-background text-foreground">
-      <header className="sticky top-0 z-50 border-b border-foreground/10 bg-background/90 backdrop-blur-md">
+      <header className="sticky top-0 z-50 border-b border-foreground/10 bg-background">
         <div className="section-shell flex h-[74px] items-center justify-between gap-6">
           <a href={`${basePath}/`} className="flex shrink-0 items-center gap-3" data-testid="link-rates-brand">
             <span className="grid h-10 w-10 place-items-center rounded-full bg-primary text-primary-foreground">
-              <Leaf size={19} strokeWidth={1.7} />
+              <LeafIcon size="md" />
             </span>
             <span className="leading-none">
-              <span className="block font-mono-ui text-[10px] font-medium tracking-[.18em] text-muted-foreground">RAJ KUTHIR</span>
+              <span className="block font-mono-ui text-xs font-medium tracking-[.18em] text-muted-foreground">RAJ KUTHIR</span>
               <span className="font-journal text-[19px] text-primary">Homestays</span>
             </span>
           </a>
           <a
             href={`${basePath}/`}
-            className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-[.1em] text-muted-foreground transition-colors hover:text-primary"
+            className="flex items-center gap-2 text-[13px] font-medium text-muted-foreground transition-colors hover:text-primary"
             data-testid="link-rates-back"
           >
-            <ArrowLeft size={15} /> Back to the stay
+            <BackIcon /> Back to the stay
           </a>
         </div>
       </header>
 
       {/* Breadcrumb, matching the BreadcrumbList the server emits. */}
       <nav aria-label="Breadcrumb" className="section-shell pt-8">
-        <ol className="flex flex-wrap items-center gap-2 font-mono-ui text-[10px] uppercase tracking-[.14em] text-muted-foreground">
+        <ol className="flex flex-wrap items-center gap-2 text-[13px] text-muted-foreground">
           <li><a href={`${basePath}/`} className="hover:text-primary" data-testid="link-rates-crumb-home">Home</a></li>
           <li aria-hidden="true">/</li>
           <li aria-current="page" className="text-primary">Rates</li>
@@ -117,15 +102,12 @@ export default function Rates() {
       <main>
         {/* ---------------------------------------------------------- hero */}
         <section className="section-shell pb-14 pt-10 md:pb-20 md:pt-14" aria-labelledby="rates-title">
-          <p className="eyebrow mb-5 text-accent">Before you enquire</p>
           <h1 id="rates-title" className="max-w-[880px] font-journal text-[clamp(2.8rem,7vw,5.6rem)] leading-[.94] tracking-[-.035em] text-primary">
             Homestay rates<br /><em>in Shantiniketan.</em>
           </h1>
           <p className="mt-8 max-w-[620px] text-lg leading-8 text-primary/75">
-            The full tariff for a night at Sobuj Potro &mdash; the price of the
-            whole two-bedroom villa in Bolpur, not a room in it. What you pay
-            depends on how many of you are staying and on your dates; the house
-            you get is the same.
+            The full tariff for a night at Sobuj Potro: the price of the whole two-bedroom villa in
+            Bolpur, not a room in it.
           </p>
           <p className="mt-4 max-w-[620px] text-sm leading-6 text-muted-foreground">
             These are read live from the same rate card as the availability
@@ -156,12 +138,12 @@ export default function Rates() {
         <section className="border-y border-border bg-card py-16 md:py-24" aria-labelledby="rate-card-title">
           <div className="section-shell grid gap-12 lg:grid-cols-[.8fr_1.2fr] lg:gap-20">
             <div>
-              <p className="eyebrow mb-5 text-accent">Per night</p>
               <h2 id="rate-card-title" className="font-journal text-4xl leading-[.95] text-primary md:text-5xl">
                 The rate card.
               </h2>
               <p className="mt-6 max-w-[380px] text-sm leading-6 text-muted-foreground">
-                The standing rate for each party size, Sunday to Thursday nights
+                What you pay depends on how many of you are staying and on your
+                dates; the house you get is the same. The standing rate for each party size, Sunday to Thursday nights
                 and Friday to Saturday nights. Festival weeks are priced
                 differently and may need a minimum stay, so the availability
                 calendar shows the exact rate for every night before you ask.
@@ -194,10 +176,10 @@ export default function Rates() {
                   <caption className="sr-only">Nightly rate for the whole villa, by number of guests, weeknights and weekends</caption>
                   <thead>
                     <tr className="border-b border-border">
-                      <th scope="col" className="py-3 font-mono-ui text-[10px] font-normal uppercase tracking-[.12em] text-muted-foreground">Guests</th>
-                      <th scope="col" className="py-3 text-right font-mono-ui text-[10px] font-normal uppercase tracking-[.12em] text-muted-foreground">Sun&ndash;Thu night</th>
+                      <th scope="col" className="py-3 text-[13px] font-normal text-muted-foreground">Guests</th>
+                      <th scope="col" className="py-3 text-right text-[13px] font-normal text-muted-foreground">Sun&ndash;Thu night</th>
                       {plan.data?.weekendRates && (
-                        <th scope="col" className="py-3 text-right font-mono-ui text-[10px] font-normal uppercase tracking-[.12em] text-muted-foreground">Fri&ndash;Sat night</th>
+                        <th scope="col" className="py-3 text-right text-[13px] font-normal text-muted-foreground">Fri&ndash;Sat night</th>
                       )}
                     </tr>
                   </thead>
@@ -220,11 +202,10 @@ export default function Rates() {
               <a
                 href={`${basePath}/#availability`}
                 onClick={() => track('check_availability', { placement: 'rates_card' })}
-                className="mt-8 inline-flex items-center gap-2 text-xs font-bold uppercase tracking-[.1em] text-primary underline decoration-accent decoration-2 underline-offset-4"
+                className="mt-8 inline-flex items-center gap-2 text-sm font-semibold text-primary underline decoration-accent decoration-2 underline-offset-4"
                 data-testid="link-rates-calendar"
               >
-                See the rate for your dates <ArrowUpRight size={14} />
-              </a>
+                See the rate for your dates              </a>
             </div>
           </div>
         </section>
@@ -240,15 +221,13 @@ export default function Rates() {
             did not expect is a worse first hour than reading it here. */}
         {extras && (
           <section className="section-shell py-16 md:py-24" aria-labelledby="extras-title">
-            <p className="eyebrow mb-5 text-accent">Who is coming</p>
             <h2 id="extras-title" className="max-w-[640px] font-journal text-4xl leading-[.95] text-primary md:text-5xl">
-              Children, larger parties<br /><em>and pets.</em>
+              Children, larger parties<br />and pets.
             </h2>
             <ul className="mt-10 grid gap-4 lg:grid-cols-3" data-testid="list-rates-extras">
               <li className="rounded-[1.4rem] border border-border bg-card p-7 text-sm leading-6 text-muted-foreground">
                 Children under {extras.childUnderAge} count as guests. Two adults
-                and two little ones are a party of four, at the four-guest price
-                &mdash; no separate child fee.
+                and two little ones are a party of four, at the four-guest price, with no separate child fee.
               </li>
               <li className="rounded-[1.4rem] border border-border bg-card p-7 text-sm leading-6 text-muted-foreground">
                 Above {maxGuests} guests, each extra person is{' '}
@@ -272,13 +251,12 @@ export default function Rates() {
         <section className={`py-16 md:py-24 ${extras ? 'border-t border-border bg-card' : ''}`} aria-labelledby="covers-title">
           <div className="section-shell grid gap-12 lg:grid-cols-[.8fr_1.2fr] lg:gap-20">
             <div>
-              <p className="eyebrow mb-5 text-accent">For that price</p>
               <h2 id="covers-title" className="font-journal text-4xl leading-[.95] text-primary md:text-5xl">
-                What the rate<br /><em>covers.</em>
+                What the rate<br />covers.
               </h2>
               <p className="mt-6 max-w-[380px] text-sm leading-6 text-muted-foreground">
                 One party at a time, and the whole house. Check-in is from
-                12:00 PM and check-out by 11:00 AM &mdash; the rest is in the{' '}
+                12:00 PM and check-out by 11:00 AM. The rest is in the{' '}
                 <a href={`${basePath}/house-rules`} className="text-primary underline decoration-accent decoration-1 underline-offset-2" data-testid="link-rates-house-rules">
                   house rules
                 </a>
@@ -286,9 +264,8 @@ export default function Rates() {
               </p>
             </div>
             <div className="grid gap-3 sm:grid-cols-2">
-              {COVERED.map(({ icon: Icon, label }) => (
+              {COVERED.map(({ label }) => (
                 <div key={label} className="flex items-start gap-3 rounded-[1.1rem] border border-border bg-background px-5 py-4">
-                  <Icon size={18} className="mt-0.5 shrink-0 text-accent" strokeWidth={1.5} />
                   <span className="text-sm leading-6 text-primary">{label}</span>
                 </div>
               ))}
@@ -297,7 +274,7 @@ export default function Rates() {
                 className="flex items-start gap-3 rounded-[1.1rem] border border-border bg-background px-5 py-4 transition-colors hover:border-primary"
                 data-testid="link-rates-pet-card"
               >
-                <PawPrint size={18} className="mt-0.5 shrink-0 text-accent" strokeWidth={1.5} />
+               
                 <span className="text-sm leading-6 text-primary">Pets welcome, in the house rules</span>
               </a>
             </div>
@@ -308,19 +285,18 @@ export default function Rates() {
         <section className="section-shell py-16 md:py-24" aria-labelledby="rates-where-title">
           <div className="grid gap-10 lg:grid-cols-[.8fr_1.2fr] lg:gap-20">
             <div>
-              <p className="eyebrow mb-5 text-accent">Where it is</p>
               <h2 id="rates-where-title" className="font-journal text-4xl leading-[.95] text-primary md:text-5xl">
-                Bolpur,<br /><em>Shantiniketan.</em>
+                Bolpur,<br />Shantiniketan.
               </h2>
             </div>
             <div className="max-w-[620px] space-y-5 text-base leading-7 text-muted-foreground">
               <p>
-                <MapPin size={15} className="mr-2 inline text-accent" />
+                <MapPinIcon className="mr-2 inline text-accent" />
                 {CONFIG.place}. Cafe Soi is on the premises, and the Tagore
                 campus, the Sonajhuri market and both railway stations are a
                 short ride away.
               </p>
-              <p className="flex flex-wrap gap-x-6 gap-y-3 text-xs font-bold uppercase tracking-[.1em] text-primary">
+              <p className="flex flex-wrap gap-x-6 gap-y-3 text-[13px] font-medium text-primary">
                 <a href={`${basePath}/gallery`} className="underline decoration-accent decoration-2 underline-offset-4" data-testid="link-rates-gallery">
                   See the villa
                 </a>
@@ -336,10 +312,9 @@ export default function Rates() {
         </section>
 
         {/* -------------------------------------------------------- closing */}
-        <section className="bg-primary py-20 text-primary-foreground md:py-28" aria-labelledby="rates-cta">
+        <section className="on-dark bg-primary py-20 text-primary-foreground md:py-28" aria-labelledby="rates-cta">
           <div className="section-shell grid gap-10 lg:grid-cols-[1.1fr_.9fr] lg:items-end">
             <div>
-              <p className="eyebrow mb-5 text-secondary">When you have dates</p>
               <h2 id="rates-cta" className="max-w-[560px] font-journal text-4xl leading-[.94] md:text-6xl">
                 Book direct,<br /><em>with the owner.</em>
               </h2>
@@ -353,10 +328,10 @@ export default function Rates() {
               <a
                 href={`${basePath}/#availability`}
                 onClick={() => track('check_availability', { placement: 'rates' })}
-                className="flex items-center gap-2 rounded-full bg-secondary px-5 py-3 text-xs font-bold uppercase tracking-[.1em] text-primary transition-transform hover:-translate-y-0.5"
+                className="flex items-center gap-2 rounded-full bg-secondary px-5 py-3 text-sm font-semibold text-primary transition-transform hover:-translate-y-0.5"
                 data-testid="link-rates-book"
               >
-                <CalendarDays size={15} /> Check availability
+                <CalendarIcon /> Check availability
               </a>
               <a
                 href={`https://wa.me/916290399165?text=${encodeURIComponent(
@@ -365,37 +340,37 @@ export default function Rates() {
                 target="_blank"
                 rel="noreferrer"
                 onClick={() => track('whatsapp_click', { placement: 'rates' })}
-                className="flex items-center gap-2 rounded-full border border-primary-foreground/25 px-5 py-3 text-xs font-bold uppercase tracking-[.1em] text-primary-foreground transition-colors hover:bg-primary-foreground/10"
+                className="flex items-center gap-2 rounded-full border border-primary-foreground/25 px-5 py-3 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary-foreground/10"
                 data-testid="link-rates-whatsapp"
               >
-                <MessageCircle size={15} /> WhatsApp
+                <WhatsappIcon /> WhatsApp
               </a>
               <a
                 href={phoneHref(CONFIG.hostPhone)}
-                className="flex items-center gap-2 rounded-full border border-primary-foreground/25 px-5 py-3 text-xs font-bold uppercase tracking-[.1em] text-primary-foreground transition-colors hover:bg-primary-foreground/10"
+                className="flex items-center gap-2 rounded-full border border-primary-foreground/25 px-5 py-3 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary-foreground/10"
                 data-testid="link-rates-call"
               >
-                <Phone size={15} /> Call the host
+                <PhoneIcon /> Call the host
               </a>
             </div>
           </div>
         </section>
       </main>
 
-      <footer className="bg-[#172d25] py-14 text-[#f5eadb]">
+      <footer className="on-dark bg-forest py-14 text-footer-ink">
         <div className="section-shell flex flex-col justify-between gap-6 sm:flex-row sm:items-center">
           <div>
             <p className="font-journal text-2xl">Raj Kuthir Homestays</p>
-            <p className="mt-2 max-w-[420px] text-sm text-[#f5eadb]/60">
-              Sobuj Potro &mdash; a private two-bedroom villa with a garden in Bolpur / Shantiniketan.
+            <p className="mt-2 max-w-[420px] text-sm text-footer-ink/60">
+              Sobuj Potro, a private two-bedroom villa with a garden in Bolpur / Shantiniketan.
             </p>
           </div>
-          <div className="flex flex-col gap-2 text-sm text-[#f5eadb]/70 sm:text-right">
-            <a href={`${basePath}/`} className="hover:text-[#e4c9a4]">The stay</a>
-            <a href={`${basePath}/pet-friendly-homestay-shantiniketan`} className="hover:text-[#e4c9a4]">Staying with a pet</a>
-            <a href={`${basePath}/gallery`} className="hover:text-[#e4c9a4]">Photos</a>
-            <a href={`${basePath}/places-to-visit-in-shantiniketan`} className="hover:text-[#e4c9a4]">Places to visit</a>
-            <a href={`${basePath}/house-rules`} className="hover:text-[#e4c9a4]">House rules</a>
+          <div className="flex flex-col gap-2 text-sm text-footer-ink/70 sm:text-right">
+            <a href={`${basePath}/`} className="hover:text-sand">The stay</a>
+            <a href={`${basePath}/pet-friendly-homestay-shantiniketan`} className="hover:text-sand">Staying with a pet</a>
+            <a href={`${basePath}/gallery`} className="hover:text-sand">Photos</a>
+            <a href={`${basePath}/places-to-visit-in-shantiniketan`} className="hover:text-sand">Places to visit</a>
+            <a href={`${basePath}/house-rules`} className="hover:text-sand">House rules</a>
           </div>
         </div>
       </footer>

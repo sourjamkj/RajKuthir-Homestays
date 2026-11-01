@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { ArrowLeft, Mail, MapPin, MessageCircle, Phone } from 'lucide-react';
+import { BackIcon, MapPinIcon, PhoneIcon, WhatsappIcon } from '@/components/icons';
 
 import { CONFIG, basePath, phoneHref } from '@/lib/site';
 
@@ -191,8 +191,8 @@ export default function Policies({ kind }: { kind: PolicyKind }) {
   return (
     <div className="min-h-[100dvh] bg-background px-4 py-10 text-foreground">
       <main className="mx-auto max-w-[720px]">
-        <a href={`${basePath}/`} className="inline-flex items-center gap-1.5 text-[12px] font-bold uppercase tracking-[.1em] text-accent" data-testid="link-policy-home">
-          <ArrowLeft size={14} /> Raj Kuthir Homestays – Sobuj Potro
+        <a href={`${basePath}/`} className="inline-flex items-center gap-1.5 text-sm font-semibold text-accent" data-testid="link-policy-home">
+          <BackIcon /> Raj Kuthir Homestays – Sobuj Potro
         </a>
         <h1 className="mt-4 font-journal text-4xl leading-tight text-primary sm:text-5xl">{title}</h1>
         {kind !== 'contact' && <p className="mt-2 text-xs text-muted-foreground">Last updated {UPDATED}</p>}
@@ -203,7 +203,7 @@ export default function Policies({ kind }: { kind: PolicyKind }) {
               key={link.kind}
               href={`${basePath}${link.href}`}
               aria-current={link.kind === kind ? 'page' : undefined}
-              className={`rounded-full border px-3 py-1.5 text-[11px] font-bold uppercase tracking-[.08em] ${link.kind === kind ? 'border-primary bg-primary text-primary-foreground' : 'border-border text-primary hover:bg-primary/5'}`}
+              className={`rounded-full border px-3 py-1.5 text-[13px] font-medium ${link.kind === kind ? 'border-primary bg-primary text-primary-foreground' : 'border-border text-primary hover:bg-primary/5'}`}
             >
               {TITLES[link.kind]}
             </a>
@@ -213,11 +213,11 @@ export default function Policies({ kind }: { kind: PolicyKind }) {
         {kind === 'contact' ? (
           <section className="mt-8 space-y-4 rounded-2xl border border-border bg-card p-6 text-sm text-primary" data-testid="section-contact">
             <p>We are a small, owner-run homestay. The quickest way to reach us is WhatsApp or a call.</p>
-            <p className="flex items-start gap-2"><Phone size={16} className="mt-0.5 shrink-0 text-accent" /> <span>Host: <a href={phoneHref(CONFIG.hostPhone)} className="underline">{CONFIG.hostPhone}</a> (9 AM – 9 PM)</span></p>
-            <p className="flex items-start gap-2"><MessageCircle size={16} className="mt-0.5 shrink-0 text-accent" /> <span>WhatsApp: <a href={whatsappHref(CONFIG.hostPhone)} target="_blank" rel="noreferrer" className="underline">{CONFIG.hostPhone}</a></span></p>
-            <p className="flex items-start gap-2"><Phone size={16} className="mt-0.5 shrink-0 text-accent" /> <span>Caretaker at the house: <a href={phoneHref(CONFIG.caretakerPhone)} className="underline">{CONFIG.caretakerPhone}</a></span></p>
-            <p className="flex items-start gap-2"><MapPin size={16} className="mt-0.5 shrink-0 text-accent" /> <span>{ADDRESS} · <a href={CONFIG.mapsUrl} target="_blank" rel="noreferrer" className="underline">Open in Google Maps</a></span></p>
-            <p className="flex items-start gap-2"><Mail size={16} className="mt-0.5 shrink-0 text-accent" /> <span>Booking questions, cancellations and refunds: message us with your booking reference and we reply the same day.</span></p>
+            <p className="flex items-start gap-2"><PhoneIcon className="mt-0.5 shrink-0 text-accent" /> <span>Host: <a href={phoneHref(CONFIG.hostPhone)} className="underline">{CONFIG.hostPhone}</a> (9 AM – 9 PM)</span></p>
+            <p className="flex items-start gap-2"><WhatsappIcon className="mt-0.5 shrink-0 text-accent" /> <span>WhatsApp: <a href={whatsappHref(CONFIG.hostPhone)} target="_blank" rel="noreferrer" className="underline">{CONFIG.hostPhone}</a></span></p>
+            <p className="flex items-start gap-2"><PhoneIcon className="mt-0.5 shrink-0 text-accent" /> <span>Caretaker at the house: <a href={phoneHref(CONFIG.caretakerPhone)} className="underline">{CONFIG.caretakerPhone}</a></span></p>
+            <p className="flex items-start gap-2"><MapPinIcon className="mt-0.5 shrink-0 text-accent" /> <span>{ADDRESS} · <a href={CONFIG.mapsUrl} target="_blank" rel="noreferrer" className="underline">Open in Google Maps</a></span></p>
+            <p>Booking questions, cancellations and refunds: message us with your booking reference and we reply the same day.</p>
             <p className="border-t border-border pt-4" data-testid="text-grievance-officer">Grievance officer: Sourja Mukherjee, Owner · <a href={phoneHref(CONFIG.hostPhone)} className="underline">{CONFIG.hostPhone}</a>. Complaints are acknowledged within 48 hours and resolved within one month.</p>
           </section>
         ) : (

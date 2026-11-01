@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { ArrowLeft, ArrowUpRight, Leaf, MessageCircle, Phone } from 'lucide-react';
+import { BackIcon, LeafIcon, PhoneIcon, WhatsappIcon } from '@/components/icons';
 
 import { CONFIG, asset, basePath, phoneHref, track } from '@/lib/site';
 
@@ -124,7 +124,6 @@ const DETAILS: Photo[] = [
 
 type Group = {
   id: string;
-  eyebrow: string;
   heading: string;
   lede: string;
   photos: Photo[];
@@ -138,21 +137,18 @@ type Group = {
 const GROUPS: Group[] = [
   {
     id: 'the-house',
-    eyebrow: 'Inside',
     heading: 'The house\nitself.',
-    lede: 'Two bedrooms, a living room and the whole place to yourselves — there is no shared lobby, no other party in the next room, and no front desk to pass on your way out.',
+    lede: 'Two bedrooms, a living room and the whole place to yourselves. There is no shared lobby, no other party in the next room, and no front desk to pass on your way out.',
     photos: HOUSE,
   },
   {
     id: 'outside',
-    eyebrow: 'Outside',
     heading: 'The garden,\nand around.',
     lede: 'The garden is yours for the length of the stay, and Shantiniketan starts at the gate. Pets are welcome here in writing, not as a favour asked at the door.',
     photos: OUTSIDE,
   },
   {
     id: 'the-details',
-    eyebrow: 'The details',
     heading: 'The small\nthings.',
     lede: 'A kitchen with an induction hob, microwave, refrigerator and water filter, and a table big enough to sit around. Home-cooked meals can be arranged through the caretaker, and Cafe Soi is on the premises.',
     photos: DETAILS,
@@ -188,30 +184,30 @@ export default function Gallery() {
 
   return (
     <div className="min-h-[100dvh] bg-background text-foreground">
-      <header className="sticky top-0 z-50 border-b border-foreground/10 bg-background/90 backdrop-blur-md">
+      <header className="sticky top-0 z-50 border-b border-foreground/10 bg-background">
         <div className="section-shell flex h-[74px] items-center justify-between gap-6">
           <a href={`${basePath}/`} className="flex shrink-0 items-center gap-3" data-testid="link-gallery-brand">
             <span className="grid h-10 w-10 place-items-center rounded-full bg-primary text-primary-foreground">
-              <Leaf size={19} strokeWidth={1.7} />
+              <LeafIcon size="md" />
             </span>
             <span className="leading-none">
-              <span className="block font-mono-ui text-[10px] font-medium tracking-[.18em] text-muted-foreground">RAJ KUTHIR</span>
+              <span className="block font-mono-ui text-xs font-medium tracking-[.18em] text-muted-foreground">RAJ KUTHIR</span>
               <span className="font-journal text-[19px] text-primary">Homestays</span>
             </span>
           </a>
           <a
             href={`${basePath}/`}
-            className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-[.1em] text-muted-foreground transition-colors hover:text-primary"
+            className="flex items-center gap-2 text-[13px] font-medium text-muted-foreground transition-colors hover:text-primary"
             data-testid="link-gallery-back"
           >
-            <ArrowLeft size={15} /> Back to the stay
+            <BackIcon /> Back to the stay
           </a>
         </div>
       </header>
 
       {/* Breadcrumb, matching the BreadcrumbList the server emits. */}
       <nav aria-label="Breadcrumb" className="section-shell pt-8">
-        <ol className="flex flex-wrap items-center gap-2 font-mono-ui text-[10px] uppercase tracking-[.14em] text-muted-foreground">
+        <ol className="flex flex-wrap items-center gap-2 text-[13px] text-muted-foreground">
           <li><a href={`${basePath}/`} className="hover:text-primary" data-testid="link-gallery-crumb-home">Home</a></li>
           <li aria-hidden="true">/</li>
           <li aria-current="page" className="text-primary">Photos</li>
@@ -221,12 +217,11 @@ export default function Gallery() {
       <main>
         {/* ---------------------------------------------------------- hero */}
         <section className="section-shell pb-14 pt-10 md:pb-20 md:pt-14" aria-labelledby="gallery-hero">
-          <p className="eyebrow mb-5 text-accent">A visual diary</p>
           <h1 id="gallery-hero" className="max-w-[760px] font-journal text-[clamp(3rem,7vw,5.5rem)] leading-[.92] tracking-[-.035em] text-primary">
             A look<br /><em>around home.</em>
           </h1>
           <p className="mt-8 max-w-[560px] text-lg leading-8 text-primary/75">
-            {GALLERY.length} photographs of Sobuj Potro — the rooms as they are, the
+            {GALLERY.length} photographs of Sobuj Potro: the rooms as they are, the
             garden, and the short walk into Shantiniketan (also spelt Santiniketan). Nothing here is a stock
             picture of somewhere else.
           </p>
@@ -234,14 +229,13 @@ export default function Gallery() {
             <a
               href={`${basePath}/#availability`}
               onClick={() => track('check_availability', { placement: 'gallery_hero' })}
-              className="flex items-center gap-2 rounded-full bg-primary px-5 py-3 text-xs font-bold uppercase tracking-[.1em] text-primary-foreground transition-transform hover:-translate-y-0.5"
+              className="flex items-center gap-2 rounded-full bg-primary px-5 py-3 text-sm font-semibold text-primary-foreground transition-transform hover:-translate-y-0.5"
               data-testid="link-gallery-hero-book"
             >
-              Check availability <ArrowUpRight size={15} />
-            </a>
+              Check availability            </a>
             <a
               href={`${basePath}/pet-friendly-homestay-shantiniketan`}
-              className="flex items-center gap-2 rounded-full border border-primary/25 px-5 py-3 text-xs font-bold uppercase tracking-[.1em] text-primary transition-colors hover:bg-primary/5"
+              className="flex items-center gap-2 rounded-full border border-primary/25 px-5 py-3 text-sm font-semibold text-primary transition-colors hover:bg-primary/5"
               data-testid="link-gallery-pet"
             >
               Staying here with a pet
@@ -260,7 +254,6 @@ export default function Gallery() {
             <div className="section-shell">
               <div className="grid gap-8 lg:grid-cols-[.8fr_1.2fr] lg:gap-16">
                 <div>
-                  <p className="eyebrow mb-5 text-accent">{group.eyebrow}</p>
                   <h2
                     id={`${group.id}-title`}
                     className="whitespace-pre-line font-journal text-4xl leading-[.95] text-primary md:text-6xl"
@@ -306,10 +299,9 @@ export default function Gallery() {
         ))}
 
         {/* ------------------------------------------------------ closing */}
-        <section className="bg-primary py-20 text-primary-foreground md:py-28" aria-labelledby="gallery-cta">
+        <section className="on-dark bg-primary py-20 text-primary-foreground md:py-28" aria-labelledby="gallery-cta">
           <div className="section-shell grid gap-10 lg:grid-cols-[1.1fr_.9fr] lg:items-end">
             <div>
-              <p className="eyebrow mb-5 text-secondary">Seen enough</p>
               <h2 id="gallery-cta" className="max-w-[540px] font-journal text-4xl leading-[.94] md:text-6xl">
                 The rest is<br /><em>better in person.</em>
               </h2>
@@ -322,11 +314,10 @@ export default function Gallery() {
               <a
                 href={`${basePath}/#availability`}
                 onClick={() => track('check_availability', { placement: 'gallery_footer' })}
-                className="flex items-center gap-2 rounded-full bg-secondary px-5 py-3 text-xs font-bold uppercase tracking-[.1em] text-primary transition-transform hover:-translate-y-0.5"
+                className="flex items-center gap-2 rounded-full bg-secondary px-5 py-3 text-sm font-semibold text-primary transition-transform hover:-translate-y-0.5"
                 data-testid="link-gallery-cta-book"
               >
-                Enquire to stay <ArrowUpRight size={15} />
-              </a>
+                Enquire to stay              </a>
               <a
                 href={`https://wa.me/916290399165?text=${encodeURIComponent(
                   'Hello Raj Kuthir, I have been looking at the photos of Sobuj Potro and would like to enquire about a stay.',
@@ -334,36 +325,36 @@ export default function Gallery() {
                 target="_blank"
                 rel="noreferrer"
                 onClick={() => track('whatsapp_click', { placement: 'gallery_footer' })}
-                className="flex items-center gap-2 rounded-full border border-primary-foreground/25 px-5 py-3 text-xs font-bold uppercase tracking-[.1em] text-primary-foreground transition-colors hover:bg-primary-foreground/10"
+                className="flex items-center gap-2 rounded-full border border-primary-foreground/25 px-5 py-3 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary-foreground/10"
                 data-testid="link-gallery-whatsapp"
               >
-                <MessageCircle size={15} /> WhatsApp
+                <WhatsappIcon /> WhatsApp
               </a>
               <a
                 href={phoneHref(CONFIG.hostPhone)}
-                className="flex items-center gap-2 rounded-full border border-primary-foreground/25 px-5 py-3 text-xs font-bold uppercase tracking-[.1em] text-primary-foreground transition-colors hover:bg-primary-foreground/10"
+                className="flex items-center gap-2 rounded-full border border-primary-foreground/25 px-5 py-3 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary-foreground/10"
                 data-testid="link-gallery-call"
               >
-                <Phone size={15} /> Call the host
+                <PhoneIcon /> Call the host
               </a>
             </div>
           </div>
         </section>
       </main>
 
-      <footer className="bg-[#172d25] py-14 text-[#f5eadb]">
+      <footer className="on-dark bg-forest py-14 text-footer-ink">
         <div className="section-shell flex flex-col justify-between gap-6 sm:flex-row sm:items-center">
           <div>
             <p className="font-journal text-2xl">Raj Kuthir Homestays</p>
-            <p className="mt-2 max-w-[420px] text-sm text-[#f5eadb]/60">
-              Sobuj Potro &mdash; a private two-bedroom villa with a garden in Bolpur / Shantiniketan.
+            <p className="mt-2 max-w-[420px] text-sm text-footer-ink/60">
+              Sobuj Potro, a private two-bedroom villa with a garden in Bolpur / Shantiniketan.
             </p>
           </div>
-          <div className="flex flex-col gap-2 text-sm text-[#f5eadb]/70 sm:text-right">
-            <a href={`${basePath}/`} className="hover:text-[#e4c9a4]">The stay</a>
-            <a href={`${basePath}/pet-friendly-homestay-shantiniketan`} className="hover:text-[#e4c9a4]">Staying with a pet</a>
-            <a href={`${basePath}/house-rules`} className="hover:text-[#e4c9a4]">House rules</a>
-            <a href={`${basePath}/#availability`} className="hover:text-[#e4c9a4]">Check availability</a>
+          <div className="flex flex-col gap-2 text-sm text-footer-ink/70 sm:text-right">
+            <a href={`${basePath}/`} className="hover:text-sand">The stay</a>
+            <a href={`${basePath}/pet-friendly-homestay-shantiniketan`} className="hover:text-sand">Staying with a pet</a>
+            <a href={`${basePath}/house-rules`} className="hover:text-sand">House rules</a>
+            <a href={`${basePath}/#availability`} className="hover:text-sand">Check availability</a>
           </div>
         </div>
       </footer>

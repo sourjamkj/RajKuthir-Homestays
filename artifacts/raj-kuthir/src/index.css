@@ -30,6 +30,18 @@
   --color-accent-foreground: hsl(var(--accent-foreground));
   --color-destructive: hsl(var(--destructive));
   --color-destructive-foreground: hsl(var(--destructive-foreground));
+  /* Brand colours that used to be typed as hex literals across the pages. */
+  --color-sand: var(--sand);
+  --color-terracotta: var(--terracotta);
+  --color-forest: var(--forest);
+  --color-footer-ink: var(--footer-ink);
+  --color-night: var(--night);
+  --color-pine: var(--pine);
+  --color-olive: var(--olive);
+  --color-olive-ink: var(--olive-ink);
+  --color-amber: var(--amber);
+  --color-sage: var(--sage);
+  --color-clay: var(--clay);
   --font-sans: var(--app-font-sans);
   --font-serif: var(--app-font-serif);
   --font-mono: var(--app-font-mono);
@@ -98,6 +110,19 @@
   --muted-border: hsl(var(--muted));
   --accent-border: hsl(var(--accent));
   --destructive-border: hsl(var(--destructive));
+
+  /* Named brand colours (same values the pages used as literals). */
+  --sand: #e4c9a4;        /* booking section, footer link hover */
+  --terracotta: #a65e45;  /* errors and warnings */
+  --forest: #172d25;      /* footer ground */
+  --footer-ink: #f5eadb;  /* text on the footer */
+  --night: #0a1712;       /* hero photo scrim */
+  --pine: #1d3a2f;        /* small text on the UPI QR card */
+  --olive: #7a8065;       /* verified chips */
+  --olive-ink: #4b5340;   /* verified text */
+  --amber: #8a6320;       /* needs-action text */
+  --sage: #cfdbd1;        /* calendar: selected night */
+  --clay: #c8a89a;        /* calendar: booked night */
 }
 
 .dark {
@@ -129,13 +154,70 @@
     overflow-x: hidden;
   }
   ::selection { background: hsl(var(--secondary)); color: hsl(var(--foreground)); }
+  /* One focus ring for every control; light on dark grounds. */
+  :focus-visible { outline: 2px solid hsl(var(--ring)); outline-offset: 2px; }
+  .on-dark { --ring: 36 47% 79%; }
+}
+
+/*
+ * Glass: one system, used only where content floats over a photograph
+ * (the homepage header while it sits on the hero, and the phone booking bar).
+ * Everything else is a solid surface. The tint comes from --background, so
+ * it follows .dark on its own; the highlight is fainter there. Without
+ * backdrop-filter, or when the visitor asks for less transparency, both fall
+ * back to the solid background. The blur is never animated.
+ */
+@layer components {
+  .glass-bar,
+  .glass-panel {
+    --glass-alpha: 62%;
+    --glass-blur: 14px;
+    --glass-edge: rgb(255 255 255 / 0.35);
+    --glass-highlight: rgb(255 255 255 / 0.4);
+    background: color-mix(in oklab, hsl(var(--background)) var(--glass-alpha), transparent);
+    -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(140%);
+    backdrop-filter: blur(var(--glass-blur)) saturate(140%);
+    border: 1px solid var(--glass-edge);
+    box-shadow: 0 8px 24px -12px color-mix(in oklab, hsl(var(--primary)) 35%, transparent);
+  }
+  .glass-panel {
+    --glass-alpha: 72%;
+    --glass-blur: 18px;
+    border-radius: var(--radius-xl);
+    box-shadow:
+      inset 0 1px 0 var(--glass-highlight),
+      0 8px 24px -12px color-mix(in oklab, hsl(var(--primary)) 35%, transparent);
+  }
+  .dark .glass-bar,
+  .dark .glass-panel {
+    --glass-edge: rgb(255 255 255 / 0.12);
+    --glass-highlight: rgb(255 255 255 / 0.14);
+  }
+  @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+    .glass-bar,
+    .glass-panel { background: hsl(var(--background)); }
+  }
+  @media (prefers-reduced-transparency: reduce) {
+    .glass-bar,
+    .glass-panel {
+      background: hsl(var(--background));
+      -webkit-backdrop-filter: none;
+      backdrop-filter: none;
+    }
+  }
 }
 
 @layer utilities {
+  /* Text set straight onto glass (the header over the hero): a little more
+     tint and the darkest ink, so it passes WCAG AA over the darkest part of
+     the photograph behind it. Measured, not guessed: see the PR. */
+  .glass-tint { --glass-alpha: 68%; }
+  .glass-tint .text-muted-foreground,
+  .glass-tint .text-primary { color: hsl(var(--foreground)); }
   .font-journal { font-family: var(--app-font-serif); }
   .font-mono-ui { font-family: var(--app-font-mono); }
   .section-shell { width: min(100% - 2.25rem, 1160px); margin-inline: auto; }
-  .eyebrow { font-family: var(--app-font-mono); text-transform: uppercase; letter-spacing: .16em; font-size: .67rem; font-weight: 500; }
+  .eyebrow { font-size: .8125rem; line-height: 1.25rem; font-weight: 500; }
   .paper-shadow { box-shadow: var(--shadow-sm); }
   .lift { transition: transform .3s ease, box-shadow .3s ease, background-color .3s ease; }
   .lift:hover { transform: translateY(-4px); box-shadow: var(--shadow-md); }

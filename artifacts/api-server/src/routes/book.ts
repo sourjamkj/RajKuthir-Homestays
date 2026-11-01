@@ -14,6 +14,7 @@ import { SITE_ORIGIN } from "../lib/seo";
 import {
   checkScreenshot,
   clashesWith,
+  guestDocument,
   guestStatusText,
   holdBlocks,
   looksLikePayToken,
@@ -40,10 +41,11 @@ import {
   setDecision,
   submitUtr,
 } from "../lib/book-pay-repo";
-import { expiredMessage, ownerUtrAlert } from "../lib/book-pay-messages";
+import { bookingSummaryMessages, confirmedMessage, expiredMessage, ownerUtrAlert } from "../lib/book-pay-messages";
 import { ownerEmail, sendEmail, sendWhatsappTemplate } from "../lib/book-pay-notify";
+import { ownerWhatsappNumberIfSet } from "../lib/owner-settings-state";
 import { confirmPaymentRequest, waLink } from "../lib/book-pay-confirm";
-import { buildConfirmation } from "../lib/invoices";
+import { buildBookingSummary, buildConfirmation, sendConfirmation } from "../lib/invoices";
 import { CashfreeError, cashfreeConfig } from "../lib/cashfree-client";
 import { checkoutMethod, looksLikeOrderId, orderIdFromWebhook, verifyWebhook } from "../lib/cashfree-rules";
 import { findOrder, gatewayInfoFor } from "../lib/cashfree-repo";
@@ -297,6 +299,11 @@ router.post("/book/start", async (req, res) => {
       result.resumed ? "Book & Pay hold resumed by the same guest" : "Book & Pay hold started",
     );
 
+    // The booking summary PDF (payment pending, QR for the advance) to the
+    // guest's email, and a heads-up to the owner. In the background: neither
+    // can delay or fail the guest's booking.
+    if (!result.resumed) void sendSummaryEmails(result.paymentRequestId);
+
     // The token travels in the URL FRAGMENT, as /pre-arrival's does: a
     // fragment never reaches a server log or a Referer header.
     res.status(201).json({
@@ -315,6 +322,34 @@ router.post("/book/start", async (req, res) => {
     res.status(500).json({ error: "Could not hold those dates just now. Please try again." });
   }
 });
+
+/** Summary PDF to the guest (if they gave an email) and a new-booking note to the owner. Never throws. */
+async function sendSummaryEmails(paymentRequestId: string): Promise<void> {
+  try {
+    const found = await findById(paymentRequestId);
+    if (!found) return;
+    const built = await buildBookingSummary(found);
+    const message = bookingSummaryMessages({
+      guestName: found.enquiry.name,
+      guestPhone: found.enquiry.phone,
+      reference: found.request.reference,
+      checkIn: found.enquiry.checkIn,
+      checkOut: found.enquiry.checkOut,
+      totalPaise: found.request.totalPaise,
+      advancePaise: found.request.advancePaise,
+      payBy: found.request.holdExpiresAt,
+      adminUrl: `${SITE_ORIGIN}/admin/guests#payments`,
+    });
+    const attachment = built.ok
+      ? [{ filename: built.invoice.filename, content: built.invoice.pdf, contentType: "application/pdf" }]
+      : undefined;
+    const guestEmailed = await sendEmail(found.enquiry.email, message.guest.subject, message.guest.text, attachment);
+    await sendEmail(await ownerEmail(), message.owner.subject, message.owner.text, attachment);
+    await logPaymentEvent(paymentRequestId, "summary_sent", guestEmailed ? "Booking summary PDF emailed to the guest" : "Booking summary on the /pay page (no guest email sent)");
+  } catch (error) {
+    logger.warn({ err: error, paymentRequestId }, "Could not send the booking summary emails");
+  }
+}
 
 /** What the /pay page shows. Bearer token in the body, never the URL. */
 router.post("/book/pay", async (req, res) => {
@@ -373,6 +408,8 @@ router.post("/book/pay", async (req, res) => {
       holdExpiresAt: request.holdExpiresAt.toISOString(),
       secondsLeft: request.status === "awaiting_payment" ? secondsLeft(request.holdExpiresAt, now) : 0,
       utrSubmitted: Boolean(request.utr),
+      // The PDF the guest can download and share from this page right now.
+      document: guestDocument(request, enquiry.convertedBookingId, now),
       payee: payable ? { upiId: upi!.id, name: upi!.name } : null,
       // The booking confirmation PDF can be downloaded right here once booked.
       confirmationReady: request.status === "confirmed" && Boolean(enquiry.convertedBookingId),
@@ -395,6 +432,53 @@ router.post("/book/pay", async (req, res) => {
     }
     logger.error({ err: error }, "Book & Pay page lookup failed");
     res.status(500).json({ error: "Could not load this payment just now. Please refresh." });
+  }
+});
+
+/**
+ * The guest's PDF: the booking SUMMARY (payment pending, QR for the advance)
+ * while the dates are held, or the booking CONFIRMATION once confirmed.
+ * Same bearer token and limits as /book/pay; never cached.
+ */
+router.post("/book/pay/document", async (req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  if (payLimiter(ipOf(req))) {
+    res.status(429).json({ error: "Too many requests. Please wait a little and try again." });
+    return;
+  }
+  const token = req.body?.token;
+  if (!looksLikePayToken(token)) {
+    res.status(404).json({ error: "This payment link is not valid." });
+    return;
+  }
+  try {
+    const found = await findByToken(token);
+    if (!found) {
+      res.status(404).json({ error: "This payment link is not valid." });
+      return;
+    }
+    const kind = guestDocument(found.request, found.enquiry.convertedBookingId, new Date());
+    if (!kind) {
+      res.status(410).json({ error: "This hold has expired, so there is no booking document. Please book again or WhatsApp us." });
+      return;
+    }
+    const built =
+      kind === "confirmation"
+        ? await buildConfirmation(found.enquiry.convertedBookingId!)
+        : await buildBookingSummary(found);
+    if (!built.ok) {
+      res.status(built.status).json({ error: built.error });
+      return;
+    }
+    res.set({
+      "Content-Type": "application/pdf",
+      "Content-Disposition": `attachment; filename="${built.invoice.filename.replace(/[^\w.-]+/g, "-")}"`,
+      "X-Content-Type-Options": "nosniff",
+    });
+    res.send(Buffer.from(built.invoice.pdf));
+  } catch (error) {
+    logger.error({ err: error }, "Book & Pay document failed");
+    res.status(500).json({ error: "Could not make the PDF just now. Please try again." });
   }
 });
 
@@ -463,7 +547,7 @@ router.post("/book/pay/utr", async (req, res) => {
     });
     void (async () => {
       await sendEmail(await ownerEmail(), alert.subject, alert.text);
-      await sendWhatsappTemplate(process.env["OWNER_WHATSAPP_NUMBER"], "WHATSAPP_OWNER_ALERT_TEMPLATE", [
+      await sendWhatsappTemplate(ownerWhatsappNumberIfSet(), "WHATSAPP_OWNER_ALERT_TEMPLATE", [
         found.enquiry.name,
         `₹${result.request.advancePaise / 100}`,
         utr,

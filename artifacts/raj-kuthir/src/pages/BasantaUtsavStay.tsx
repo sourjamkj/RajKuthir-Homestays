@@ -17,7 +17,6 @@ export default function BasantaUtsavStay() {
       festival="Basanta Utsav"
       peakId="basanta-utsav"
       documentTitle="Stay for Basanta Utsav in Shantiniketan | Raj Kuthir"
-      eyebrow="Spring and Dol"
       breadcrumb="Basanta Utsav stay"
       heading={<>Spring in Shantiniketan:<br /><em>Basanta Utsav.</em></>}
       intro={
@@ -28,7 +27,7 @@ export default function BasantaUtsavStay() {
             yellow and saffron.
           </p>
           <p className="text-sm leading-6 text-muted-foreground">
-            Sobuj Potro is a private two-bedroom villa in Bolpur &mdash; a whole house to
+            Sobuj Potro is a private two-bedroom villa in Bolpur: a whole house to
             come back to in one of the busiest weeks of the year in Santiniketan.
           </p>
         </>
