@@ -15,6 +15,8 @@ import { runSchemaCheck } from "./lib/schema-check";
 import { ensureWaInboundTables } from "./lib/wa-webhook";
 import { ensureOwnerAppTables } from "./lib/owner-devices";
 import { ensureCaretakerMessagesTable } from "./lib/caretaker-messages";
+import { ensureOwnerAlertsTable } from "./lib/owner-alerts";
+import { startOwnerAlertWatch } from "./lib/owner-alerts-watch";
 import { startOwnerSettingsRefresh } from "./lib/owner-settings";
 
 const rawPort = process.env["PORT"];
@@ -85,6 +87,12 @@ app.listen(port, (err) => {
   // then refresh every minute. Until loaded, Railway values apply.
   void ensureOwnerAppTables();
   void ensureCaretakerMessagesTable();
+  // Owner alerts: the app's alert list, phone pushes (Expo) and the owner
+  // emails, per Settings. The watcher turns new activity (OTA bookings,
+  // cancellations, ID uploads, WhatsApp drafts or failures) and the evening
+  // check-in list into alerts, every two minutes.
+  void ensureOwnerAlertsTable();
+  startOwnerAlertWatch();
   startOwnerSettingsRefresh();
 
   // Google reviews: queues review-request drafts for stays that just ended

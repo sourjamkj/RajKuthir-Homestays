@@ -17,8 +17,14 @@ import {
   listDevices,
   recentAudit,
   revokeDevice,
+  activePushTokens,
+  forgetPushTokens,
+  pushTokenOf,
   setPushToken,
 } from "../lib/owner-devices";
+import { listOwnerAlerts, markOwnerAlertsRead } from "../lib/owner-alerts";
+import { pushToPhones } from "../lib/expo-push";
+import { quietHoursNow } from "../lib/owner-settings-state";
 import { isExpoPushToken, publicDevice, readDeviceInfo } from "../lib/owner-devices-rules";
 import { loadOwnerSettings, saveOwnerSettings, storedOwnerSettings } from "../lib/owner-settings";
 import { applySettingsPatch, settingsView } from "../lib/owner-settings-rules";
@@ -180,6 +186,43 @@ router.patch("/admin/settings", requireAdmin, async (req, res) => {
     });
   }
   res.json({ changed: result.changed, settings: settingsView(storedOwnerSettings(), process.env) });
+});
+
+/* --------------------------------------------------------------- alerts */
+
+/** The app's alert list: everything the owner was told about, newest first, with the unread count. */
+router.get("/admin/alerts", requireAdmin, async (req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  const limit = Math.min(Math.max(Number(req.query.limit) || 50, 1), 200);
+  res.json(await listOwnerAlerts(limit));
+});
+
+/** `{ ids: [...] }` marks those read; an empty body marks everything read. */
+router.post("/admin/alerts/read", requireAdmin, async (req, res) => {
+  const ids: unknown = req.body?.ids;
+  if (ids !== undefined && (!Array.isArray(ids) || ids.some((id) => typeof id !== "string" || !UUID.test(id)))) {
+    res.status(400).json({ error: "ids must be a list of alert ids." });
+    return;
+  }
+  await markOwnerAlertsRead(ids as string[] | undefined);
+  res.status(204).end();
+});
+
+/**
+ * Sends a test alert, to check notifications from Settings. From the app it
+ * goes to that phone only; from the web, to every signed-in phone.
+ */
+router.post("/admin/alerts/test", requireAdmin, async (_req, res) => {
+  const session = sessionOf(res);
+  const tokens = session.via === "app" ? [await pushTokenOf(session.deviceId)].filter((t): t is string => Boolean(t)) : await activePushTokens();
+  if (tokens.length === 0) {
+    res.status(409).json({ error: session.via === "app" ? "This phone has not turned on notifications yet." : "No signed-in phone has notifications turned on." });
+    return;
+  }
+  const quiet = quietHoursNow(new Date());
+  const result = await pushToPhones(tokens, { title: "Test from Raj Kuthir", body: quiet ? "Notifications work. It is quiet hours, so this one came without sound." : "Notifications work.", data: { alertId: "", event: "test", href: "/admin" } }, quiet);
+  await forgetPushTokens(result.dead);
+  res.json({ sent: result.sent, quiet, signedOutPhones: result.dead.length });
 });
 
 /** Who changed what, newest first: settings, phones signing in and out, manual sends. */
