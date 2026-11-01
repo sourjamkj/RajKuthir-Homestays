@@ -51,7 +51,7 @@ test("peak dates: 90% at 30+ days, nothing after", () => {
 
 test("the policy page states the same numbers", () => {
   const page = readFileSync(path.join(here, "../../../raj-kuthir/src/pages/Policies.tsx"), "utf8");
-  for (const phrase of ["15 days or more", "₹200", "7 to 14 days", "Less than 7 days", "paid in full", "30 days or more", "90%"]) {
+  for (const phrase of ["15 days or more", "₹200", "7 to 14 days", "Less than 7 days", "paid in full", "30 days or more", "90%", "we refund what we recover", "Grievance officer", "48 hours", "Consumer Protection Act, 2019"]) {
     assert.ok(page.includes(phrase), `Policies.tsx should say "${phrase}"`);
   }
 });

@@ -10,8 +10,11 @@
  * Peak dates (paid in full at booking):
  *   30+ days                  → 90% back
  *   under 30 days             → nothing back
- * Credit for a later stay, and a refund if the nights are rebooked, are the
- * owner's to offer on top; this only says what the policy guarantees.
+ * On top of this the page promises: if the nights are rebooked, what is
+ * recovered goes back less ₹200 (Indian Contract Act s.74: keep only what
+ * the cancellation actually cost); and if WE cancel, a full refund plus the
+ * same charge the guest would have paid that day (Consumer Protection
+ * (E-Commerce) Rules 2020, r.4(6)). Those are the owner's to pay by hand.
  *
  * Days are counted in IST calendar days from the cancellation date to the
  * check-in date. Any card / net banking convenience fee is excluded before

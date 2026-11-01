@@ -43,7 +43,7 @@ const CONTENT: Record<Exclude<PolicyKind, 'contact'>, Section[]> = {
     {
       title: 'Who we are',
       lines: [
-        `Raj Kuthir Homestays – Sobuj Potro is a private homestay at ${ADDRESS}, run by its owner. "We" and "us" on this site mean the homestay; "you" means the guest making the booking.`,
+        `Raj Kuthir Homestays – Sobuj Potro is a private homestay at ${ADDRESS}, owned and run by Sourja Mukherjee. "We" and "us" on this site mean the homestay; "you" means the guest making the booking.`,
       ],
     },
     {
@@ -76,8 +76,14 @@ const CONTENT: Record<Exclude<PolicyKind, 'contact'>, Section[]> = {
       ],
     },
     {
+      title: 'Complaints',
+      lines: [
+        `Grievance officer: Sourja Mukherjee, Owner. Phone or WhatsApp ${CONFIG.hostPhone}. We acknowledge every complaint within 48 hours and resolve it within one month.`,
+      ],
+    },
+    {
       title: 'Law',
-      lines: ['These terms are governed by the laws of India. Any dispute is subject to the courts of Birbhum district, West Bengal.'],
+      lines: ['These terms are governed by the laws of India. Subject to your rights under the Consumer Protection Act, 2019 (including your right to approach the consumer commission where you live), any dispute is subject to the courts of Birbhum district, West Bengal.'],
     },
   ],
   privacy: [
@@ -134,7 +140,7 @@ const CONTENT: Record<Exclude<PolicyKind, 'contact'>, Section[]> = {
       lines: [
         'Poush Mela, Christmas and New Year, Basanta Utsav and the other peak dates marked on the Rates page are paid in full at booking, as these nights cannot be resold at short notice.',
         '30 days or more before check-in: 90% of what you paid is refunded.',
-        'Less than 30 days before check-in: no refund. If we rebook the nights, you get credit for another stay.',
+        'Less than 30 days before check-in: no refund. If we manage to rebook the nights, we refund what we recover, less ₹200.',
       ],
     },
     {
@@ -147,8 +153,10 @@ const CONTENT: Record<Exclude<PolicyKind, 'contact'>, Section[]> = {
     {
       title: 'If we have to cancel',
       lines: [
-        'If we ever cannot host you, you get a full refund of everything you paid us, or new dates if you prefer.',
-        'If floods, a strike or a government order stop you from travelling, you get credit for new dates within 12 months, even when the cancellation would otherwise not be refunded.',
+        'If we cancel your booking for any reason within our control, you get a full refund of everything you paid us, including any convenience fee, and we also pay you the same amount you would have been charged had you cancelled on that day. Or, if you prefer, new dates.',
+        'If we cannot host you because of floods, a strike, a government order or a similar event outside our control, you get a full refund of everything you paid us, or new dates if you prefer.',
+        'If a government order (for example a lockdown or a travel ban) makes your stay impossible, you choose: a full refund, or credit for new dates within 12 months.',
+        'If floods or a strike stop you from travelling, you get credit for new dates within 12 months, even when the cancellation would otherwise not be refunded.',
       ],
     },
     {
@@ -210,6 +218,7 @@ export default function Policies({ kind }: { kind: PolicyKind }) {
             <p className="flex items-start gap-2"><Phone size={16} className="mt-0.5 shrink-0 text-accent" /> <span>Caretaker at the house: <a href={phoneHref(CONFIG.caretakerPhone)} className="underline">{CONFIG.caretakerPhone}</a></span></p>
             <p className="flex items-start gap-2"><MapPin size={16} className="mt-0.5 shrink-0 text-accent" /> <span>{ADDRESS} · <a href={CONFIG.mapsUrl} target="_blank" rel="noreferrer" className="underline">Open in Google Maps</a></span></p>
             <p className="flex items-start gap-2"><Mail size={16} className="mt-0.5 shrink-0 text-accent" /> <span>Booking questions, cancellations and refunds: message us with your booking reference and we reply the same day.</span></p>
+            <p className="border-t border-border pt-4" data-testid="text-grievance-officer">Grievance officer: Sourja Mukherjee, Owner · <a href={phoneHref(CONFIG.hostPhone)} className="underline">{CONFIG.hostPhone}</a>. Complaints are acknowledged within 48 hours and resolved within one month.</p>
           </section>
         ) : (
           <div className="mt-8 space-y-8">
