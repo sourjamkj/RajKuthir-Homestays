@@ -16,7 +16,6 @@ export default function PoushMelaStay() {
       festival="Poush Mela"
       peakId="poush-mela"
       documentTitle="Stay for Poush Mela in Shantiniketan | Raj Kuthir"
-      eyebrow="The winter fair"
       breadcrumb="Poush Mela stay"
       heading={<>A stay for<br /><em>Poush Mela.</em></>}
       intro={
@@ -43,7 +42,7 @@ export default function PoushMelaStay() {
             </p>
             <p className="border-l-2 border-accent/40 pl-5 text-sm leading-6">
               The university announces the dates and arrangements afresh each year. Check
-              its notice before you fix your travel &mdash; we will tell you what we know
+              its notice before you fix your travel. We will tell you what we know
               when you enquire, but we would rather not guess on a web page.
             </p>
           </>

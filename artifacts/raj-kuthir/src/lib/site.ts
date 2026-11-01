@@ -61,7 +61,7 @@ export const NEIGHBOURHOOD = [
       {
         title: 'Prantik station',
         distance: '~5 km',
-        note: 'The closer halt — about fifteen minutes by toto',
+        note: 'The closer halt, about fifteen minutes by toto',
       },
       {
         title: 'Bolpur Shantiniketan station',
@@ -97,7 +97,7 @@ export const NEIGHBOURHOOD = [
       {
         title: 'Kala Bhavana',
         distance: '~6 km',
-        note: 'The art school — murals, sculpture, open studios',
+        note: 'The art school: murals, sculpture, open studios',
       },
     ],
   },
@@ -108,7 +108,7 @@ export const NEIGHBOURHOOD = [
       {
         title: 'Sonajhuri Khoai Haat',
         distance: '~4 km',
-        note: 'Forest market — Saturdays, often Sundays too, from about 2pm',
+        note: 'Forest market: Saturdays, often Sundays too, from about 2pm',
       },
       {
         title: 'Kopai River',
@@ -118,7 +118,7 @@ export const NEIGHBOURHOOD = [
       {
         title: 'Ballavpur Wildlife Sanctuary',
         distance: '~6 km',
-        note: 'Deer park and birds — best early morning',
+        note: 'Deer park and birds, best early morning',
       },
       {
         title: 'Srijani Shilpagram',
@@ -144,7 +144,7 @@ export const NEIGHBOURHOOD = [
       {
         title: 'Joydev Kenduli',
         distance: '~40 km',
-        note: "Baul country — the fair is in January, at Makar Sankranti",
+        note: "Baul country. The fair is in January, at Makar Sankranti",
       },
       {
         title: 'Bakreshwar',

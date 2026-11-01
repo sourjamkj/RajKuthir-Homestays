@@ -1,5 +1,5 @@
 import { useMemo, useState, type FormEvent } from 'react';
-import { ArrowRight, CalendarCheck, CircleAlert, Loader2, ShieldCheck } from 'lucide-react';
+import { AlertIcon, CalendarIcon, SpinnerIcon } from '@/components/icons';
 
 import { formatRupees, useRatePlan } from '@/lib/rates';
 import { basePath, track } from '@/lib/site';
@@ -193,7 +193,7 @@ export function BookAndPay({ id = 'book-online' }: { id?: string }) {
   };
 
   const field =
-    'mt-2 w-full border-b border-border bg-transparent px-0 py-3 text-sm text-primary outline-none placeholder:text-muted-foreground/60 focus:border-primary';
+    'mt-2 w-full border-b border-border bg-transparent px-0 py-3 text-sm text-primary placeholder:text-muted-foreground/60 focus:border-primary';
 
   return (
     <section id={id} className="scroll-mt-24 rounded-[1.5rem] border border-primary/15 bg-card p-6 md:p-8" aria-labelledby={`${id}-title`} data-testid="section-book-and-pay">
@@ -202,7 +202,7 @@ export function BookAndPay({ id = 'book-online' }: { id?: string }) {
           <p className="eyebrow text-accent">Instant hold · pay by UPI</p>
           <h3 id={`${id}-title`} className="mt-2 font-journal text-3xl text-primary md:text-4xl">Book &amp; pay online</h3>
         </div>
-        <CalendarCheck size={22} className="hidden text-accent sm:block" />
+        <CalendarIcon size="md" className="hidden text-accent sm:block" />
       </div>
 
       {ladder && (
@@ -236,7 +236,7 @@ export function BookAndPay({ id = 'book-online' }: { id?: string }) {
         <div className="grid grid-cols-3 gap-3">
           {(['adults', 'children', 'pets'] as const).map((key) => (
             <label key={key} className="block rounded-xl border border-border p-3">
-              <span className="text-[10px] font-bold uppercase tracking-[.08em] text-muted-foreground">{key}</span>
+              <span className="text-[13px] font-medium text-muted-foreground">{key}</span>
               <input
                 id={`${id}-${key}`}
                 type="number"
@@ -245,7 +245,7 @@ export function BookAndPay({ id = 'book-online' }: { id?: string }) {
                 required
                 value={stay[key]}
                 onChange={(e) => update(key, e.target.value)}
-                className="mt-1 w-full bg-transparent text-lg font-bold text-primary outline-none"
+                className="mt-1 w-full bg-transparent text-lg font-bold text-primary"
                 data-testid={`input-book-${key}`}
               />
             </label>
@@ -253,28 +253,28 @@ export function BookAndPay({ id = 'book-online' }: { id?: string }) {
         </div>
         {enquiryOnly && (
           <p className="rounded-xl bg-secondary/60 px-4 py-3 text-[12px] leading-5 text-primary" data-testid="text-book-enquiry-only">
-            {totalGuests > 5 ? `For ${totalGuests} guests` : 'For stays over 30 nights'} we confirm by message — fill in your details below and send an enquiry.
+            {totalGuests > 5 ? `For ${totalGuests} guests` : 'For stays over 30 nights'} we confirm by message. Fill in your details below and send an enquiry.
           </p>
         )}
         <button
           type="submit"
           disabled={busy !== null || enquiryOnly || totalGuests < 1}
-          className="flex w-full items-center justify-center gap-2 rounded-full border border-primary/25 px-5 py-3.5 text-xs font-bold uppercase tracking-[.11em] text-primary transition-colors hover:bg-primary/5 disabled:opacity-40"
+          className="flex w-full items-center justify-center gap-2 rounded-full border border-primary/25 px-5 py-3.5 text-sm font-semibold text-primary transition-colors hover:bg-primary/5 disabled:opacity-40"
           data-testid="button-book-quote"
         >
-          {busy === 'quote' ? <Loader2 size={15} className="animate-spin" /> : null} See price &amp; availability
+          {busy === 'quote' ? <SpinnerIcon className="animate-spin" /> : null} See price &amp; availability
         </button>
       </form>
 
       {error && (
-        <p className="mt-5 flex items-start gap-2 rounded-xl border border-[#A65E45]/40 bg-[#A65E45]/5 px-4 py-3 text-[13px] leading-6 text-[#A65E45]" role="alert" data-testid="text-book-error">
-          <CircleAlert size={15} className="mt-0.5 shrink-0" /> <span>{error}</span>
+        <p className="mt-5 flex items-start gap-2 rounded-xl border border-terracotta/40 bg-terracotta/5 px-4 py-3 text-[13px] leading-6 text-terracotta" role="alert" data-testid="text-book-error">
+          <AlertIcon className="mt-0.5 shrink-0" /> <span>{error}</span>
         </p>
       )}
 
       {quote && !quote.available && (
-        <div className="mt-5 rounded-xl border border-[#A65E45]/40 bg-[#A65E45]/5 p-4 text-[13px] leading-6 text-[#A65E45]" role="alert" data-testid="text-book-unavailable">
-          <p className="flex items-start gap-2"><CircleAlert size={15} className="mt-1 shrink-0" /> {quote.reason}</p>
+        <div className="mt-5 rounded-xl border border-terracotta/40 bg-terracotta/5 p-4 text-[13px] leading-6 text-terracotta" role="alert" data-testid="text-book-unavailable">
+          <p className="flex items-start gap-2"><AlertIcon className="mt-1 shrink-0" /> {quote.reason}</p>
           {quote.nextFree.length > 0 && (
             <div className="mt-3">
               <p className="font-bold text-primary">Next free dates:</p>
@@ -304,7 +304,7 @@ export function BookAndPay({ id = 'book-online' }: { id?: string }) {
                 <li key={night.date} className="flex justify-between py-1.5 tabular-nums">
                   <span className="text-primary/80">
                     {pretty(night.date)}
-                    {night.peak ? <span className="ml-2 text-[11px] text-accent">{night.peak}</span> : night.weekend ? <span className="ml-2 text-[11px] text-muted-foreground">weekend</span> : null}
+                    {night.peak ? <span className="ml-2 text-xs text-accent">{night.peak}</span> : night.weekend ? <span className="ml-2 text-xs text-muted-foreground">weekend</span> : null}
                   </span>
                   <span className="text-primary">{formatRupees(night.paise)}</span>
                 </li>
@@ -327,7 +327,7 @@ export function BookAndPay({ id = 'book-online' }: { id?: string }) {
 
       {enquirySent ? (
         <p className="mt-6 rounded-xl bg-secondary p-4 text-[13px] leading-6 text-primary" role="status" data-testid="text-book-enquiry-sent">
-          Enquiry received — we'll reply on WhatsApp shortly with availability and a quote.
+          Enquiry received. We'll reply on WhatsApp shortly with availability and a quote.
         </p>
       ) : ((quote && quote.available) || (enquiryOnly && stayNights > 0)) ? (
         <form onSubmit={start} className="mt-6 space-y-5" data-testid="form-book-start">
@@ -353,12 +353,11 @@ export function BookAndPay({ id = 'book-online' }: { id?: string }) {
             <button
               type="submit"
               disabled={busy !== null}
-              className="flex w-full items-center justify-center gap-2 rounded-full bg-primary px-5 py-4 text-xs font-bold uppercase tracking-[.11em] text-primary-foreground transition-transform hover:-translate-y-0.5 active:scale-95 disabled:opacity-40"
+              className="flex w-full items-center justify-center gap-2 rounded-full bg-primary px-5 py-4 text-sm font-semibold text-primary-foreground transition-transform hover:-translate-y-0.5 active:scale-95 disabled:opacity-40"
               data-testid="button-book-start"
             >
-              {busy === 'start' ? <Loader2 size={15} className="animate-spin" /> : null}
-              Hold dates &amp; pay {formatRupees(quote.advancePaise)} <ArrowRight size={15} />
-            </button>
+              {busy === 'start' ? <SpinnerIcon className="animate-spin" /> : null}
+              Hold dates &amp; pay {formatRupees(quote.advancePaise)}            </button>
           )}
           <button
             type="button"
@@ -366,16 +365,16 @@ export function BookAndPay({ id = 'book-online' }: { id?: string }) {
             disabled={busy !== null}
             className={
               quote && quote.available && quote.onlineBooking && !enquiryOnly
-                ? 'flex w-full items-center justify-center gap-2 rounded-full border border-primary/25 px-5 py-3 text-xs font-bold uppercase tracking-[.11em] text-primary hover:bg-primary/5 disabled:opacity-40'
-                : 'flex w-full items-center justify-center gap-2 rounded-full bg-primary px-5 py-4 text-xs font-bold uppercase tracking-[.11em] text-primary-foreground disabled:opacity-40'
+                ? 'flex w-full items-center justify-center gap-2 rounded-full border border-primary/25 px-5 py-3 text-sm font-semibold text-primary hover:bg-primary/5 disabled:opacity-40'
+                : 'flex w-full items-center justify-center gap-2 rounded-full bg-primary px-5 py-4 text-sm font-semibold text-primary-foreground disabled:opacity-40'
             }
             data-testid="button-book-enquiry"
           >
-            {busy === 'enquiry' ? <Loader2 size={15} className="animate-spin" /> : null}
+            {busy === 'enquiry' ? <SpinnerIcon className="animate-spin" /> : null}
             {quote && quote.available && quote.onlineBooking && !enquiryOnly ? 'Just send an enquiry' : 'Send enquiry'}
           </button>
-          <p className="flex items-start gap-2 text-[11px] leading-5 text-muted-foreground">
-            <ShieldCheck size={14} className="mt-0.5 shrink-0 text-accent" />
+          <p className="flex items-start gap-2 text-xs leading-5 text-muted-foreground">
+           
             {quote && quote.available && quote.onlineBooking && !enquiryOnly
               ? `Paying holds these dates for ${quote.holdMinutes} minutes; we confirm as soon as we see the payment. `
               : 'We reply on WhatsApp with availability and a quote. '}

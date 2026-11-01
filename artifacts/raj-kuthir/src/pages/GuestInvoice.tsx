@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Download, Loader2 } from 'lucide-react';
+import { DownloadIcon, SpinnerIcon } from '@/components/icons';
 
 /**
  * A guest's invoice, opened from the private link the owner sends on
@@ -39,24 +39,24 @@ export default function GuestInvoice() {
   return (
     <main className="mx-auto flex min-h-[100dvh] max-w-[860px] flex-col gap-5 bg-background px-4 py-8 text-foreground">
       <header>
-        <p className="text-[10px] font-bold uppercase tracking-[.14em] text-accent">Raj Kuthir Homestays – Sobuj Potro</p>
+        <p className="text-[13px] font-medium text-accent">Raj Kuthir Homestays – Sobuj Potro</p>
         <h1 className="mt-1 font-journal text-3xl text-primary">Your invoice</h1>
       </header>
       {state === null && (
-        <p className="flex items-center gap-2 text-sm text-muted-foreground"><Loader2 size={16} className="animate-spin" /> Loading…</p>
+        <p className="flex items-center gap-2 text-sm text-muted-foreground"><SpinnerIcon className="animate-spin" /> Loading…</p>
       )}
-      {state && 'error' in state && <p className="text-sm text-[#A65E45]" role="alert">{state.error}</p>}
+      {state && 'error' in state && <p className="text-sm text-terracotta" role="alert">{state.error}</p>}
       {state && 'url' in state && (
         <>
           <a
             href={state.url}
             download={state.name}
-            className="inline-flex w-fit items-center gap-2 rounded-full bg-primary px-5 py-2.5 text-[11px] font-bold uppercase tracking-[.08em] text-primary-foreground"
+            className="inline-flex w-fit items-center gap-2 rounded-full bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground"
           >
-            <Download size={14} /> Download invoice
+            <DownloadIcon /> Download invoice
           </a>
           <object data={state.url} type="application/pdf" className="h-[75vh] w-full rounded-xl border border-border" aria-label="Invoice">
-            <p className="text-sm text-muted-foreground">Your browser cannot show the PDF here — use Download invoice above.</p>
+            <p className="text-sm text-muted-foreground">Your browser cannot show the PDF here. Use Download invoice above.</p>
           </object>
         </>
       )}
