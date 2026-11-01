@@ -106,6 +106,49 @@ export function ownerUtrAlert(input: {
 }
 
 /**
+ * The owner's note when a guest pays online through Cashfree. `confirmed` is
+ * whether the booking was made automatically; when it was not, `problem`
+ * says why and the owner decides (and refunds if needed) from the console.
+ */
+export function ownerOnlinePaymentAlert(input: {
+  guestName: string;
+  guestPhone: string;
+  reference: string;
+  checkIn: string | null;
+  checkOut: string | null;
+  amountPaise: number;
+  method: string;
+  cfPaymentId: string | null;
+  confirmed: boolean;
+  problem: string | null;
+  adminUrl: string;
+  /** Card / net banking convenience fee inside amountPaise, if any. */
+  feePaise?: number;
+}): { subject: string; text: string } {
+  const head = input.confirmed
+    ? `Paid online and booked: ₹${rupees(input.amountPaise)} — ${input.guestName} (${input.reference})`
+    : `Paid online — needs your check: ₹${rupees(input.amountPaise)} — ${input.guestName} (${input.reference})`;
+  return {
+    subject: head,
+    text: [
+      input.confirmed
+        ? `${input.guestName} (${input.guestPhone}) paid the advance online. The booking is confirmed and the guest has their confirmation.`
+        : `${input.guestName} (${input.guestPhone}) paid the advance online, but the booking was NOT made automatically.`,
+      ...(input.problem ? ["", input.confirmed ? `Note: ${input.problem}` : `Why: ${input.problem}`] : []),
+      "",
+      `Amount: ₹${rupees(input.amountPaise)} (${input.method})` +
+        (input.feePaise ? ` — includes ₹${rupees(input.feePaise)} convenience fee (not refundable)` : ""),
+      `Cashfree payment ID: ${input.cfPaymentId ?? "—"}`,
+      `Stay: ${prettyDate(input.checkIn)} → ${prettyDate(input.checkOut)}`,
+      "",
+      input.confirmed
+        ? `Details: ${input.adminUrl}`
+        : `The dates stay held. Confirm or refund from the console: ${input.adminUrl}`,
+    ].join("\n"),
+  };
+}
+
+/**
  * The moment a guest books, before paying: the summary email to the guest
  * (PDF attached, QR for the advance inside) and a heads-up to the owner.
  * The guest's never says "confirmed" — it says what to do to confirm.

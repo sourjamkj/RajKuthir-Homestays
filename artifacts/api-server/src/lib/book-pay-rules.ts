@@ -38,12 +38,22 @@ export type BookPaySettings = {
   advancePercent: number;
   /** Minutes the dates are held while the guest pays. */
   holdMinutes: number;
+  /**
+   * Convenience fee on online CARD and NET BANKING payments, as a percentage
+   * of the advance (the owner's Cashfree rate, e.g. 2.3). UPI is always free.
+   * 0 = no fee. Not refundable.
+   */
+  cardFeePercent: number;
 };
 
 export const DEFAULT_BOOK_PAY_SETTINGS: BookPaySettings = {
   advancePercent: 50,
   holdMinutes: 30,
+  cardFeePercent: 0,
 };
+
+/** The highest convenience fee the console accepts. */
+export const MAX_CARD_FEE_PERCENT = 5;
 
 /** Hours a hold is stretched to once the guest says they have paid. */
 export const SUBMITTED_HOLD_HOURS = 12;
@@ -55,6 +65,17 @@ export function settingsProblem(settings: BookPaySettings): string | null {
   }
   if (!Number.isInteger(holdMinutes) || holdMinutes < 10 || holdMinutes > 24 * 60) {
     return "The hold must be between 10 minutes and 24 hours.";
+  }
+  // Older saved settings have no fee: that is 0, not an error.
+  const fee = settings.cardFeePercent ?? 0;
+  if (
+    typeof fee !== "number" ||
+    !Number.isFinite(fee) ||
+    fee < 0 ||
+    fee > MAX_CARD_FEE_PERCENT ||
+    Math.abs(Math.round(fee * 100) - fee * 100) > 1e-9
+  ) {
+    return `The card convenience fee must be between 0 and ${MAX_CARD_FEE_PERCENT}%, with at most two decimals.`;
   }
   return null;
 }

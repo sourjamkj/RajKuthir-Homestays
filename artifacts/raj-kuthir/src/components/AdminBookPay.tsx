@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { AlertTriangle, Check, Image as ImageIcon, Loader2, MessageCircle, Settings2, Wallet, X } from 'lucide-react';
+import { AlertTriangle, Check, CreditCard, Image as ImageIcon, Loader2, MessageCircle, RotateCcw, Settings2, Wallet, X } from 'lucide-react';
 
 import { AdminApiError, adminFetch } from '@/lib/admin-api';
 import { formatRupees } from '@/lib/rates';
@@ -39,11 +39,34 @@ type Row = {
   createdAt: string;
   overdue: boolean;
   rebookWhatsappUrl: string | null;
+  online: OnlinePayment | null;
+  /** What the cancellation policy refunds if the guest cancels today. */
+  policyRefund?: { daysBefore: number; peak: boolean; refundPaise: number; creditPaise: number; rule: string } | null;
 };
 
+type OnlinePayment = {
+  orderId: string;
+  amountPaise: number;
+  /** Card / net banking convenience fee inside amountPaise; not refundable. */
+  feePaise?: number;
+  paymentGroup: string | null;
+  cfPaymentId: string | null;
+  bankReference: string | null;
+  paidAt: string | null;
+  settleNote: string | null;
+  refunds: Array<{ refundId: string; amountPaise: number; status: string; note: string | null; createdAt: string }>;
+};
+
+const METHOD: Record<string, string> = { upi: 'UPI', credit_card: 'Credit card', debit_card: 'Debit card', net_banking: 'Net banking', wallet: 'Wallet' };
+const LIVE_REFUND = ['SUCCESS', 'PENDING', 'PENDING_APPROVAL', 'ONHOLD'];
+// The convenience fee is not refundable, so it never counts towards a refund.
+const refundable = (online: OnlinePayment) =>
+  Math.max(0, online.amountPaise - (online.feePaise ?? 0) - online.refunds.filter((r) => LIVE_REFUND.includes(r.status)).reduce((sum, r) => sum + r.amountPaise, 0));
+
 type Response = {
-  settings: { advancePercent: number; holdMinutes: number };
+  settings: { advancePercent: number; holdMinutes: number; cardFeePercent?: number };
   upiReady: boolean;
+  onlinePayment?: 'sandbox' | 'production' | null;
   payments: Row[];
   migrationNeeded?: boolean;
 };
@@ -76,7 +99,7 @@ export function AdminBookPay() {
   });
   const [reasons, setReasons] = useState<Record<string, string>>({});
   const [showSettings, setShowSettings] = useState(false);
-  const [draft, setDraft] = useState<{ advancePercent: string; holdMinutes: string } | null>(null);
+  const [draft, setDraft] = useState<{ advancePercent: string; holdMinutes: string; cardFeePercent: string } | null>(null);
   const [message, setMessage] = useState<string | null>(null);
 
   const refresh = () => {
@@ -137,13 +160,50 @@ export function AdminBookPay() {
     onError: (error) => setMessage(error instanceof Error ? error.message : 'Could not reject.'),
   });
 
+  const refund = useMutation({
+    mutationFn: async (row: Row) => {
+      if (!row.online) throw new Error('No online payment on this booking.');
+      const max = refundable(row.online);
+      // Start from what the cancellation policy says, never above what is left.
+      const policy = row.policyRefund ?? null;
+      const suggested = policy ? Math.min(policy.refundPaise, max) : max;
+      const policyLine = policy
+        ? `\n\nPolicy if cancelled today: ${policy.rule} → ${formatRupees(policy.refundPaise)}.` +
+          (policy.creditPaise ? ` Or offer ${formatRupees(policy.creditPaise)} as credit for a stay within 6 months.` : '') +
+          ' If you have rebooked the nights, you can refund more (less ₹200).'
+        : '';
+      const answer = window.prompt(
+        `Refund to ${row.guestName}'s original payment method.${policyLine}\n\nAmount in ₹ (up to ${(max / 100).toFixed(2)}` +
+          (row.online.feePaise ? `; the ${formatRupees(row.online.feePaise)} convenience fee is not refundable` : '') +
+          `):`,
+        (suggested / 100).toFixed(2),
+      );
+      if (answer === null) throw new Error('Refund cancelled.');
+      const rupees = Number(answer.replace(/[₹,\s]/g, ''));
+      if (!Number.isFinite(rupees) || rupees <= 0) throw new Error('That is not an amount.');
+      const note = window.prompt('Reason (kept with the refund, optional):', 'Booking cancelled') ?? '';
+      if (!window.confirm(`Refund ${formatRupees(Math.round(rupees * 100))} to ${row.guestName}? This cannot be undone.`)) {
+        throw new Error('Refund cancelled.');
+      }
+      return adminFetch<{ refundId: string; status: string }>(`/api/admin/book-pay/${row.id}/refund`, {
+        method: 'POST',
+        body: JSON.stringify({ amountPaise: Math.round(rupees * 100), note }),
+      });
+    },
+    onSuccess: (result) => {
+      setMessage(`Refund ${result.refundId} sent to Cashfree (${result.status.toLowerCase()}). It reaches the guest in 5–7 working days.`);
+      refresh();
+    },
+    onError: (error) => setMessage(error instanceof Error ? error.message : 'Could not refund.'),
+  });
+
   const notified = useMutation({
     mutationFn: (row: Row) => adminFetch(`/api/admin/book-pay/${row.id}/expiry-notified`, { method: 'POST', body: '{}' }),
     onSuccess: refresh,
   });
 
   const saveSettings = useMutation({
-    mutationFn: (values: { advancePercent: number; holdMinutes: number }) =>
+    mutationFn: (values: { advancePercent: number; holdMinutes: number; cardFeePercent: number }) =>
       adminFetch('/api/admin/book-pay/settings', { method: 'PUT', body: JSON.stringify(values) }),
     onSuccess: () => {
       setShowSettings(false);
@@ -186,6 +246,35 @@ export function AdminBookPay() {
         </a>
       )}
       {row.rejectReason && <p className="mt-2 text-[12px] text-muted-foreground">Reason: {row.rejectReason}</p>}
+
+      {row.online && (
+        <div className="mt-3 rounded-xl bg-secondary/60 p-3 text-[12px] text-primary" data-testid={`online-payment-${row.id}`}>
+          <p className="flex flex-wrap items-center gap-1.5 font-bold">
+            <CreditCard size={13} /> Paid online · {formatRupees(row.online.amountPaise)}
+            {row.online.feePaise ? ` (incl. ${formatRupees(row.online.feePaise)} convenience fee, not refundable)` : ''} · {METHOD[row.online.paymentGroup ?? ''] ?? 'Online'} · {when(row.online.paidAt)}
+          </p>
+          <p className="mt-1 font-mono text-[11px] text-muted-foreground">
+            Cashfree payment {row.online.cfPaymentId ?? '—'} · order {row.online.orderId}{row.online.bankReference ? ` · bank ref ${row.online.bankReference}` : ''}
+          </p>
+          {row.online.settleNote && <p className="mt-1 text-[11px] text-muted-foreground">{row.online.settleNote}</p>}
+          {row.online.refunds.map((r) => (
+            <p key={r.refundId} className="mt-1 text-[11px]">
+              Refund {formatRupees(r.amountPaise)} · {r.status.toLowerCase().replace(/_/g, ' ')} · {when(r.createdAt)}{r.note ? ` · ${r.note}` : ''}
+            </p>
+          ))}
+          {refundable(row.online) > 0 && (
+            <button
+              type="button"
+              disabled={refund.isPending}
+              onClick={() => refund.mutate(row)}
+              className="mt-2 inline-flex items-center gap-1.5 rounded-full border border-[#A65E45]/50 px-3 py-1.5 text-[10px] font-bold uppercase tracking-[.08em] text-[#A65E45] disabled:opacity-40"
+              data-testid="button-payment-refund"
+            >
+              {refund.isPending ? <Loader2 size={12} className="animate-spin" /> : <RotateCcw size={12} />} Refund
+            </button>
+          )}
+        </div>
+      )}
 
       {(row.status === 'submitted' || row.status === 'awaiting_payment' || row.status === 'expired') && (
         <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:items-center">
@@ -254,13 +343,18 @@ export function AdminBookPay() {
           <p className="eyebrow flex items-center gap-2 text-accent"><Wallet size={15} /> Book &amp; Pay</p>
           <h2 className="mt-1 font-journal text-3xl text-primary">Payments to verify{toVerify.length ? ` · ${toVerify.length}` : ''}</h2>
           <p className="mt-1 max-w-[620px] text-[13px] text-muted-foreground">
-            Guests who booked online and say they paid. Find the UTR in your bank app, then confirm or reject. Dates stay held until you decide.
+            Guests who booked online. Paid through Cashfree: confirmed automatically, refund here if needed. Paid by UPI ID: find the UTR in your bank app, then confirm or reject. Dates stay held until you decide.
+            {data?.onlinePayment === 'sandbox' && <span className="ml-1 font-bold text-accent">Online payment is in TEST mode.</span>}
           </p>
         </div>
         <button
           type="button"
           onClick={() => {
-            setDraft({ advancePercent: String(data?.settings.advancePercent ?? 50), holdMinutes: String(data?.settings.holdMinutes ?? 30) });
+            setDraft({
+              advancePercent: String(data?.settings.advancePercent ?? 50),
+              holdMinutes: String(data?.settings.holdMinutes ?? 30),
+              cardFeePercent: String(data?.settings.cardFeePercent ?? 0),
+            });
             setShowSettings((value) => !value);
           }}
           className="flex items-center gap-2 rounded-full border border-border px-4 py-2 text-[11px] font-bold uppercase tracking-[.08em] text-primary"
@@ -284,7 +378,11 @@ export function AdminBookPay() {
         <form
           onSubmit={(event) => {
             event.preventDefault();
-            saveSettings.mutate({ advancePercent: Number(draft.advancePercent), holdMinutes: Number(draft.holdMinutes) });
+            saveSettings.mutate({
+              advancePercent: Number(draft.advancePercent),
+              holdMinutes: Number(draft.holdMinutes),
+              cardFeePercent: Number(draft.cardFeePercent || 0),
+            });
           }}
           className="mt-4 flex flex-wrap items-end gap-3 rounded-2xl border border-border bg-card p-4"
         >
@@ -296,8 +394,15 @@ export function AdminBookPay() {
             Hold (minutes)
             <input id="bookpay-hold" type="number" min={10} max={1440} value={draft.holdMinutes} onChange={(e) => setDraft({ ...draft, holdMinutes: e.target.value })} className="mt-1 block w-28 rounded-lg border border-border bg-background px-3 py-2 text-primary" />
           </label>
+          <label className="text-[12px] text-muted-foreground">
+            Card / net banking fee %
+            <input id="bookpay-card-fee" type="number" min={0} max={5} step={0.01} value={draft.cardFeePercent} onChange={(e) => setDraft({ ...draft, cardFeePercent: e.target.value })} className="mt-1 block w-28 rounded-lg border border-border bg-background px-3 py-2 text-primary" data-testid="input-bookpay-card-fee" />
+          </label>
           <button type="submit" className="rounded-full bg-primary px-4 py-2 text-[11px] font-bold uppercase tracking-[.08em] text-primary-foreground">Save</button>
           <p className="w-full text-[11px] text-muted-foreground">Applies to new bookings. A hold stretches to 12 hours once the guest submits a UTR.</p>
+          <p className="w-full text-[11px] text-muted-foreground">
+            Convenience fee: added only when a guest pays online by card or net banking, as a % of the advance (use your Cashfree rate, e.g. 2.30 for 1.95% + 18% GST). UPI is always free. Shown to the guest before they pay; not refundable. 0 = no fee.
+          </p>
         </form>
       )}
 

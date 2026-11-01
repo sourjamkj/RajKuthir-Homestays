@@ -35,13 +35,60 @@ type PayData = {
   payee: { upiId: string; name: string } | null;
   upiUrl: string | null;
   qrSvg: string | null;
+  onlinePay?: boolean;
+  /** Convenience fee on card / net banking (0 = none). UPI is always free. */
+  cardFee?: { feePaise: number; percent: number };
+  confirmationReady?: boolean;
   /** The PDF this guest can download now: summary (payment pending) or confirmation. */
   document?: 'summary' | 'confirmation' | null;
 };
 
+type CashfreeCheckout = { checkout: (options: { paymentSessionId: string; redirectTarget: '_self' }) => Promise<unknown> };
+declare global {
+  interface Window {
+    Cashfree?: (options: { mode: 'sandbox' | 'production' }) => CashfreeCheckout;
+  }
+}
+
+const TOKEN_KEY = 'rk-pay-token';
+const CASHFREE_SDK = 'https://sdk.cashfree.com/js/v3/cashfree.js';
+
 function tokenFromFragment(): string {
   if (typeof window === 'undefined') return '';
   return decodeURIComponent(window.location.hash.replace(/^#/, '')).trim();
+}
+
+/**
+ * The token from the fragment, or — on the way back from the Cashfree
+ * checkout, whose return URL carries only the order id — from this tab's
+ * session storage, where it was put just before leaving.
+ */
+function initialToken(): string {
+  const fromHash = tokenFromFragment();
+  try {
+    if (fromHash) sessionStorage.setItem(TOKEN_KEY, fromHash);
+    return fromHash || sessionStorage.getItem(TOKEN_KEY) || '';
+  } catch {
+    return fromHash;
+  }
+}
+
+function returningOrderId(): string | null {
+  if (typeof window === 'undefined') return null;
+  const id = new URLSearchParams(window.location.search).get('order_id');
+  return id && /^[A-Za-z0-9_-]{3,50}$/.test(id) ? id : null;
+}
+
+function loadCashfree(): Promise<NonNullable<Window['Cashfree']>> {
+  if (window.Cashfree) return Promise.resolve(window.Cashfree);
+  return new Promise((resolve, reject) => {
+    const script = document.createElement('script');
+    script.src = CASHFREE_SDK;
+    script.async = true;
+    script.onload = () => (window.Cashfree ? resolve(window.Cashfree) : reject(new Error('Cashfree did not load')));
+    script.onerror = () => reject(new Error('Cashfree did not load'));
+    document.head.appendChild(script);
+  });
 }
 
 function pretty(iso: string | null): string {
@@ -70,7 +117,12 @@ function readAsBase64(file: File): Promise<string> {
 }
 
 export default function Pay() {
-  const [token] = useState(tokenFromFragment);
+  const [token] = useState(initialToken);
+  const [returnOrder, setReturnOrder] = useState<string | null>(returningOrderId);
+  const [verifying, setVerifying] = useState(false);
+  const [onlineNote, setOnlineNote] = useState<string | null>(null);
+  // Which checkout is opening: 'all' (no fee configured), 'upi' or 'card'.
+  const [opening, setOpening] = useState<'all' | 'upi' | 'card' | null>(null);
   const [data, setData] = useState<PayData | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [left, setLeft] = useState(0);
@@ -118,6 +170,57 @@ export default function Pay() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  // Back from the Cashfree checkout: ask the server (which asks Cashfree)
+  // what happened. A payment can take a minute to settle, so keep asking
+  // for a little while before handing over to the "we'll confirm" message.
+  useEffect(() => {
+    if (!returnOrder || !token) return;
+    let tries = 0;
+    let stopped = false;
+    let timer: number | undefined;
+    setVerifying(true);
+
+    const check = async () => {
+      tries += 1;
+      try {
+        const response = await fetch('/api/book/pay/cashfree/verify', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ token, orderId: returnOrder }),
+        });
+        const body = await response.json().catch(() => ({}));
+        if (stopped) return;
+        if (!response.ok) {
+          setOnlineNote(body.error ?? 'We could not check the payment just now.');
+        } else if (body.status === 'pending' && tries < 18) {
+          setOnlineNote('Waiting for the bank to confirm your payment…');
+          timer = window.setTimeout(() => void check(), 10_000);
+          return;
+        } else if (body.status === 'pending') {
+          setOnlineNote('Your bank has not confirmed the payment yet. If money has left your account, it is safe: we will confirm by WhatsApp or email shortly.');
+        } else if (body.status === 'closed') {
+          setOnlineNote('That payment was not completed. You can try again below.');
+        } else {
+          setOnlineNote(null);
+        }
+      } catch {
+        if (!stopped) setOnlineNote('Could not reach the server. Please refresh in a moment.');
+      }
+      if (stopped) return;
+      setVerifying(false);
+      setReturnOrder(null);
+      // Back to the plain /pay#token address, so a refresh works as before.
+      window.history.replaceState(null, '', `${window.location.pathname}#${encodeURIComponent(token)}`);
+      void load();
+    };
+
+    void check();
+    return () => {
+      stopped = true;
+      if (timer) window.clearTimeout(timer);
+    };
+  }, [returnOrder, token, load]);
 
   // Countdown, and a refresh the moment it reaches zero so the page shows
   // what the server now says rather than a stale "pay now".
@@ -175,6 +278,38 @@ export default function Pay() {
       setFormError('Could not reach the server. Please try again.');
     } finally {
       setSending(false);
+    }
+  };
+
+  const payOnline = async (method?: 'upi' | 'card') => {
+    setOnlineNote(null);
+    setOpening(method ?? 'all');
+    try {
+      const response = await fetch('/api/book/pay/cashfree/order', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(method ? { token, method } : { token }),
+      });
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        setOnlineNote(body.error ?? 'Online payment is not available just now. Please pay by UPI below.');
+        if (response.status === 410) void load();
+        return;
+      }
+      try {
+        sessionStorage.setItem(TOKEN_KEY, token);
+      } catch {
+        /* the return page then asks for the link again; payment still settles */
+      }
+      const Cashfree = await loadCashfree();
+      await Cashfree({ mode: body.mode === 'production' ? 'production' : 'sandbox' }).checkout({
+        paymentSessionId: body.paymentSessionId,
+        redirectTarget: '_self',
+      });
+    } catch {
+      setOnlineNote('The secure checkout could not open. Please check your connection, or pay by UPI below.');
+    } finally {
+      setOpening(null);
     }
   };
 
@@ -253,6 +388,7 @@ export default function Pay() {
   };
 
   const payable = data?.status === 'awaiting_payment' && left > 0 && data.upiUrl;
+  const online = data?.status === 'awaiting_payment' && left > 0 && data.onlinePay && !verifying;
 
   // The guest's own WhatsApp, opened on a chat with us, the booking already typed.
   const ownerWhatsappUrl = data
@@ -298,7 +434,7 @@ export default function Pay() {
                 <dt className="text-muted-foreground">Check-out</dt><dd className="text-right text-primary">{pretty(data.checkOut)}</dd>
                 <dt className="text-muted-foreground">Stay</dt><dd className="text-right text-primary">{data.nights} night{data.nights === 1 ? '' : 's'} · {data.guests} guest{data.guests === 1 ? '' : 's'}{data.pets ? ` · ${data.pets} pet${data.pets === 1 ? '' : 's'}` : ''}</dd>
                 <dt className="text-muted-foreground">Total</dt><dd className="text-right text-primary">{formatRupees(data.totalPaise)}</dd>
-                <dt className="font-bold text-primary">Advance now ({data.advancePercent}%)</dt><dd className="text-right text-lg font-bold text-primary" data-testid="text-pay-advance">{formatRupees(data.advancePaise)}</dd>
+                <dt className="font-bold text-primary">{data.advancePercent >= 100 ? 'Peak dates, paid in full now' : `Advance now (${data.advancePercent}%)`}</dt><dd className="text-right text-lg font-bold text-primary" data-testid="text-pay-advance">{formatRupees(data.advancePaise)}</dd>
                 <dt className="text-muted-foreground">Balance at check-in</dt><dd className="text-right text-primary">{formatRupees(data.balancePaise)}</dd>
                 <dt className="text-muted-foreground">Reference</dt><dd className="text-right font-mono text-primary">{data.reference}</dd>
               </dl>
@@ -362,11 +498,73 @@ export default function Pay() {
               </section>
             )}
 
-            {payable && (
+            {verifying && (
+              <p className="mt-5 flex items-center gap-2 rounded-xl bg-card p-4 text-sm text-primary" role="status" data-testid="text-pay-verifying">
+                <SpinnerIcon className="animate-spin" /> {onlineNote ?? 'Checking your payment…'}
+              </p>
+            )}
+            {!verifying && onlineNote && (
+              <p className="mt-5 flex items-start gap-2 rounded-xl border border-border bg-card p-4 text-sm text-primary" role="status" data-testid="text-pay-online-note">
+                <AlertIcon className="mt-0.5 shrink-0" /> {onlineNote}
+              </p>
+            )}
+
+            {online && (
+              <section className="mt-6" aria-label="Pay online">
+                {data.cardFee && data.cardFee.feePaise > 0 ? (
+                  <>
+                    {/* With a convenience fee: UPI (free) and card / net banking
+                        (plus the fee, shown before the guest pays) are separate. */}
+                    <button
+                      type="button"
+                      onClick={() => payOnline('upi')}
+                      disabled={opening !== null}
+                      className="flex w-full items-center justify-center gap-2 rounded-full bg-primary px-5 py-4 text-sm font-semibold text-primary-foreground disabled:opacity-60"
+                      data-testid="button-pay-online-upi"
+                    >
+                      {opening === 'upi' && <SpinnerIcon className="animate-spin" />} Pay {formatRupees(data.advancePaise)} by UPI
+                    </button>
+                    <p className="mt-2 text-center text-xs text-muted-foreground">No convenience fee on UPI.</p>
+                    <button
+                      type="button"
+                      onClick={() => payOnline('card')}
+                      disabled={opening !== null}
+                      className="mt-4 flex w-full items-center justify-center gap-2 rounded-full border border-primary/25 px-5 py-4 text-sm font-semibold text-primary disabled:opacity-60"
+                      data-testid="button-pay-online-card"
+                    >
+                      {opening === 'card' && <SpinnerIcon className="animate-spin" />} Card or net banking: {formatRupees(data.advancePaise + data.cardFee.feePaise)}
+                    </button>
+                    <p className="mt-2 text-center text-xs text-muted-foreground" data-testid="text-card-fee">
+                      Includes a {formatRupees(data.cardFee.feePaise)} convenience fee ({data.cardFee.percent}% for card and net banking payments). The fee is not refundable.
+                    </p>
+                  </>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => payOnline()}
+                    disabled={opening !== null}
+                    className="flex w-full items-center justify-center gap-2 rounded-full bg-primary px-5 py-4 text-sm font-semibold text-primary-foreground disabled:opacity-60"
+                    data-testid="button-pay-online"
+                  >
+                    {opening && <SpinnerIcon className="animate-spin" />} Pay {formatRupees(data.advancePaise)} online
+                  </button>
+                )}
+                <p className="mt-3 flex items-center justify-center gap-1.5 text-center text-xs text-muted-foreground">
+                  {data.cardFee && data.cardFee.feePaise > 0 ? 'Secure checkout by Cashfree' : 'UPI, cards or net banking · secure checkout by Cashfree'} · booking confirmed instantly
+                </p>
+                {payable && (
+                  <p className="mt-6 flex items-center gap-3 text-xs text-muted-foreground">
+                    <span className="h-px flex-1 bg-border" /> or pay directly by UPI <span className="h-px flex-1 bg-border" />
+                  </p>
+                )}
+              </section>
+            )}
+
+            {payable && !verifying && (
               <section className="mt-6 space-y-5" aria-label="Pay by UPI">
                 <a
                   href={data.upiUrl!}
-                  className={`flex w-full items-center justify-center gap-2 rounded-full bg-primary px-5 py-4 text-sm font-semibold text-primary-foreground ${mobile ? '' : 'md:hidden'}`}
+                  className={`flex w-full items-center justify-center gap-2 rounded-full px-5 py-4 text-sm font-semibold ${data.onlinePay ? 'border border-primary/25 text-primary' : 'bg-primary text-primary-foreground'} ${mobile ? '' : 'md:hidden'}`}
                   data-testid="link-pay-upi"
                 >
                   Pay {formatRupees(data.advancePaise)} with UPI app

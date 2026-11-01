@@ -113,6 +113,10 @@ app.use(
       if (req.url === "/webhooks/whatsapp" || req.url?.startsWith("/webhooks/whatsapp?")) {
         (req as unknown as { rawBody: Buffer }).rawBody = buf;
       }
+      // Cashfree's payment webhook: base64 HMAC over timestamp + raw body.
+      if (req.url === "/api/book/cashfree/webhook" || req.url?.startsWith("/api/book/cashfree/webhook?")) {
+        (req as unknown as { rawBody: Buffer }).rawBody = buf;
+      }
     },
   }),
 );

@@ -27,6 +27,13 @@ import {
 /** How much of the total is asked for up front, the balance at check-in. */
 export const ADVANCE_PERCENT = 50;
 
+/**
+ * Peak dates (Poush Mela, Christmas–New Year, Basanta Utsav … the peak periods
+ * on the rate plan) are paid in full at booking: those nights cannot be resold
+ * at short notice, so the cancellation policy needs the money in hand.
+ */
+export const PEAK_ADVANCE_PERCENT = 100;
+
 export type QuoteInput = Party & {
   checkIn: string | null;
   checkOut: string | null;
@@ -51,6 +58,10 @@ export type Quote = {
   totalPaise: number;
   advancePaise: number;
   balancePaise: number;
+  /** Share of the total asked up front: 100 when the stay touches a peak period. */
+  advancePercent: number;
+  /** The peak period this stay touches (full payment at booking), or null. */
+  peak: string | null;
 };
 
 export type QuoteResult =
@@ -163,7 +174,8 @@ export function quoteForEnquiry(
 
   const totalPaise =
     roomPaise + surchargePerNight(breakdown) * nights.length + petCharge(breakdown, nights.length);
-  const advancePaise = advanceOf(totalPaise, rules.advancePercent ?? ADVANCE_PERCENT);
+  const advancePercent = minimum ? PEAK_ADVANCE_PERCENT : (rules.advancePercent ?? ADVANCE_PERCENT);
+  const advancePaise = advanceOf(totalPaise, advancePercent);
 
   return {
     ok: true,
@@ -178,5 +190,7 @@ export function quoteForEnquiry(
     totalPaise,
     advancePaise,
     balancePaise: totalPaise - advancePaise,
+    advancePercent,
+    peak: minimum?.label ?? null,
   };
 }
