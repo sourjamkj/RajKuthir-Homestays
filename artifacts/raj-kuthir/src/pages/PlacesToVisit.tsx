@@ -257,7 +257,7 @@ export default function PlacesToVisit() {
                 Check availability              </a>
               <a
                 href={`https://wa.me/916290399165?text=${encodeURIComponent(
-                  'Hello Raj Kuthir, I am planning a trip to Shantiniketan and would like to enquire about a stay at Sobuj Potro.',
+                  'Hello Raj Kuthir, I am planning a trip to Shantiniketan and have a question about staying at Sobuj Potro.',
                 )}`}
                 target="_blank"
                 rel="noreferrer"

@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { BackIcon, DownloadIcon, LeafIcon, PhoneIcon, WhatsappIcon } from '@/components/icons';
+import { BackIcon, CalendarIcon, DownloadIcon, LeafIcon, PhoneIcon } from '@/components/icons';
 
 import { CONFIG, asset, basePath, phoneHref } from '@/lib/site';
 
@@ -244,7 +244,7 @@ export default function HouseRules() {
                   className="flex items-center gap-2 rounded-full border border-border px-6 py-4 text-sm font-semibold text-primary transition-colors hover:border-primary"
                   data-testid="link-house-rules-enquire"
                 >
-                  <WhatsappIcon /> Send an enquiry
+                  <CalendarIcon /> Book your stay
                 </a>
               </div>
             </div>

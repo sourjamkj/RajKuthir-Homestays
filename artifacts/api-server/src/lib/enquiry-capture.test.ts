@@ -5,148 +5,75 @@ import test from "node:test";
 import { fileURLToPath } from "node:url";
 
 /**
- * That every enquiry the website takes actually reaches the server.
+ * The website books; it no longer takes enquiries.
  *
- * WHY THIS FILE EXISTS
+ * In November 2026 the owner removed "Send enquiry" and "Just send an
+ * enquiry": the homepage form and the Book & Pay form on /rates finish one
+ * way, "Hold dates & pay". What the site cannot book (six or more guests,
+ * over thirty nights, online booking paused) goes to the host on WhatsApp
+ * with the details already typed, and nothing is filed as an enquiry.
  *
- * The first real enquiry Raj Kuthir received through the site arrived on the
- * host's phone reading:
- *
- *   Name: To be shared
- *   Dates: To be confirmed to To be confirmed
- *   Guests: 2 adults, 0 children, 0 pets
- *   Phone: To be shared
- *
- * — and there was no matching row in the database, because the button that
- * sent it was a plain link to wa.me that never spoke to the API at all. Two
- * separate faults, both in the homepage, and neither visible from the server
- * side: an enquiry that never arrives leaves no log line to notice.
- *
- * These assertions read App.tsx rather than execute it, which is a weaker
- * kind of test, but the alternative is a browser and this failure mode is
- * textual: a literal placeholder string, and an anchor where a submit button
- * belongs.
+ * These read the source rather than run it (the failure modes are textual:
+ * a button or a fetch coming back), as the earlier version of this file did
+ * when it pinned the opposite behaviour.
  */
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const clientRoot = path.resolve(here, "../../../..", "artifacts/raj-kuthir");
 const APP_TSX = readFileSync(path.join(clientRoot, "src/App.tsx"), "utf8");
+const BOOK_AND_PAY_TSX = readFileSync(path.join(clientRoot, "src/components/BookAndPay.tsx"), "utf8");
+const ENQUIRY_ROUTES = readFileSync(path.join(here, "../routes/enquiries.ts"), "utf8");
 
-/**
- * App.tsx with its comments removed.
- *
- * The comment above the message builder quotes the broken placeholders by
- * name, so a naive search for them finds the explanation of the bug and
- * reports the bug. Strip the prose, then look at the code.
- */
-const APP_CODE = APP_TSX.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+const strip = (src: string) => src.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+const APP_CODE = strip(APP_TSX);
+const BOOK_AND_PAY_CODE = strip(BOOK_AND_PAY_TSX);
 
-test("enquiry · no message is ever sent with placeholder answers in it", () => {
+test("booking · no form on the site posts an enquiry any more", () => {
+  for (const [name, code] of [["App.tsx", APP_CODE], ["BookAndPay.tsx", BOOK_AND_PAY_CODE]] as const) {
+    assert.ok(!code.includes("'/api/enquiries'"), `${name} posts to /api/enquiries again`);
+    assert.ok(!/Send enquiry|Just send an enquiry/.test(code), `${name} offers "Send enquiry" again`);
+  }
+});
+
+test("booking · the homepage form's only submit holds the dates and pays", () => {
+  const form = APP_CODE.slice(APP_CODE.indexOf("<form ref={formRef}"), APP_CODE.indexOf("</form>", APP_CODE.indexOf("<form ref={formRef}")));
+  assert.ok(form.length > 0, "the booking form is gone");
+  assert.match(form, /onSubmit=\{\(event\) => \{ event\.preventDefault\(\); if \(canPayOnline\) void startBooking\(\); \}\}/);
+  assert.equal((form.match(/type="submit"/g) ?? []).length, 1, "there is more than one way to submit the form");
+  assert.match(form, /data-testid="button-book-pay"/);
+});
+
+test("booking · what the site cannot book goes to WhatsApp, with the details typed", () => {
+  assert.match(APP_CODE, /const bookByMessage = \(enquiryOnly && nights > 0\) \|\| bookingPaused;/);
+  assert.match(APP_CODE, /<a href=\{bookByWhatsappUrl\}/);
+  assert.match(APP_CODE, /data-testid="link-book-by-whatsapp"/);
+  assert.match(BOOK_AND_PAY_CODE, /const bookByMessage = \(enquiryOnly && stayNights > 0\) \|\| bookingPaused;/);
+  assert.match(BOOK_AND_PAY_CODE, /href=\{bookByWhatsappUrl\}/);
+});
+
+test("enquiry · no WhatsApp message is ever sent with placeholder answers in it", () => {
   for (const placeholder of ["To be shared", "To be confirmed"]) {
-    assert.ok(
-      !APP_CODE.includes(placeholder),
-      `"${placeholder}" is back in the WhatsApp message — an enquiry that cannot be answered`,
-    );
+    assert.ok(!APP_CODE.includes(placeholder), `"${placeholder}" is back in the WhatsApp message`);
   }
 });
 
 test("enquiry · a blank form sends a plain hello, not a filled-in form", () => {
-  // The sticky mobile bar carries this message on every screen of the site,
-  // so it is reachable long before the guest has typed anything.
-  assert.match(
-    APP_TSX,
-    /const hasEnquiryDetail = /,
-    "the message no longer distinguishes a filled form from an empty one",
-  );
-  const builder = APP_TSX.slice(
-    APP_TSX.indexOf("const whatsappMessage = "),
-    APP_TSX.indexOf("const whatsappUrl = "),
-  );
+  const builder = APP_TSX.slice(APP_TSX.indexOf("const whatsappText = "), APP_TSX.indexOf("const whatsappUrl = "));
   assert.ok(builder.length > 0, "the WhatsApp message builder is gone");
-  assert.match(
-    builder,
-    /if \(!hasEnquiryDetail\) return/,
-    "an untouched form still composes a full enquiry",
-  );
+  assert.match(builder, /if \(!hasEnquiryDetail\) return/, "an untouched form still composes a full message");
   for (const field of ["form.name.trim()", "form.phone.trim()"]) {
-    assert.ok(
-      builder.includes(field),
-      `${field} is interpolated without being checked for content`,
-    );
+    assert.ok(builder.includes(field), `${field} is interpolated without being checked for content`);
   }
 });
 
-test("enquiry · the WhatsApp button records the enquiry before handing over", () => {
-  // It used to be <a href={whatsappUrl}>, which is why the enquiry existed
-  // only in WhatsApp and nowhere in the owner's console.
-  const form = APP_TSX.slice(APP_TSX.indexOf("data-testid=\"form-booking-enquiry\""));
-  const button = form.slice(form.indexOf("link-booking-whatsapp") - 600, form.indexOf("link-booking-whatsapp") + 200);
-
-  assert.ok(
-    !/<a[^>]*href=\{whatsappUrl\}[^>]*data-testid="link-booking-whatsapp"/.test(APP_TSX),
-    "the in-form WhatsApp control is a bare link again, bypassing /api/enquiries",
-  );
-  assert.match(button, /type="submit"/, "the WhatsApp control does not submit the form");
-  assert.match(
-    button,
-    /setHandOffToWhatsApp\(true\)/,
-    "nothing marks the submission as one that should continue into WhatsApp",
-  );
+test("enquiry · the sticky phone bar is a plain wa.me link for questions", () => {
+  assert.match(APP_CODE, /<a href=\{whatsappUrl\}[^>]*data-testid="button-sticky-whatsapp"/);
 });
 
-test("enquiry · WhatsApp opens only after the POST has been made", () => {
-  const submit = APP_TSX.slice(
-    APP_TSX.indexOf("const submitEnquiry = async"),
-    APP_TSX.indexOf("const updateForm") > APP_TSX.indexOf("const submitEnquiry = async")
-      ? APP_TSX.indexOf("const updateForm")
-      : APP_TSX.indexOf("const submitEnquiry = async") + 4000,
-  );
-
-  const post = submit.indexOf("fetch('/api/enquiries'");
-  const open = submit.indexOf("window.open(whatsappUrl");
-
-  assert.ok(post > -1, "the enquiry is no longer POSTed");
-  assert.ok(open > -1, "the WhatsApp hand-off is gone");
-  assert.ok(post < open, "WhatsApp opens before the enquiry is recorded");
-});
-
-test("enquiry · a refused enquiry does not continue into WhatsApp", () => {
-  // A 409 means the dates are taken. Sending the host a WhatsApp for a
-  // booking the server just refused would tell the guest it went through.
-  const submit = APP_TSX.slice(APP_TSX.indexOf("const submitEnquiry = async")).slice(0, 4000);
-  const refusal = submit.indexOf("response.status === 409");
-  const earlyReturn = submit.indexOf("return;", refusal);
-  const open = submit.indexOf("window.open(whatsappUrl");
-
-  assert.ok(refusal > -1 && earlyReturn > -1, "the refusal branch is gone");
-  assert.ok(earlyReturn < open, "a refused enquiry still opens WhatsApp");
-});
-
-test("enquiry · the sticky mobile bar is a bare wa.me link, entered by hand", () => {
-  // A DELIBERATE EXCEPTION, not an oversight.
-  //
-  // Every other route into an enquiry saves it first and opens WhatsApp
-  // afterwards, because an enquiry that only reaches the host's phone is one
-  // nobody can quote, hold or convert. The sticky phone bar is the one place
-  // that does not: it opens WhatsApp directly, and the owner records the lead
-  // afterwards through POST /admin/enquiries.
-  //
-  // That is a decision with a cost — a lead typed by hand is a lead that can
-  // be forgotten — so it is pinned here rather than left to be rediscovered.
-  // If the bar is ever wired back through the form, this test is what should
-  // change, and the history explains why it looked like this in between.
-  assert.match(
-    APP_CODE,
-    /<a[^>]*href={whatsappUrl}[^>]*data-testid="button-sticky-whatsapp"/,
-    "the sticky bar is no longer the plain wa.me link it is meant to be",
-  );
-
-  // The compensating control. Without a way to enter a lead by hand, an
-  // enquiry started at the bar has nowhere to land at all.
-  const ENQUIRY_ROUTES = readFileSync(path.join(here, "../routes/enquiries.ts"), "utf8");
-  assert.match(
-    ENQUIRY_ROUTES,
-    /router\.post\("\/admin\/enquiries", requireAdmin/,
-    "the hand-entry route the sticky bar relies on is gone",
-  );
+test("enquiry · the public enquiry endpoint refuses; the owner's hand entry stays", () => {
+  assert.match(ENQUIRY_ROUTES, /const PUBLIC_ENQUIRIES_OPEN = false;/);
+  const handler = ENQUIRY_ROUTES.slice(ENQUIRY_ROUTES.indexOf('router.post("/enquiries"'));
+  assert.ok(handler.indexOf("if (!PUBLIC_ENQUIRIES_OPEN)") < handler.indexOf("tooMany("), "the refusal no longer comes first");
+  assert.match(handler.slice(0, 600), /res\.status\(410\)/);
+  assert.match(ENQUIRY_ROUTES, /router\.post\("\/admin\/enquiries", requireAdmin/, "the owner's hand-entry route is gone");
 });

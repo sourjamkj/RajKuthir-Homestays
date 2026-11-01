@@ -1,5 +1,5 @@
 import { useMemo, useState, type FormEvent } from 'react';
-import { AlertIcon, CalendarIcon, SpinnerIcon } from '@/components/icons';
+import { AlertIcon, CalendarIcon, SpinnerIcon, WhatsappIcon } from '@/components/icons';
 
 import { formatRupees, useRatePlan } from '@/lib/rates';
 import { basePath, track } from '@/lib/site';
@@ -77,15 +77,14 @@ export function BookAndPay({ id = 'book-online' }: { id?: string }) {
   const [guest, setGuest] = useState({ name: '', phone: '', email: '', requests: '' });
   const [quote, setQuote] = useState<QuoteOk | QuoteNo | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [busy, setBusy] = useState<'quote' | 'start' | 'enquiry' | null>(null);
-  const [enquirySent, setEnquirySent] = useState(false);
+  const [busy, setBusy] = useState<'quote' | 'start' | null>(null);
 
   const totalGuests = Number(stay.adults || 0) + Number(stay.children || 0);
   const stayNights =
     stay.checkIn && stay.checkOut && stay.checkOut > stay.checkIn
       ? Math.round((Date.parse(stay.checkOut) - Date.parse(stay.checkIn)) / 86_400_000)
       : 0;
-  // Larger parties and long stays are confirmed by message, not paid online.
+  // Larger parties and long stays are booked by message (WhatsApp), not online.
   const enquiryOnly = totalGuests > 5 || stayNights > 30;
   const upcomingPeaks = useMemo(
     () => (ratePlan.data?.peaks ?? []).filter((peak) => peak.endDate > today),
@@ -96,40 +95,23 @@ export function BookAndPay({ id = 'book-online' }: { id?: string }) {
     setStay((current) => ({ ...current, [field]: value }));
     setQuote(null);
     setError(null);
-    setEnquirySent(false);
   };
 
-  const sendEnquiry = async () => {
-    if (!guest.name.trim() || !guest.phone.trim()) {
-      setError('Add your name and mobile number so we can reply.');
-      return;
-    }
-    setBusy('enquiry');
-    setError(null);
-    try {
-      const { ok, data } = await postJson<{ error?: string }>('/api/enquiries', {
-        name: guest.name,
-        phone: guest.phone,
-        email: guest.email || null,
-        requests: guest.requests || null,
-        checkIn: stay.checkIn || null,
-        checkOut: stay.checkOut || null,
-        adults: stay.adults,
-        children: stay.children,
-        pets: stay.pets,
-      });
-      if (ok) {
-        setEnquirySent(true);
-        track('book_pay_enquiry');
-      } else {
-        setError(data.error ?? 'Could not send the enquiry.');
-      }
-    } catch {
-      setError('Could not reach the server. Please check your connection.');
-    } finally {
-      setBusy(null);
-    }
-  };
+  /*
+    No enquiries from this form (the owner's decision, November 2026): the
+    form books. What the site cannot book (six or more guests, over thirty
+    nights, online booking paused) goes to the host on WhatsApp, with the
+    dates and party already typed. Nothing is filed as an enquiry.
+  */
+  const bookByWhatsappUrl = (() => {
+    const lines = ['Hello Raj Kuthir, I would like to book Sobuj Potro.'];
+    if (stay.checkIn && stay.checkOut) lines.push(`Dates: ${stay.checkIn} to ${stay.checkOut}${stayNights ? ` (${stayNights} night${stayNights === 1 ? '' : 's'})` : ''}`);
+    lines.push(`Guests: ${stay.adults} adults, ${stay.children} children, ${stay.pets} pets`);
+    if (guest.name.trim()) lines.push(`Name: ${guest.name.trim()}`);
+    return `https://wa.me/916290399165?text=${encodeURIComponent(lines.join('\n'))}`;
+  })();
+  const bookingPaused = Boolean(quote && quote.available && !quote.onlineBooking);
+  const bookByMessage = (enquiryOnly && stayNights > 0) || bookingPaused;
 
   const checkPrice = async (event?: FormEvent, override?: { checkIn: string; checkOut: string }) => {
     event?.preventDefault();
@@ -252,8 +234,8 @@ export function BookAndPay({ id = 'book-online' }: { id?: string }) {
           ))}
         </div>
         {enquiryOnly && (
-          <p className="rounded-xl bg-secondary/60 px-4 py-3 text-[12px] leading-5 text-primary" data-testid="text-book-enquiry-only">
-            {totalGuests > 5 ? `For ${totalGuests} guests` : 'For stays over 30 nights'} we confirm by message. Fill in your details below and send an enquiry.
+          <p className="rounded-xl bg-secondary/60 px-4 py-3 text-[13px] leading-5 text-primary" data-testid="text-book-by-message">
+            {totalGuests > 5 ? `For ${totalGuests} guests` : 'For stays over 30 nights'} we book by message. WhatsApp opens with your dates and party already filled in.
           </p>
         )}
         <button
@@ -325,11 +307,25 @@ export function BookAndPay({ id = 'book-online' }: { id?: string }) {
         </div>
       )}
 
-      {enquirySent ? (
-        <p className="mt-6 rounded-xl bg-secondary p-4 text-[13px] leading-6 text-primary" role="status" data-testid="text-book-enquiry-sent">
-          Enquiry received. We'll reply on WhatsApp shortly with availability and a quote.
-        </p>
-      ) : ((quote && quote.available) || (enquiryOnly && stayNights > 0)) ? (
+      {bookByMessage ? (
+        <div className="mt-6 space-y-3" data-testid="book-by-message">
+          {bookingPaused && (
+            <p className="rounded-xl bg-secondary/60 px-4 py-3 text-[13px] leading-5 text-primary">
+              Online booking is paused just now. Message us on WhatsApp and we will book these dates for you.
+            </p>
+          )}
+          <a
+            href={bookByWhatsappUrl}
+            target="_blank"
+            rel="noreferrer"
+            onClick={() => track('book_by_whatsapp', { placement: id })}
+            className="flex w-full items-center justify-center gap-2 rounded-full bg-primary px-5 py-4 text-sm font-semibold text-primary-foreground transition-transform hover:-translate-y-0.5 active:scale-95"
+            data-testid="link-book-by-whatsapp"
+          >
+            <WhatsappIcon /> Message us on WhatsApp to book
+          </a>
+        </div>
+      ) : quote && quote.available && quote.onlineBooking ? (
         <form onSubmit={start} className="mt-6 space-y-5" data-testid="form-book-start">
               <div className="grid gap-5 sm:grid-cols-2">
                 <label className="block sm:col-span-2">
@@ -349,36 +345,18 @@ export function BookAndPay({ id = 'book-online' }: { id?: string }) {
                   <textarea id={`${id}-requests`} rows={2} maxLength={1000} value={guest.requests} onChange={(e) => setGuest({ ...guest, requests: e.target.value })} className={`${field} resize-none`} data-testid="input-book-requests" />
                 </label>
               </div>
-          {quote && quote.available && quote.onlineBooking && !enquiryOnly && (
-            <button
-              type="submit"
-              disabled={busy !== null}
-              className="flex w-full items-center justify-center gap-2 rounded-full bg-primary px-5 py-4 text-sm font-semibold text-primary-foreground transition-transform hover:-translate-y-0.5 active:scale-95 disabled:opacity-40"
-              data-testid="button-book-start"
-            >
-              {busy === 'start' ? <SpinnerIcon className="animate-spin" /> : null}
-              Hold dates &amp; pay {formatRupees(quote.advancePaise)}            </button>
-          )}
           <button
-            type="button"
-            onClick={sendEnquiry}
+            type="submit"
             disabled={busy !== null}
-            className={
-              quote && quote.available && quote.onlineBooking && !enquiryOnly
-                ? 'flex w-full items-center justify-center gap-2 rounded-full border border-primary/25 px-5 py-3 text-sm font-semibold text-primary hover:bg-primary/5 disabled:opacity-40'
-                : 'flex w-full items-center justify-center gap-2 rounded-full bg-primary px-5 py-4 text-sm font-semibold text-primary-foreground disabled:opacity-40'
-            }
-            data-testid="button-book-enquiry"
+            className="flex w-full items-center justify-center gap-2 rounded-full bg-primary px-5 py-4 text-sm font-semibold text-primary-foreground transition-transform hover:-translate-y-0.5 active:scale-95 disabled:opacity-40"
+            data-testid="button-book-start"
           >
-            {busy === 'enquiry' ? <SpinnerIcon className="animate-spin" /> : null}
-            {quote && quote.available && quote.onlineBooking && !enquiryOnly ? 'Just send an enquiry' : 'Send enquiry'}
+            {busy === 'start' ? <SpinnerIcon className="animate-spin" /> : null}
+            Hold dates &amp; pay {formatRupees(quote.advancePaise)}
           </button>
-          <p className="flex items-start gap-2 text-xs leading-5 text-muted-foreground">
-           
-            {quote && quote.available && quote.onlineBooking && !enquiryOnly
-              ? `Paying holds these dates for ${quote.holdMinutes} minutes; we confirm as soon as we see the payment. `
-              : 'We reply on WhatsApp with availability and a quote. '}
-            By booking or enquiring you agree to our{' '}
+          <p className="text-xs leading-5 text-muted-foreground">
+            Paying holds these dates for {quote.holdMinutes} minutes; we confirm as soon as we see the payment. By booking you
+            agree to our{' '}
             <a href={`${basePath}/house-rules`} className="underline decoration-accent underline-offset-2">house rules</a>.
           </p>
         </form>
