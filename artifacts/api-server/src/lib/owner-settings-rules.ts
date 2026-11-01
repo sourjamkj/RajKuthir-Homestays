@@ -35,6 +35,9 @@ export type StoredOwnerSettings = {
   alertEmail?: string | null;
   ownerWhatsapp?: string | null;
   caretakerWhatsapp?: string | null;
+  /** How messages to the caretaker greet her, and how they are signed. */
+  caretakerName?: string | null;
+  ownerSignature?: string | null;
   whatsappAutoreply?: boolean | null;
   whatsappMode?: WhatsappMode | null;
   pushEvents?: Partial<Record<OwnerEvent, boolean>>;
@@ -44,6 +47,7 @@ export type StoredOwnerSettings = {
 /** Built-in defaults the code used before this console existed. */
 export const DEFAULT_OWNER_WHATSAPP = "+91 62903 99165";
 export const DEFAULT_CARETAKER_WHATSAPP = "+91 78726 85558";
+export const DEFAULT_OWNER_SIGNATURE = "Sourja Mukherjee";
 
 export type Env = Record<string, string | undefined>;
 
@@ -72,6 +76,24 @@ export function resolveCaretakerWhatsapp(stored: StoredOwnerSettings, env: Env):
   if (stored.caretakerWhatsapp) return { value: stored.caretakerWhatsapp, source: "console" };
   const railway = fromEnv(env, "CARETAKER_WHATSAPP");
   return railway ? { value: railway, source: "railway" } : { value: DEFAULT_CARETAKER_WHATSAPP, source: "default" };
+}
+
+/** A person's name as typed: trimmed, single-spaced, no control characters or WhatsApp formatting marks. */
+export function cleanPersonName(raw: unknown): string | null {
+  if (typeof raw !== "string") return null;
+  // eslint-disable-next-line no-control-regex
+  const name = raw.replace(/[\u0000-\u001f\u007f*_~`]/g, "").replace(/\s+/g, " ").trim();
+  return name.length >= 2 && name.length <= 60 ? name : null;
+}
+
+export function resolveCaretakerName(stored: StoredOwnerSettings): Resolved<string | null> {
+  return stored.caretakerName ? { value: stored.caretakerName, source: "console" } : { value: null, source: "default" };
+}
+
+export function resolveOwnerSignature(stored: StoredOwnerSettings): Resolved<string> {
+  return stored.ownerSignature
+    ? { value: stored.ownerSignature, source: "console" }
+    : { value: DEFAULT_OWNER_SIGNATURE, source: "default" };
 }
 
 export function resolveAutoreply(stored: StoredOwnerSettings, env: Env): Resolved<boolean> {
@@ -152,6 +174,8 @@ export function parseStoredSettings(raw: string | null | undefined): StoredOwner
   if (typeof data.alertEmail === "string" && EMAIL.test(data.alertEmail)) out.alertEmail = data.alertEmail;
   if (typeof data.ownerWhatsapp === "string") out.ownerWhatsapp = normaliseIndianMobile(data.ownerWhatsapp);
   if (typeof data.caretakerWhatsapp === "string") out.caretakerWhatsapp = normaliseIndianMobile(data.caretakerWhatsapp);
+  if (cleanPersonName(data.caretakerName)) out.caretakerName = cleanPersonName(data.caretakerName);
+  if (cleanPersonName(data.ownerSignature)) out.ownerSignature = cleanPersonName(data.ownerSignature);
   if (typeof data.whatsappAutoreply === "boolean") out.whatsappAutoreply = data.whatsappAutoreply;
   if (data.whatsappMode === "manual" || data.whatsappMode === "api") out.whatsappMode = data.whatsappMode;
   const push = eventMap(data.pushEvents);
@@ -179,7 +203,7 @@ export function applySettingsPatch(current: StoredOwnerSettings, body: unknown, 
   }
   const input = { ...(body as Record<string, unknown>) };
   delete input.confirmPassword;
-  const allowed = new Set(["alertEmail", "ownerWhatsapp", "caretakerWhatsapp", "whatsappAutoreply", "whatsappMode", "pushEvents", "emailEvents"]);
+  const allowed = new Set(["alertEmail", "ownerWhatsapp", "caretakerWhatsapp", "caretakerName", "ownerSignature", "whatsappAutoreply", "whatsappMode", "pushEvents", "emailEvents"]);
   const unknown = Object.keys(input).filter((k) => !allowed.has(k));
   if (unknown.length) return { ok: false, status: 400, error: `Unknown setting: ${unknown.join(", ")}.` };
 
@@ -199,6 +223,13 @@ export function applySettingsPatch(current: StoredOwnerSettings, body: unknown, 
     if (blank(v)) next[field] = null;
     else if (typeof v === "string" && normaliseIndianMobile(v)) next[field] = normaliseIndianMobile(v);
     else return { ok: false, status: 400, error: `${field === "ownerWhatsapp" ? "Your" : "The caretaker's"} WhatsApp number must be a 10-digit Indian mobile.` };
+  }
+  for (const field of ["caretakerName", "ownerSignature"] as const) {
+    if (!(field in input)) continue;
+    const v = input[field];
+    if (blank(v)) next[field] = null;
+    else if (cleanPersonName(v)) next[field] = cleanPersonName(v);
+    else return { ok: false, status: 400, error: `${field === "caretakerName" ? "The caretaker's name" : "Your signature"} should be 2 to 60 letters.` };
   }
   if ("whatsappAutoreply" in input) {
     const v = input.whatsappAutoreply;
@@ -282,6 +313,8 @@ export function settingsView(stored: StoredOwnerSettings, env: Env) {
       alertEmail: resolveAlertEmail(stored, env),
       ownerWhatsapp: resolveOwnerWhatsapp(stored, env),
       caretakerWhatsapp: resolveCaretakerWhatsapp(stored, env),
+      caretakerName: resolveCaretakerName(stored),
+      ownerSignature: resolveOwnerSignature(stored),
     },
     whatsapp: {
       mode: resolveWhatsappMode(stored, env),
