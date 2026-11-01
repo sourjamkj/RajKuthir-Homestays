@@ -161,7 +161,7 @@ export default function TwoDayItinerary() {
                 The plan needs<br /><em>somewhere to start.</em>
               </h2>
               <p className="mt-7 max-w-[470px] text-lg leading-8 text-primary-foreground/70">
-                Sobuj Potro is a private two-bedroom villa in Bolpur with a garden and parking on the premises: five minutes of the plan above, and the rest of it is yours. Enquire direct.
+                Sobuj Potro is a private two-bedroom villa in Bolpur with a garden and parking on the premises: five minutes of the plan above, and the rest of it is yours. Book direct.
               </p>
               <p className="mt-5 flex flex-wrap gap-x-6 gap-y-3 text-[13px] font-medium">
                 <a href={`${basePath}/rates`} className="underline decoration-secondary decoration-2 underline-offset-4 hover:text-secondary" data-testid="link-itinerary-rates">
@@ -185,7 +185,7 @@ export default function TwoDayItinerary() {
                 Check availability              </a>
               <a
                 href={`https://wa.me/916290399165?text=${encodeURIComponent(
-                  'Hello Raj Kuthir, we are planning two days in Shantiniketan and would like to enquire about a stay at Sobuj Potro.',
+                  'Hello Raj Kuthir, we are planning two days in Shantiniketan and have a question about staying at Sobuj Potro.',
                 )}`}
                 target="_blank"
                 rel="noreferrer"

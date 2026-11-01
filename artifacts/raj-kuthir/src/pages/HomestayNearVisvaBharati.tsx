@@ -148,7 +148,7 @@ export default function HomestayNearVisvaBharati() {
                 A quiet house,<br /><em>a short ride from the campus.</em>
               </h2>
               <p className="mt-7 max-w-[470px] text-lg leading-8 text-primary-foreground/70">
-                Two bedrooms, a private garden and parking on the premises in Bolpur. Enquire direct: no platform fee, and the host confirms your dates personally.
+                Two bedrooms, a private garden and parking on the premises in Bolpur. Book direct: no platform fee, and the host confirms your dates personally.
               </p>
               <p className="mt-5 flex flex-wrap gap-x-6 gap-y-3 text-[13px] font-medium">
                 <a href={`${basePath}/rates`} className="underline decoration-secondary decoration-2 underline-offset-4 hover:text-secondary" data-testid="link-visva-bharati-rates">
@@ -172,7 +172,7 @@ export default function HomestayNearVisvaBharati() {
                 Check availability              </a>
               <a
                 href={`https://wa.me/916290399165?text=${encodeURIComponent(
-                  'Hello Raj Kuthir, we are visiting Visva-Bharati in Shantiniketan and would like to enquire about a stay at Sobuj Potro.',
+                  'Hello Raj Kuthir, we are visiting Visva-Bharati in Shantiniketan and have a question about staying at Sobuj Potro.',
                 )}`}
                 target="_blank"
                 rel="noreferrer"

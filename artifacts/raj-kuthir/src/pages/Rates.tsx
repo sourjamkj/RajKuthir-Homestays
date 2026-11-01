@@ -12,7 +12,7 @@ import { CONFIG, basePath, phoneHref, track } from '@/lib/site';
  *
  * Nowhere in this file. Every figure is read from /api/rates through
  * useRatePlan — the same query, the same cache and the same formatting the
- * homepage calendar and the enquiry estimate use. The owner changes a price in
+ * homepage calendar and the booking form use. The owner changes a price in
  * Admin → Rates and this page, the calendar and the estimate all move
  * together. A test fails if a rupee amount is ever typed into this file.
  *
@@ -111,7 +111,7 @@ export default function Rates() {
           </p>
           <p className="mt-4 max-w-[620px] text-sm leading-6 text-muted-foreground">
             These are read live from the same rate card as the availability
-            calendar and the enquiry estimate, so the three always agree.
+            calendar and the booking form, so the three always agree.
           </p>
           <p className="mt-4 max-w-[620px] text-sm leading-6 text-muted-foreground">
             Working out how many nights you need first? There is a{' '}
@@ -319,9 +319,9 @@ export default function Rates() {
                 Book direct,<br /><em>with the owner.</em>
               </h2>
               <p className="mt-7 max-w-[470px] text-lg leading-8 text-primary-foreground/70">
-                Pick your dates on the calendar and send an enquiry. The host
-                confirms availability and the final amount directly, and no
-                payment is taken on this site.
+                Pick your dates, hold them and pay the advance by UPI right here.
+                The host confirms as soon as the payment arrives, and the balance
+                is paid at check-in.
               </p>
             </div>
             <div className="flex flex-wrap gap-3 lg:justify-end">
@@ -335,7 +335,7 @@ export default function Rates() {
               </a>
               <a
                 href={`https://wa.me/916290399165?text=${encodeURIComponent(
-                  'Hello Raj Kuthir, I have been looking at the rates for Sobuj Potro and would like to enquire about a stay.',
+                  'Hello Raj Kuthir, I have been looking at the rates for Sobuj Potro and have a question about a stay.',
                 )}`}
                 target="_blank"
                 rel="noreferrer"

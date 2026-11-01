@@ -38,7 +38,7 @@ const FAQ_ANCHOR = 'pet-faq';
 export const PET_FAQ = [
   {
     q: 'Are pets actually allowed, or just tolerated?',
-    a: 'Genuinely allowed. Pets are written into our published house rules, not granted as an exception at the door. Tell us who is coming when you enquire so the caretaker can have the house ready.',
+    a: 'Genuinely allowed. Pets are written into our published house rules, not granted as an exception at the door. Tell us who is coming when you book so the caretaker can have the house ready.',
   },
   {
     q: 'Is the garden fenced?',
@@ -46,7 +46,7 @@ export const PET_FAQ = [
   },
   {
     q: 'Is there an extra charge for bringing a pet?',
-    a: 'Yes, per pet, and it depends on how long you stay: for one or two nights it is a single charge for the whole stay; from three nights it is charged per night. The amounts come from our current rate plan: it is shown on the rates page and in the booking section of the homepage, and the enquiry form adds it to your estimate when you enter your pets. Separately, pet damage or soiling is charged from ₹1,000, and that is on the house rules page along with everything else.',
+    a: 'Yes, per pet, and it depends on how long you stay: for one or two nights it is a single charge for the whole stay; from three nights it is charged per night. The amounts come from our current rate plan: it is shown on the rates page and in the booking section of the homepage, and the booking form adds it to your estimate when you enter your pets. Separately, pet damage or soiling is charged from ₹1,000, and that is on the house rules page along with everything else.',
   },
   {
     q: 'Can we leave our dog in the villa while we go out?',
@@ -136,14 +136,14 @@ export default function PetFriendly() {
                 </a>
                 <a
                   href={`https://wa.me/916290399165?text=${encodeURIComponent(
-                    'Hello Raj Kuthir, I would like to enquire about a stay at Sobuj Potro. I am travelling with a pet.',
+                    'Hello Raj Kuthir, I have a question about staying at Sobuj Potro with a pet.',
                   )}`}
                   target="_blank"
                   rel="noreferrer"
                   className="flex items-center gap-2 rounded-full border border-border px-6 py-4 text-sm font-semibold text-primary transition-colors hover:border-primary"
                   data-testid="link-pet-whatsapp-hero"
                 >
-                  <WhatsappIcon /> Enquire on WhatsApp
+                  <WhatsappIcon /> Ask on WhatsApp
                 </a>
               </div>
 
@@ -195,7 +195,7 @@ export default function PetFriendly() {
                 },
                 {
                   title: 'A caretaker who knows you are coming',
-                  text: 'Tell us about your pet when you enquire and the house is prepared for them, rather than the caretaker finding out on arrival.',
+                  text: 'Tell us about your pet when you book and the house is prepared for them, rather than the caretaker finding out on arrival.',
                 },
               ].map(({ title, text }) => (
                 <div key={title} className="rounded-[1.4rem] border border-border bg-background p-7" data-testid={`card-why-${title.toLowerCase().replace(/[^a-z]+/g, '-').replace(/^-|-$/g, '')}`}>
@@ -280,7 +280,7 @@ export default function PetFriendly() {
               <p className="mt-6 text-sm leading-7 text-primary-foreground/70">
                 If your dog settles when left alone, none of this will matter to you. If they bark at unfamiliar
                 sounds in an unfamiliar house (and plenty of dogs do on the first night), it is worth
-                planning around rather than discovering at midnight. Tell us honestly when you enquire and we will
+                planning around rather than discovering at midnight. Tell us honestly when you book and we will
                 talk it through. We would far rather have that conversation now than ask you to leave.
               </p>
               <p className="mt-6 text-sm leading-7 text-primary-foreground/70">
@@ -359,7 +359,7 @@ export default function PetFriendly() {
               <div className="mt-8 space-y-4 text-sm leading-6 text-muted-foreground">
                 <p><strong className="text-primary"><a href={`${basePath}/cafe-soi-shantiniketan`} className="underline decoration-accent decoration-2 underline-offset-4" data-testid="link-pet-cafe">Cafe Soi</a> is on the premises.</strong> You are not going anywhere to eat.</p>
                 <p><strong className="text-primary">The villa has a kitchen for simple meals</strong>: refrigerator, microwave, water filter and basic utensils.</p>
-                <p><strong className="text-primary">Home-cooked meals can be arranged</strong> with the designated caretaker. Talk to them about it when you arrive, or mention it in your enquiry.</p>
+                <p><strong className="text-primary">Home-cooked meals can be arranged</strong> with the designated caretaker. Talk to them about it when you arrive, or mention it when you book.</p>
                 <p><strong className="text-primary">Zomato delivers to the area</strong>, subject to the usual delivery conditions.</p>
               </div>
             </div>
@@ -465,14 +465,14 @@ export default function PetFriendly() {
                 </a>
                 <a
                   href={`https://wa.me/916290399165?text=${encodeURIComponent(
-                    'Hello Raj Kuthir, I would like to enquire about a stay at Sobuj Potro. I am travelling with a pet.',
+                    'Hello Raj Kuthir, I have a question about staying at Sobuj Potro with a pet.',
                   )}`}
                   target="_blank"
                   rel="noreferrer"
                   className="flex items-center gap-2 rounded-full border border-primary/25 px-6 py-4 text-sm font-semibold text-primary transition-colors hover:bg-primary/5"
                   data-testid="link-pet-cta-whatsapp"
                 >
-                  <WhatsappIcon /> Enquire on WhatsApp
+                  <WhatsappIcon /> Ask on WhatsApp
                 </a>
               </div>
             </div>

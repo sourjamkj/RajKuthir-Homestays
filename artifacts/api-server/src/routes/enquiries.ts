@@ -90,7 +90,26 @@ function tooMany(key: string, now = Date.now()): boolean {
 }
 
 /** Public: the guest enquiry form posts here. */
+/**
+ * Public enquiries are switched off (the owner's decision, November 2026):
+ * the website's form books (hold the dates, pay the advance), and anything it
+ * cannot book goes to the host on WhatsApp. An old cached page, or anything
+ * else still posting here, gets a clear refusal instead of filing an enquiry.
+ *
+ * The handler below is kept intact so turning enquiries back on is deleting
+ * this guard. The owner's own hand entry (POST /admin/enquiries) is unaffected.
+ */
+const PUBLIC_ENQUIRIES_OPEN = false;
+
 router.post("/enquiries", async (req, res) => {
+  if (!PUBLIC_ENQUIRIES_OPEN) {
+    res.status(410).json({
+      error:
+        "We no longer take enquiries here. Choose your dates on the calendar to hold them and pay the advance, or message us on WhatsApp on +91 62903 99165.",
+    });
+    return;
+  }
+
   if (tooMany(req.ip ?? "unknown")) {
     res.status(429).json({
       error: "Too many enquiries from this connection. Please try again later.",
