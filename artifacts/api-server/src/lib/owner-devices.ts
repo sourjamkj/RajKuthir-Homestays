@@ -39,17 +39,33 @@ CREATE TABLE IF NOT EXISTS owner_audit (
 CREATE INDEX IF NOT EXISTS owner_audit_at_idx ON owner_audit (at DESC);
 `;
 
-let migrated = false;
+/**
+ * One migration at a time. Right after a deploy the phone's first few requests
+ * arrive together; they all wait on the same promise instead of each running
+ * the CREATE statements at once. A failure is not remembered, so the next
+ * request tries again.
+ */
+let migration: Promise<boolean> | null = null;
 
-export async function ensureOwnerAppTables(): Promise<boolean> {
-  if (migrated) return true;
-  try {
-    await pool.query(OWNER_APP_MIGRATION_SQL);
-    migrated = true;
-    return true;
-  } catch (error) {
-    logger.error({ err: error }, "Could not create the owner app tables");
-    return false;
+export function ensureOwnerAppTables(): Promise<boolean> {
+  if (!migration) {
+    migration = pool.query(OWNER_APP_MIGRATION_SQL).then(
+      () => true,
+      (error: unknown) => {
+        logger.error({ err: error }, "Could not create the owner app tables");
+        migration = null;
+        return false;
+      },
+    );
+  }
+  return migration;
+}
+
+/** Thrown when a phone's token could not be checked (database down, say): not the same as a wrong token. */
+export class TokenCheckUnavailable extends Error {
+  constructor() {
+    super("Could not check the phone's sign-in just now.");
+    this.name = "TokenCheckUnavailable";
   }
 }
 
@@ -89,12 +105,18 @@ export async function createDevice(input: { name: string; platform: string }): P
 
 /** The phone a token belongs to, if it is still allowed in. Touches last_seen_at now and then. */
 export async function deviceForToken(token: string, now = new Date()): Promise<DeviceRow | null> {
-  if (!(await ensureOwnerAppTables())) return null;
-  const { rows } = await pool.query<DbRow>(
-    `SELECT id, name, platform, push_token, created_at, last_seen_at, revoked_at
-       FROM owner_devices WHERE token_hash = $1`,
-    [hashDeviceToken(token)],
-  );
+  if (!(await ensureOwnerAppTables())) throw new TokenCheckUnavailable();
+  let rows: DbRow[];
+  try {
+    ({ rows } = await pool.query<DbRow>(
+      `SELECT id, name, platform, push_token, created_at, last_seen_at, revoked_at
+         FROM owner_devices WHERE token_hash = $1`,
+      [hashDeviceToken(token)],
+    ));
+  } catch (error) {
+    logger.error({ err: error }, "Could not look up an owner app token");
+    throw new TokenCheckUnavailable();
+  }
   const row = rows[0];
   if (!row) return null;
   const device = toDevice(row);
@@ -113,6 +135,21 @@ export async function listDevices(): Promise<DeviceRow[]> {
        FROM owner_devices ORDER BY revoked_at IS NOT NULL, last_seen_at DESC LIMIT 50`,
   );
   return rows.map(toDevice);
+}
+
+/**
+ * When a phone signs in again (after a reinstall, which wipes its token), the
+ * earlier sign-ins from the same phone are signed out, so the list in Settings
+ * holds one row per phone and an old token cannot be used.
+ */
+export async function revokeEarlierSignIns(keep: DeviceRow, now = new Date()): Promise<number> {
+  await ensureOwnerAppTables();
+  const { rowCount } = await pool.query(
+    `UPDATE owner_devices SET revoked_at = $4, push_token = NULL
+      WHERE id <> $1 AND name = $2 AND platform = $3 AND revoked_at IS NULL`,
+    [keep.id, keep.name, keep.platform, now],
+  );
+  return rowCount ?? 0;
 }
 
 /** Signs a phone out. Its push token goes too, so it stops getting alerts. */

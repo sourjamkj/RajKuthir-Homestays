@@ -1,7 +1,7 @@
 import { Router, type IRouter } from "express";
 
 import { requireAdmin } from "../lib/admin-auth";
-import { caretakerQueue, markCaretakerItem } from "../lib/caretaker-alerts";
+import { caretakerBookings, caretakerQueue, markCaretakerItem } from "../lib/caretaker-alerts";
 import { logger } from "../lib/logger";
 
 /**
@@ -18,6 +18,17 @@ router.get("/admin/caretaker/queue", requireAdmin, async (_req, res) => {
   } catch (error) {
     logger.error({ err: error }, "Could not build the caretaker queue");
     res.status(500).json({ error: "Could not load caretaker messages." });
+  }
+});
+
+/** Every upcoming booking with its caretaker messages, for "Inform the caretaker" at any time. */
+router.get("/admin/caretaker/bookings", requireAdmin, async (_req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  try {
+    res.json(await caretakerBookings());
+  } catch (error) {
+    logger.error({ err: error }, "Could not list bookings for the caretaker");
+    res.status(500).json({ error: "Could not load bookings." });
   }
 });
 

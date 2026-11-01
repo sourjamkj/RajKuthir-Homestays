@@ -223,6 +223,38 @@ export const createCaretakerMessage = (draft: CaretakerDraft) =>
 export const markCaretakerMessageSent = (id: string) =>
   adminFetch<CaretakerMessage>(`/api/admin/caretaker/messages/${encodeURIComponent(id)}/sent`, json('POST'));
 
+/* --------------------------------------- bookings: inform the caretaker */
+
+export type BookingAlertKind = 'new_booking' | 'checkin_eve' | 'checkout_eve' | 'cancelled';
+export type CaretakerBookingMessage = {
+  kind: BookingAlertKind;
+  label: string;
+  /** The WhatsApp text. Never carries an amount. */
+  text: string;
+  whatsappUrl: string | null;
+  done: { status: 'sent' | 'skipped'; at: string | null; how: 'manual' | 'automatic' } | null;
+};
+export type CaretakerBookingCard = {
+  bookingId: string;
+  guestName: string | null;
+  checkIn: string;
+  checkOut: string;
+  status: 'confirmed' | 'cancelled';
+  source: string;
+  when: string;
+  suggested: BookingAlertKind | null;
+  messages: CaretakerBookingMessage[];
+};
+
+/** Every booking that has not ended, with the messages you can send the caretaker about it. */
+export const getCaretakerBookings = () => adminFetch<{ caretaker: string | null; cards: CaretakerBookingCard[] }>('/api/admin/caretaker/bookings');
+/** Records that you sent (or chose to skip) one of those messages. */
+export const markCaretakerBooking = (bookingId: string, kind: BookingAlertKind, outcome: 'sent' | 'skipped' = 'sent') =>
+  adminFetch<{ ok: true; outcome: 'sent' | 'skipped' }>(
+    `/api/admin/caretaker/${encodeURIComponent(bookingId)}/${encodeURIComponent(kind)}`,
+    json('POST', { outcome }),
+  );
+
 /* ----------------------------------------------------- month calendar */
 
 export type CalendarDayStatus = 'past' | 'free' | 'booked' | 'blocked' | 'held';
