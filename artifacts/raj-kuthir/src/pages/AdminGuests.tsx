@@ -240,8 +240,9 @@ function waNumber(phone: string): string {
  * Status picks the message: a "new" enquiry gets a proper first reply (with
  * an apology if it has waited more than a day), a "contacted" one gets a
  * short nudge. What the guest gave us shapes the wording: their dates if they
- * sent any, the quote if one has gone out. No availability is promised here,
- * because the calendar is checked when the quote is made, not now.
+ * sent any, the quote if one has gone out. When their nights are already
+ * blocked or booked (datesTaken from the server), it says so and points them
+ * to the calendar instead.
  */
 function buildEnquiryFollowUp(row: Enquiry): string {
   const first = row.name.trim().split(/\s+/)[0] || 'there';
@@ -250,6 +251,17 @@ function buildEnquiryFollowUp(row: Enquiry): string {
       ? `${format(parseISO(row.checkIn), 'd MMM')} – ${format(parseISO(row.checkOut), 'd MMM')}`
       : null;
   const sign = '\n\nWarm regards,\nTeam Raj Kuthir Homestays – Sobuj Potro';
+
+  // The nights they asked for are already blocked or booked: say so plainly,
+  // whatever the status, instead of asking them to confirm dates we cannot give.
+  if (row.datesTaken && dates) {
+    return (
+      `Hi ${first}, thank you for your interest in Raj Kuthir Homestays – Sobuj Potro, Shantiniketan.\n\n` +
+      `I'm sorry, the villa is already booked for ${dates}. ` +
+      `If your dates are flexible, I'd be glad to host you on another day. Share the dates that suit you and I will send you the best direct rate.\n\n` +
+      `See which dates are open: https://rajkuthirhomestays.casa/#availability${sign}`
+    );
+  }
 
   if (row.status === 'contacted') {
     if (row.quoteSentAt) {
@@ -1146,7 +1158,7 @@ export default function AdminGuests() {
                       data-testid={`button-follow-up-${row.id}`}
                     >
                       <MessageCircle size={12} />
-                      {row.status === 'new' ? 'Reply on WhatsApp' : 'Follow up'}
+                      {row.datesTaken ? 'Tell them dates are taken' : row.status === 'new' ? 'Reply on WhatsApp' : 'Follow up'}
                     </a>
                   )}
                   <span className="ml-auto flex flex-wrap gap-1.5">
