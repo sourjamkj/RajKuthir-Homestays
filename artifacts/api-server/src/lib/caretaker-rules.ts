@@ -203,3 +203,105 @@ export function toE164(raw: string | null | undefined): string | null {
   if (digits.length === 10) digits = `91${digits}`;
   return digits.length >= 11 && digits.length <= 15 ? `+${digits}` : null;
 }
+
+/* ------------------------------------------------------------------
+ * Every booking, on demand. The queue above lists only what is due now; the
+ * owner also wants to open any upcoming booking and tell the caretaker about
+ * it whenever they choose. These rules say which messages make sense for a
+ * booking today and which one to offer first. Same texts as above, so the
+ * caretaker never sees an amount.
+ * ------------------------------------------------------------------ */
+
+export type CaretakerMessageState = { status: "sent" | "skipped"; at: Date | null; how: "manual" | "automatic" };
+
+export type BookingCaretakerMessage = {
+  kind: AlertKind;
+  label: string;
+  text: string;
+  done: CaretakerMessageState | null;
+};
+
+export type BookingCaretakerCard = {
+  bookingId: string;
+  guestName: string | null;
+  checkIn: string;
+  checkOut: string;
+  status: "confirmed" | "cancelled";
+  source: string;
+  /** "Arrives tomorrow", "Staying now", "In 12 days"… */
+  when: string;
+  /** The message to offer first: what is due, else the booking itself if she has not been told. */
+  suggested: AlertKind | null;
+  messages: BookingCaretakerMessage[];
+};
+
+export const KIND_LABEL: Record<AlertKind, string> = {
+  new_booking: "New booking",
+  checkin_eve: "Arriving tomorrow",
+  checkout_eve: "Leaving tomorrow",
+  cancelled: "Cancelled",
+};
+
+function daysBetween(fromIso: string, toIso: string): number {
+  return Math.round((Date.parse(`${toIso}T00:00:00Z`) - Date.parse(`${fromIso}T00:00:00Z`)) / 86_400_000);
+}
+
+function whenLabel(b: AlertBooking, today: string): string {
+  if (b.status === "cancelled") return "Cancelled";
+  if (today >= b.checkIn && today < b.checkOut) return "Staying now";
+  if (today === b.checkOut) return "Leaves today";
+  const days = daysBetween(today, b.checkIn);
+  if (days === 0) return "Arrives today";
+  if (days === 1) return "Arrives tomorrow";
+  return `In ${days} days`;
+}
+
+/**
+ * One card per booking that has not ended: confirmed bookings, and cancelled
+ * ones the caretaker had been told about. `done` maps "bookingId:kind" to what
+ * already happened (sent by the owner, skipped, or sent automatically).
+ */
+export function bookingCaretakerCards(
+  bookings: AlertBooking[],
+  done: ReadonlyMap<string, CaretakerMessageState>,
+  now: Date,
+): BookingCaretakerCard[] {
+  const today = istDate(now);
+  const due = new Map(dueAlerts(bookings, new Set(done.keys()), now, { manual: true }).map((a) => [a.bookingId, a.kind]));
+  const cards: BookingCaretakerCard[] = [];
+
+  for (const b of bookings) {
+    if (b.checkOut < today) continue;
+    const state = (kind: AlertKind) => done.get(`${b.id}:${kind}`) ?? null;
+    let kinds: AlertKind[];
+    if (b.status === "cancelled") {
+      const told = state("new_booking")?.status === "sent" || state("checkin_eve")?.status === "sent";
+      if (!told || b.checkOut <= today) continue;
+      kinds = ["cancelled"];
+    } else if (b.status === "confirmed") {
+      kinds = ["new_booking"];
+      if (today < b.checkIn) kinds.push("checkin_eve");
+      kinds.push("checkout_eve");
+    } else {
+      continue;
+    }
+
+    const messages = kinds.map((kind) => ({ kind, label: KIND_LABEL[kind], text: alertText(kind, b), done: state(kind) }));
+    const suggested =
+      due.get(b.id) ?? (b.status === "confirmed" && !state("new_booking") ? "new_booking" : b.status === "cancelled" && !state("cancelled") ? "cancelled" : null);
+
+    cards.push({
+      bookingId: b.id,
+      guestName: b.guestName,
+      checkIn: b.checkIn,
+      checkOut: b.checkOut,
+      status: b.status,
+      source: SOURCE_LABEL[b.source] ?? b.source,
+      when: whenLabel(b, today),
+      suggested,
+      messages,
+    });
+  }
+
+  return cards.sort((a, b) => (a.checkIn === b.checkIn ? a.checkOut.localeCompare(b.checkOut) : a.checkIn.localeCompare(b.checkIn)));
+}

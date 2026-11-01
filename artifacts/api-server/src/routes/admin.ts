@@ -5,6 +5,8 @@ import {
   clearSessionCookie,
   isAdminAuthConfigured,
   adminSession,
+  SIGN_IN_UNAVAILABLE,
+  type AdminSessionInfo,
   recordFailedAttempt,
   setSessionCookie,
   tooManyAttempts,
@@ -19,7 +21,14 @@ function clientKey(req: { ip?: string }): string {
 
 router.get("/admin/me", async (req, res) => {
   res.setHeader("Cache-Control", "no-store");
-  const session = await adminSession(req);
+  let session: AdminSessionInfo | null;
+  try {
+    session = await adminSession(req);
+  } catch {
+    // Not "signed out": the phone must keep its token and ask again later.
+    res.status(503).json(SIGN_IN_UNAVAILABLE);
+    return;
+  }
   res.json({
     signedIn: Boolean(session),
     configured: isAdminAuthConfigured(),

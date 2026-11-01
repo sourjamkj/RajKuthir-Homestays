@@ -3,7 +3,15 @@ import { bookings, db, pool } from "@workspace/db";
 
 import { logger } from "./logger";
 import { caretakerWhatsappNumber, ownerWhatsappNumber } from "./owner-settings-state";
-import { dueAlerts, istDate, toE164, type AlertBooking } from "./caretaker-rules";
+import {
+  bookingCaretakerCards,
+  dueAlerts,
+  istDate,
+  toE164,
+  type AlertBooking,
+  type BookingCaretakerCard,
+  type CaretakerMessageState,
+} from "./caretaker-rules";
 
 /**
  * Caretaker alerts. Two ways out:
@@ -256,6 +264,62 @@ export async function caretakerQueue(now = new Date()): Promise<CaretakerQueueIt
         : null,
     };
   });
+}
+
+/** The booking columns the caretaker rules read. */
+const ALERT_COLUMNS = {
+  id: bookings.id,
+  source: bookings.source,
+  status: bookings.status,
+  guestName: bookings.guestName,
+  guestPhone: bookings.guestPhone,
+  checkIn: bookings.checkIn,
+  checkOut: bookings.checkOut,
+  guests: bookings.guests,
+  pets: bookings.pets,
+  grossPaise: bookings.grossPaise,
+  receivedPaise: bookings.receivedPaise,
+  createdAt: bookings.createdAt,
+};
+
+export type CaretakerBookingCard = BookingCaretakerCard & {
+  messages: Array<BookingCaretakerCard["messages"][number] & { whatsappUrl: string | null }>;
+};
+
+/**
+ * Every booking that has not ended, each with the messages the owner can send
+ * the caretaker about it and whether each was already sent (by the owner from
+ * the console or app, or automatically). For "Inform the caretaker" on any
+ * booking, whenever the owner chooses; nothing is sent from here.
+ */
+export async function caretakerBookings(now = new Date()): Promise<{ caretaker: string | null; cards: CaretakerBookingCard[] }> {
+  await ensureTable();
+  const today = istDate(now);
+  const rows = (await db.select(ALERT_COLUMNS).from(bookings).where(gte(bookings.checkOut, today))) as AlertBooking[];
+
+  const caretaker = toE164(caretakerWhatsappNumber());
+  const records = (
+    await pool.query<{ booking_id: string; kind: string; recipient: string; status: string; sent_at: Date | null }>(
+      `select booking_id, kind, recipient, status, sent_at from caretaker_alerts
+        where booking_id = any($1::uuid[]) and status in ('sent', 'skipped')`,
+      [rows.map((r) => r.id)],
+    )
+  ).rows;
+
+  // The owner's own record wins; an automatic send to the caretaker counts as told.
+  const done = new Map<string, CaretakerMessageState>();
+  for (const r of records) {
+    const key = `${r.booking_id}:${r.kind}`;
+    if (r.recipient === MANUAL) done.set(key, { status: r.status as "sent" | "skipped", at: r.sent_at, how: "manual" });
+    else if (r.recipient === caretaker && r.status === "sent" && !done.has(key)) done.set(key, { status: "sent", at: r.sent_at, how: "automatic" });
+  }
+
+  const link = (text: string) => (caretaker ? `https://wa.me/${caretaker.replace(/\D/g, "")}?text=${encodeURIComponent(text)}` : null);
+  const cards = bookingCaretakerCards(rows, done, now).slice(0, 40).map((card) => ({
+    ...card,
+    messages: card.messages.map((m) => ({ ...m, whatsappUrl: link(m.text) })),
+  }));
+  return { caretaker, cards };
 }
 
 /** Marks a queue item done: sent by the owner, or skipped on purpose. */

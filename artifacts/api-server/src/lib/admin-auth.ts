@@ -1,8 +1,10 @@
 import crypto from "node:crypto";
 import type { Request, RequestHandler, Response } from "express";
 import { logger } from "./logger";
-import { deviceForToken } from "./owner-devices";
+import { deviceForToken, TokenCheckUnavailable } from "./owner-devices";
 import { bearerFrom } from "./owner-devices-rules";
+
+export { TokenCheckUnavailable };
 
 /**
  * Self-hosted admin auth.
@@ -170,19 +172,28 @@ export function isSignedIn(req: Request): boolean {
  */
 export type AdminSessionInfo = { via: "web" } | { via: "app"; deviceId: string };
 
+/**
+ * Null means "not signed in" and only that. When a phone's token cannot be
+ * checked (the database is unreachable for a moment, right after a deploy, say)
+ * this throws TokenCheckUnavailable instead, and callers answer 503: a 401
+ * would make the phone forget a token that is perfectly good.
+ */
 export async function adminSession(req: Request): Promise<AdminSessionInfo | null> {
   if (!isAdminAuthConfigured()) return null;
   if (isSignedIn(req)) return { via: "web" };
   const token = bearerFrom(req.headers.authorization);
   if (!token) return null;
+  let device;
   try {
-    const device = await deviceForToken(token);
-    return device ? { via: "app", deviceId: device.id } : null;
+    device = await deviceForToken(token);
   } catch (error) {
-    logger.error({ err: error }, "Could not check an owner app token");
-    return null;
+    if (!(error instanceof TokenCheckUnavailable)) logger.error({ err: error }, "Could not check an owner app token");
+    throw error instanceof TokenCheckUnavailable ? error : new TokenCheckUnavailable();
   }
+  return device ? { via: "app", deviceId: device.id } : null;
 }
+
+export const SIGN_IN_UNAVAILABLE = { error: "Could not check your sign-in just now. Please try again in a moment.", retry: true } as const;
 
 /** The session requireAdmin found, for routes that need to know web or app. */
 export function sessionOf(res: Response): AdminSessionInfo {
@@ -195,7 +206,13 @@ export const requireAdmin: RequestHandler = async (req, res, next) => {
     return;
   }
 
-  const session = await adminSession(req);
+  let session: AdminSessionInfo | null;
+  try {
+    session = await adminSession(req);
+  } catch {
+    res.status(503).json(SIGN_IN_UNAVAILABLE);
+    return;
+  }
   if (!session) {
     res.status(401).json({ error: "Admin sign-in required." });
     return;

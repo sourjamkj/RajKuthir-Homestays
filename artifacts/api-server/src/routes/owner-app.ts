@@ -17,6 +17,7 @@ import {
   listDevices,
   recentAudit,
   revokeDevice,
+  revokeEarlierSignIns,
   activePushTokens,
   forgetPushTokens,
   pushTokenOf,
@@ -70,8 +71,9 @@ router.post("/admin/app/login", async (req, res) => {
   clearAttempts(key);
   try {
     const { device, token } = await createDevice(readDeviceInfo(req.body));
-    void audit({ via: "app", deviceId: device.id, action: "device.signed_in", detail: { name: device.name, platform: device.platform } });
-    logger.info({ deviceId: device.id }, "Owner app signed in");
+    const replaced = await revokeEarlierSignIns(device).catch(() => 0);
+    void audit({ via: "app", deviceId: device.id, action: "device.signed_in", detail: { name: device.name, platform: device.platform, replaced } });
+    logger.info({ deviceId: device.id, replaced }, "Owner app signed in");
     res.status(201).json({ token, device: publicDevice(device, device.id) });
   } catch (error) {
     logger.error({ err: error }, "Could not register the owner's phone");

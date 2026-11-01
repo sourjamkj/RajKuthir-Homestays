@@ -5,7 +5,7 @@ import { AppState, Linking, Pressable, Text, View } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 
 import { getAlerts, setupApi, SITE } from './src/api';
-import { currentToken, forgetToken, loadToken, signOut, unlock } from './src/auth';
+import { confirmSignedOut, currentToken, forgetToken, loadToken, signOut, unlock } from './src/auth';
 import { destinationFor, registerForPush, setupChannels, unregisterPush } from './src/push';
 import Alerts from './src/screens/Alerts';
 import Calendar from './src/screens/Calendar';
@@ -81,9 +81,22 @@ export default function App() {
 
   useEffect(() => {
     void setupChannels();
-    // A 401 means this phone was signed out (from Settings or the web): back to sign-in.
+    // A 401 may mean this phone was signed out (from Settings or the web). Ask
+    // the server once more before forgetting the token: a restart or a bad
+    // signal must never send you back to the password.
+    let checking = false;
     setupApi(currentToken, () => {
-      void forgetToken().then(() => setPhase('signedOut'));
+      if (checking) return;
+      checking = true;
+      void confirmSignedOut()
+        .then(async (gone) => {
+          if (!gone) return;
+          await forgetToken();
+          setPhase('signedOut');
+        })
+        .finally(() => {
+          checking = false;
+        });
     });
     // Opened by tapping an alert while the app was closed.
     const launched = Notifications.getLastNotificationResponse();

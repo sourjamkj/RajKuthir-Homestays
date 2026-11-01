@@ -16,6 +16,27 @@ import {
 import { color, longDate, space, when } from '../theme';
 import { Body, Button, Card, Chip, Field, Heading, Notice, Row, Title } from '../ui';
 import { useLoad } from '../useLoad';
+import CaretakerBookings from './CaretakerBookings';
+
+/**
+ * The Caretaker tab: "Bookings" (inform her about any booking) and "Staff
+ * messages" (salary, bonus, leave, notices).
+ */
+export default function Caretaker() {
+  const [view, setView] = useState<'bookings' | 'messages'>('bookings');
+  return (
+    <View style={{ flex: 1 }}>
+      <View style={{ paddingHorizontal: space(4), paddingTop: space(4) }}>
+        <Title>Caretaker</Title>
+        <Row>
+          <Chip label="Bookings" active={view === 'bookings'} onPress={() => setView('bookings')} />
+          <Chip label="Staff messages" active={view === 'messages'} onPress={() => setView('messages')} />
+        </Row>
+      </View>
+      {view === 'bookings' ? <CaretakerBookings /> : <StaffMessages />}
+    </View>
+  );
+}
 
 /**
  * Messages to the caretaker: salary credited, a festival bonus, a day off, or
@@ -71,7 +92,7 @@ function WhatsappText({ text }: { text: string }) {
   );
 }
 
-export default function Caretaker() {
+function StaffMessages() {
   const data = useLoad(getCaretakerConsole);
   const [kind, setKind] = useState<CaretakerMessageKind>('salary_credited');
   const [fields, setFields] = useState<Record<string, string>>({});
@@ -237,7 +258,6 @@ export default function Caretaker() {
       refreshControl={<RefreshControl refreshing={data.loading} onRefresh={() => void data.reload()} />}
       keyboardShouldPersistTaps="handled"
     >
-      <Title>Caretaker</Title>
       {notice && <Notice tone={notice.tone}>{notice.text}</Notice>}
       {data.error && <Notice tone="error">{data.error}</Notice>}
 
