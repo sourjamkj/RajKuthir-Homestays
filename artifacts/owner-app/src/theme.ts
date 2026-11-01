@@ -50,3 +50,14 @@ export function addDays(iso: string, days: number): string {
   const t = Date.parse(`${iso}T00:00:00Z`) + days * 86_400_000;
   return new Date(t).toISOString().slice(0, 10);
 }
+
+/** "just now", "5 min ago", "3 h ago", "yesterday", else the date. */
+export function ago(at: string, now = Date.now()): string {
+  const s = Math.max(0, Math.round((now - new Date(at).getTime()) / 1000));
+  if (s < 60) return 'just now';
+  if (s < 3600) return `${Math.round(s / 60)} min ago`;
+  if (s < 86_400) return `${Math.round(s / 3600)} h ago`;
+  if (s < 2 * 86_400) return 'yesterday';
+  if (s < 7 * 86_400) return `${Math.round(s / 86_400)} days ago`;
+  return when(at);
+}

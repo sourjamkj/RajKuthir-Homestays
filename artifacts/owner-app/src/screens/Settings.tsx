@@ -1,24 +1,12 @@
 import { useState } from 'react';
 import { Alert, RefreshControl, ScrollView, Switch, View } from 'react-native';
 
-import { getSettings, listDevices, patchSettings, revokeDevice, type OwnerEvent, type WhatsappMode } from '../api';
+import { getSettings, listDevices, patchSettings, revokeDevice, type WhatsappMode } from '../api';
+import Notifications from './NotificationSettings';
 import { unlock } from '../auth';
 import { color, space, when } from '../theme';
 import { Body, Button, Card, Chip, Heading, Notice, Row, Title } from '../ui';
 import { useLoad } from '../useLoad';
-
-const EVENT_LABEL: Record<OwnerEvent, string> = {
-  booking_hold: 'A guest holds dates',
-  payment_submitted: 'A guest says they paid',
-  enquiry: 'New enquiry',
-  ota_booking: 'Booking.com / Airbnb / MMT booking',
-  ota_cancellation: 'OTA cancellation',
-  checkin_tomorrow: 'Check-in tomorrow',
-  message_draft: 'WhatsApp message waiting',
-  message_failed: 'WhatsApp message failed',
-  documents_uploaded: 'Guest uploaded ID',
-  invoice_check_failed: 'Invoice check failed',
-};
 
 export default function Settings({ onSignOut }: { onSignOut: () => void }) {
   const settings = useLoad(getSettings);
@@ -106,21 +94,11 @@ export default function Settings({ onSignOut }: { onSignOut: () => void }) {
             <Body muted style={{ marginTop: space(2) }}>Change these in the web console (they need your password).</Body>
           </Card>
 
-          <Card>
-            <Heading>Email me when…</Heading>
-            {(Object.keys(EVENT_LABEL) as OwnerEvent[]).map((event) => (
-              <Row key={event} style={{ justifyContent: 'space-between', paddingVertical: space(1) }}>
-                <Body style={{ flexShrink: 1 }}>{EVENT_LABEL[event]}</Body>
-                <Switch
-                  value={s.alerts.email[event] ?? false}
-                  disabled={busy !== null}
-                  trackColor={{ true: color.brand, false: color.line }}
-                  onValueChange={(on) => void save(`email-${event}`, { emailEvents: { [event]: on } }, false)}
-                  accessibilityLabel={`Email when: ${EVENT_LABEL[event]}`}
-                />
-              </Row>
-            ))}
-          </Card>
+          <Notifications
+            alerts={s.alerts}
+            busy={busy}
+            save={(key, patch) => void save(key, patch, false)}
+          />
         </>
       )}
 
