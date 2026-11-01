@@ -129,6 +129,8 @@ type Enquiry = {
   hold: HoldState;
   /** The booking this enquiry became, once it has become one. */
   convertedBookingId: string | null;
+  /** Set when an open enquiry asks for nights already blocked or booked. */
+  datesTaken?: { startDate: string; endDate: string; label: string } | null;
 };
 
 
@@ -457,9 +459,12 @@ export default function AdminGuests() {
     checkOut: '',
   });
 
+  // Said once, right after Add, when the nights entered are already taken.
+  const [addedClash, setAddedClash] = useState<string | null>(null);
+
   const createEnquiry = useMutation({
     mutationFn: () =>
-      adminFetch('/api/admin/enquiries', {
+      adminFetch<{ id: string; datesTaken?: { startDate: string; endDate: string; label: string } | null }>('/api/admin/enquiries', {
         method: 'POST',
         body: JSON.stringify({
           name: enquiryDraft.name,
@@ -468,7 +473,13 @@ export default function AdminGuests() {
           checkOut: enquiryDraft.checkOut || undefined,
         }),
       }),
-    onSuccess: () => {
+    onSuccess: (data) => {
+      const taken = data?.datesTaken;
+      setAddedClash(
+        taken
+          ? `Saved — but ${format(parseISO(taken.startDate), 'd MMM')} → ${format(parseISO(taken.endDate), 'd MMM yyyy')} is already taken (${taken.label}). If this is the guest who booked, mark the enquiry Converted.`
+          : null,
+      );
       setEnquiryDraft({ name: '', phone: '', checkIn: '', checkOut: '' });
       setAddingEnquiry(false);
       void queryClient.invalidateQueries({ queryKey: ENQUIRIES_KEY });
@@ -776,6 +787,12 @@ export default function AdminGuests() {
             </form>
           )}
 
+          {addedClash && (
+            <p className="mt-4 rounded-xl border border-[#A65E45]/40 bg-[#A65E45]/[.07] px-4 py-3 text-[13px] leading-6 text-[#7a3f2c]" role="status" data-testid="notice-added-clash">
+              {addedClash}
+            </p>
+          )}
+
           <div className="mt-4 space-y-3">
             {enquiries.isLoading && (
               <p className="text-sm text-muted-foreground">Loading…</p>
@@ -874,7 +891,20 @@ export default function AdminGuests() {
                   answer should not need a click.
                 */}
                 <div className="mt-4 border-t border-border pt-4">
-                  {row.quote.ok ? (
+                  {row.datesTaken ? (
+                    <div
+                      className="rounded-xl border border-[#A65E45]/40 bg-[#A65E45]/[.07] px-4 py-3 text-[13px] leading-6 text-[#7a3f2c]"
+                      role="status"
+                      data-testid={`notice-dates-taken-${row.id}`}
+                    >
+                      <p className="font-semibold">
+                        These dates are already taken ({row.datesTaken.label}, {format(parseISO(row.datesTaken.startDate), 'd MMM')} → {format(parseISO(row.datesTaken.endDate), 'd MMM yyyy')}).
+                      </p>
+                      <p className="mt-1">
+                        No quote or booking is offered for them. If this is the guest who already booked, mark it Converted. Otherwise, offer other dates or mark it Closed.
+                      </p>
+                    </div>
+                  ) : row.quote.ok ? (
                     <div className="flex flex-wrap items-center justify-between gap-3">
                       <div>
                         <p className="text-[10px] font-bold uppercase tracking-[.1em] text-muted-foreground">
@@ -1037,7 +1067,7 @@ export default function AdminGuests() {
 
                   {/* Any enquiry not yet booked can be booked with the owner's
                       own details: dates, party, agreed price, advance. */}
-                  {!row.convertedBookingId && (
+                  {!row.convertedBookingId && !row.datesTaken && (
                     <EnquiryBookForm
                       row={row}
                       onBooked={() => {
