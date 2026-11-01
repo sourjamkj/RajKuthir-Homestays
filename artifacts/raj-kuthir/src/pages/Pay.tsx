@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState, type ChangeEvent, type FormEvent } from 'react';
-import { AlertCircle, CheckCircle2, Clock, Copy, Download, FileText, Loader2, MessageCircle, Share2, Smartphone, Upload } from 'lucide-react';
+import { AlertIcon, CheckCircleIcon, ClockIcon, CopyIcon, DownloadIcon, ShareIcon, SpinnerIcon, UploadIcon, WhatsappIcon } from '@/components/icons';
 
 import { formatRupees } from '@/lib/rates';
 import { CONFIG, basePath, phoneHref } from '@/lib/site';
@@ -280,13 +280,13 @@ export default function Pay() {
         <h1 className="mt-3 font-journal text-4xl leading-tight text-primary">Complete your booking</h1>
 
         {error && (
-          <p className="mt-6 flex items-start gap-2 rounded-xl border border-[#A65E45]/40 bg-[#A65E45]/5 p-4 text-sm text-[#A65E45]" role="alert">
-            <AlertCircle size={16} className="mt-0.5 shrink-0" /> {error}
+          <p className="mt-6 flex items-start gap-2 rounded-xl border border-terracotta/40 bg-terracotta/5 p-4 text-sm text-terracotta" role="alert">
+            <AlertIcon className="mt-0.5 shrink-0" /> {error}
           </p>
         )}
 
         {!data && !error && (
-          <p className="mt-10 flex items-center gap-2 text-sm text-muted-foreground"><Loader2 size={16} className="animate-spin" /> Loading your booking…</p>
+          <p className="mt-10 flex items-center gap-2 text-sm text-muted-foreground"><SpinnerIcon className="animate-spin" /> Loading your booking…</p>
         )}
 
         {data && (
@@ -305,11 +305,11 @@ export default function Pay() {
             </section>
 
             <p
-              className={`mt-5 flex items-start gap-2 rounded-xl p-4 text-sm ${data.status === 'confirmed' ? 'bg-primary text-primary-foreground' : data.status === 'submitted' ? 'bg-secondary text-primary' : data.status === 'awaiting_payment' && left > 0 ? 'bg-card text-primary' : 'border border-[#A65E45]/40 bg-[#A65E45]/5 text-[#A65E45]'}`}
+              className={`mt-5 flex items-start gap-2 rounded-xl p-4 text-sm ${data.status === 'confirmed' ? 'bg-primary text-primary-foreground' : data.status === 'submitted' ? 'bg-secondary text-primary' : data.status === 'awaiting_payment' && left > 0 ? 'bg-card text-primary' : 'border border-terracotta/40 bg-terracotta/5 text-terracotta'}`}
               role="status"
               data-testid="text-pay-status"
             >
-              {data.status === 'awaiting_payment' && left > 0 ? <Clock size={16} className="mt-0.5 shrink-0" /> : data.status === 'submitted' || data.status === 'confirmed' ? <CheckCircle2 size={16} className="mt-0.5 shrink-0" /> : <AlertCircle size={16} className="mt-0.5 shrink-0" />}
+              {data.status === 'awaiting_payment' && left > 0 ? <ClockIcon className="mt-0.5 shrink-0" /> : data.status === 'submitted' || data.status === 'confirmed' ? <CheckCircleIcon className="mt-0.5 shrink-0" /> : <AlertIcon className="mt-0.5 shrink-0" />}
               <span>
                 {data.status === 'awaiting_payment' && left <= 0 ? 'This hold has expired and the dates have been released.' : data.statusText}
                 {data.status === 'awaiting_payment' && left > 0 && <strong className="ml-1 tabular-nums" data-testid="text-pay-countdown"> {clock(left)} left.</strong>}
@@ -318,47 +318,47 @@ export default function Pay() {
 
             {data.document && (
               <section className="mt-5 rounded-2xl border border-border bg-card p-5" aria-label="Your booking document" data-testid="pay-document">
-                <p className="flex items-center gap-2 text-sm font-bold text-primary">
-                  <FileText size={16} /> {data.document === 'confirmation' ? 'Your booking confirmation' : 'Your booking summary'}
+                <p className="text-sm font-bold text-primary">
+                  {data.document === 'confirmation' ? 'Your booking confirmation' : 'Your booking summary'}
                 </p>
                 <p className="mt-1 text-xs text-muted-foreground">
                   {data.document === 'confirmation'
                     ? 'Your reference, what you have paid and the balance due at check-in.'
-                    : 'Your dates, the amount and a QR code to pay the advance. Payment pending — the booking is confirmed once the advance reaches us.'}
+                    : 'Your dates, the amount and a QR code to pay the advance. Payment pending: the booking is confirmed once the advance reaches us.'}
                 </p>
                 <div className="mt-4 grid gap-2 sm:grid-cols-2">
                   <button
                     type="button"
                     onClick={downloadDocument}
                     disabled={docBusy !== null}
-                    className="flex items-center justify-center gap-2 rounded-full bg-primary px-4 py-3 text-xs font-bold uppercase tracking-[.1em] text-primary-foreground disabled:opacity-60"
+                    className="flex items-center justify-center gap-2 rounded-full bg-primary px-4 py-3 text-sm font-semibold text-primary-foreground disabled:opacity-60"
                     data-testid="button-download-document"
                   >
-                    {docBusy === 'download' ? <Loader2 size={15} className="animate-spin" /> : <Download size={15} />} Download PDF
+                    {docBusy === 'download' ? <SpinnerIcon className="animate-spin" /> : <DownloadIcon />} Download PDF
                   </button>
                   <button
                     type="button"
                     onClick={shareDocument}
                     disabled={docBusy !== null}
-                    className="flex items-center justify-center gap-2 rounded-full border border-primary/25 px-4 py-3 text-xs font-bold uppercase tracking-[.1em] text-primary disabled:opacity-60"
+                    className="flex items-center justify-center gap-2 rounded-full border border-primary/25 px-4 py-3 text-sm font-semibold text-primary disabled:opacity-60"
                     data-testid="button-share-document"
                   >
-                    {docBusy === 'share' ? <Loader2 size={15} className="animate-spin" /> : <Share2 size={15} />} Share PDF
+                    {docBusy === 'share' ? <SpinnerIcon className="animate-spin" /> : <ShareIcon />} Share PDF
                   </button>
                 </div>
                 <a
                   href={ownerWhatsappUrl}
                   target="_blank"
                   rel="noreferrer"
-                  className="mt-2 flex items-center justify-center gap-2 rounded-full bg-[#1f7a4d] px-4 py-3 text-xs font-bold uppercase tracking-[.1em] text-white"
+                  className="mt-2 flex items-center justify-center gap-2 rounded-full bg-[#1f7a4d] px-4 py-3 text-sm font-semibold text-white"
                   data-testid="link-whatsapp-owner"
                 >
-                  <MessageCircle size={15} /> WhatsApp your booking to us
+                  <WhatsappIcon /> WhatsApp your booking to us
                 </a>
-                <p className="mt-2 text-center text-[11px] text-muted-foreground">
+                <p className="mt-2 text-center text-xs text-muted-foreground">
                   Opens your WhatsApp with your booking details typed in. To send the PDF too, tap Share PDF and choose our chat ({CONFIG.hostPhone}).
                 </p>
-                {docError && <p className="mt-2 text-center text-[13px] text-[#A65E45]" role="alert">{docError}</p>}
+                {docError && <p className="mt-2 text-center text-[13px] text-terracotta" role="alert">{docError}</p>}
               </section>
             )}
 
@@ -366,22 +366,22 @@ export default function Pay() {
               <section className="mt-6 space-y-5" aria-label="Pay by UPI">
                 <a
                   href={data.upiUrl!}
-                  className={`flex w-full items-center justify-center gap-2 rounded-full bg-primary px-5 py-4 text-sm font-bold uppercase tracking-[.1em] text-primary-foreground ${mobile ? '' : 'md:hidden'}`}
+                  className={`flex w-full items-center justify-center gap-2 rounded-full bg-primary px-5 py-4 text-sm font-semibold text-primary-foreground ${mobile ? '' : 'md:hidden'}`}
                   data-testid="link-pay-upi"
                 >
-                  <Smartphone size={17} /> Pay {formatRupees(data.advancePaise)} with UPI app
+                  Pay {formatRupees(data.advancePaise)} with UPI app
                 </a>
                 {data.qrSvg && (
                   <div className={`${mobile ? 'hidden' : 'flex'} flex-col items-center rounded-2xl border border-border bg-white p-5`} data-testid="pay-qr">
                     {/* Generated by the server from the same upi:// link; no external QR service. */}
                     <div className="h-56 w-56" dangerouslySetInnerHTML={{ __html: data.qrSvg }} />
-                    <p className="mt-3 text-center text-xs text-[#1d3a2f]">Scan with any UPI app (GPay, PhonePe, Paytm, BHIM) — the amount fills itself.</p>
+                    <p className="mt-3 text-center text-xs text-pine">Scan with any UPI app (GPay, PhonePe, Paytm, BHIM). The amount fills itself.</p>
                   </div>
                 )}
                 {data.payee && (
                   <p className="text-center text-xs text-muted-foreground">
                     Or pay {formatRupees(data.advancePaise)} to <span className="font-mono text-primary">{data.payee.upiId}</span> ({data.payee.name}) with note <span className="font-mono text-primary">{data.reference}</span>
-                    <button type="button" onClick={copyUpi} className="ml-2 inline-flex items-center gap-1 text-accent underline underline-offset-2"><Copy size={12} /> {copied ? 'Copied' : 'Copy UPI ID'}</button>
+                    <button type="button" onClick={copyUpi} className="ml-2 inline-flex items-center gap-1 text-accent underline underline-offset-2"><CopyIcon /> {copied ? 'Copied' : 'Copy UPI ID'}</button>
                   </p>
                 )}
 
@@ -397,13 +397,13 @@ export default function Pay() {
                       maxLength={16}
                       value={utr}
                       onChange={(event) => setUtr(event.target.value)}
-                      className="mt-2 w-full border-b border-border bg-transparent px-0 py-3 font-mono text-lg tracking-widest text-primary outline-none focus:border-primary"
+                      className="mt-2 w-full border-b border-border bg-transparent px-0 py-3 font-mono text-lg tracking-widest text-primary focus:border-primary"
                       placeholder="412345678901"
                       data-testid="input-pay-utr"
                     />
                   </label>
                   <label className="flex cursor-pointer items-center gap-2 text-xs text-muted-foreground">
-                    <Upload size={14} />
+                    <UploadIcon />
                     <span>{file ? file.name : 'Add payment screenshot (optional, image up to 5 MB)'}</span>
                     <input
                       id="pay-screenshot"
@@ -414,14 +414,14 @@ export default function Pay() {
                       data-testid="input-pay-screenshot"
                     />
                   </label>
-                  {formError && <p className="text-[13px] text-[#A65E45]" role="alert">{formError}</p>}
+                  {formError && <p className="text-[13px] text-terracotta" role="alert">{formError}</p>}
                   <button
                     type="submit"
                     disabled={sending}
-                    className="flex w-full items-center justify-center gap-2 rounded-full border border-primary/25 px-5 py-3.5 text-xs font-bold uppercase tracking-[.1em] text-primary hover:bg-primary/5 disabled:opacity-40"
+                    className="flex w-full items-center justify-center gap-2 rounded-full border border-primary/25 px-5 py-3.5 text-sm font-semibold text-primary hover:bg-primary/5 disabled:opacity-40"
                     data-testid="button-pay-submit"
                   >
-                    {sending && <Loader2 size={14} className="animate-spin" />} I have paid — submit
+                    {sending && <SpinnerIcon className="animate-spin" />} I have paid: submit
                   </button>
                 </form>
               </section>

@@ -1,21 +1,5 @@
 import { useEffect } from 'react';
-import {
-  ArrowLeft,
-  ArrowRight,
-  CalendarDays,
-  Car,
-  ChefHat,
-  Coffee,
-  Leaf,
-  MapPin,
-  MessageCircle,
-  Moon,
-  PawPrint,
-  Phone,
-  Refrigerator,
-  Train,
-  Wifi,
-} from 'lucide-react';
+import { BackIcon, CalendarIcon, LeafIcon, MapPinIcon, PhoneIcon, WhatsappIcon } from '@/components/icons';
 
 import { CONFIG, asset, basePath, phoneHref } from '@/lib/site';
 
@@ -79,12 +63,12 @@ export const PET_FAQ = [
 ];
 
 const villaFeatures = [
-  { icon: Wifi, label: 'High-speed Wi-Fi' },
-  { icon: Car, label: 'Parking on the premises' },
-  { icon: Refrigerator, label: 'Refrigerator and microwave' },
-  { icon: ChefHat, label: 'Basic cooking utensils' },
-  { icon: Coffee, label: 'Cafe Soi on site' },
-  { icon: PawPrint, label: 'Pets in the house rules' },
+  { label: 'High-speed Wi-Fi' },
+  { label: 'Parking on the premises' },
+  { label: 'Refrigerator and microwave' },
+  { label: 'Basic cooking utensils' },
+  { label: 'Cafe Soi on site' },
+  { label: 'Pets in the house rules' },
 ];
 
 export default function PetFriendly() {
@@ -99,30 +83,30 @@ export default function PetFriendly() {
 
   return (
     <div className="min-h-[100dvh] bg-background text-foreground">
-      <header className="sticky top-0 z-50 border-b border-foreground/10 bg-background/90 backdrop-blur-md">
+      <header className="sticky top-0 z-50 border-b border-foreground/10 bg-background">
         <div className="section-shell flex h-[74px] items-center justify-between gap-6">
           <a href={`${basePath}/`} className="flex shrink-0 items-center gap-3" data-testid="link-pet-brand">
             <span className="grid h-10 w-10 place-items-center rounded-full bg-primary text-primary-foreground">
-              <Leaf size={19} strokeWidth={1.7} />
+              <LeafIcon size="md" />
             </span>
             <span className="leading-none">
-              <span className="block font-mono-ui text-[10px] font-medium tracking-[.18em] text-muted-foreground">RAJ KUTHIR</span>
+              <span className="block font-mono-ui text-xs font-medium tracking-[.18em] text-muted-foreground">RAJ KUTHIR</span>
               <span className="font-journal text-[19px] text-primary">Homestays</span>
             </span>
           </a>
           <a
             href={`${basePath}/`}
-            className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-[.1em] text-muted-foreground transition-colors hover:text-primary"
+            className="flex items-center gap-2 text-[13px] font-medium text-muted-foreground transition-colors hover:text-primary"
             data-testid="link-pet-back"
           >
-            <ArrowLeft size={15} /> Back to the stay
+            <BackIcon /> Back to the stay
           </a>
         </div>
       </header>
 
       {/* Breadcrumb, matching the BreadcrumbList the server emits. */}
       <nav aria-label="Breadcrumb" className="section-shell pt-8">
-        <ol className="flex flex-wrap items-center gap-2 font-mono-ui text-[10px] uppercase tracking-[.14em] text-muted-foreground">
+        <ol className="flex flex-wrap items-center gap-2 text-[13px] text-muted-foreground">
           <li><a href={`${basePath}/`} className="hover:text-primary" data-testid="link-pet-crumb-home">Home</a></li>
           <li aria-hidden="true">/</li>
           <li aria-current="page" className="text-primary">Staying with a pet</li>
@@ -134,24 +118,21 @@ export default function PetFriendly() {
         <section className="section-shell pb-16 pt-10 md:pb-20 md:pt-14">
           <div className="grid gap-12 lg:grid-cols-[1.15fr_.85fr] lg:items-center lg:gap-20">
             <div>
-              <p className="eyebrow mb-6 text-accent">Travelling with your dog</p>
               <h1 className="max-w-[720px] font-journal text-[clamp(2.7rem,6.5vw,5rem)] leading-[.94] tracking-[-.03em] text-primary">
                 Pet-friendly in Shantiniketan,<br /><em className="text-accent">and we mean it.</em>
               </h1>
               <p className="mt-8 max-w-[560px] text-[15px] leading-7 text-muted-foreground md:text-[17px]">
                 Raj Kuthir &ndash; Sobuj Potro is a dog-friendly stay in Shantiniketan (also spelt Santiniketan): a private
-                two-bedroom villa in Bolpur with its own garden. You get the whole house, so there is no
-                front desk to clear your dog with, no corridor to walk them down, and nobody else&rsquo;s
-                pet on the other side of the wall.
+                two-bedroom villa in Bolpur with its own garden.
               </p>
 
               <div className="mt-9 flex flex-wrap gap-3">
                 <a
                   href={`${basePath}/#availability`}
-                  className="flex items-center gap-2 rounded-full bg-primary px-6 py-4 text-xs font-bold uppercase tracking-[.12em] text-primary-foreground transition-transform hover:-translate-y-0.5"
+                  className="flex items-center gap-2 rounded-full bg-primary px-6 py-4 text-sm font-semibold text-primary-foreground transition-transform hover:-translate-y-0.5"
                   data-testid="link-pet-check-availability"
                 >
-                  <CalendarDays size={15} /> Check availability &amp; current rate
+                  <CalendarIcon /> Check availability &amp; current rate
                 </a>
                 <a
                   href={`https://wa.me/916290399165?text=${encodeURIComponent(
@@ -159,15 +140,15 @@ export default function PetFriendly() {
                   )}`}
                   target="_blank"
                   rel="noreferrer"
-                  className="flex items-center gap-2 rounded-full border border-border px-6 py-4 text-xs font-bold uppercase tracking-[.12em] text-primary transition-colors hover:border-primary"
+                  className="flex items-center gap-2 rounded-full border border-border px-6 py-4 text-sm font-semibold text-primary transition-colors hover:border-primary"
                   data-testid="link-pet-whatsapp-hero"
                 >
-                  <MessageCircle size={15} /> Enquire on WhatsApp
+                  <WhatsappIcon /> Enquire on WhatsApp
                 </a>
               </div>
 
-              <p className="mt-6 flex items-center gap-2 font-mono-ui text-[11px] text-muted-foreground">
-                <MapPin size={13} className="text-accent" /> Bolpur / Shantiniketan, West Bengal
+              <p className="mt-6 flex items-center gap-2 font-mono-ui text-xs text-muted-foreground">
+                <MapPinIcon className="text-accent" /> Bolpur / Shantiniketan, West Bengal
               </p>
             </div>
 
@@ -190,10 +171,13 @@ export default function PetFriendly() {
         <section className="border-y border-border bg-card py-20 md:py-24" aria-labelledby="why-title">
           <div className="section-shell grid gap-12 lg:grid-cols-[.75fr_1.25fr] lg:gap-20">
             <div>
-              <p className="eyebrow mb-5 text-accent">Why a villa, not a room</p>
               <h2 id="why-title" className="font-journal text-4xl leading-[.96] text-primary md:text-6xl">
-                The whole<br /><em>house is yours.</em>
+                The whole<br />house is yours.
               </h2>
+              <p className="mt-6 max-w-[380px] text-[15px] leading-7 text-muted-foreground">
+                There is no front desk to clear your dog with, no corridor to walk them down, and nobody
+                else&rsquo;s pet on the other side of the wall.
+              </p>
             </div>
             <div className="grid gap-5 sm:grid-cols-2">
               {[
@@ -227,13 +211,12 @@ export default function PetFriendly() {
         <section className="section-shell py-20 md:py-24" aria-labelledby="villa-title">
           <div className="flex flex-col justify-between gap-8 md:flex-row md:items-end">
             <div>
-              <p className="eyebrow mb-5 text-accent">The stay</p>
               <h2 id="villa-title" className="font-journal text-4xl leading-[.96] text-primary md:text-6xl">
-                Two bedrooms,<br /><em>a garden, a kitchen.</em>
+                Two bedrooms,<br />a garden, a kitchen.
               </h2>
             </div>
             <p className="max-w-[340px] text-sm leading-6 text-muted-foreground">
-              A private bungalow rather than a room in someone else&rsquo;s building &mdash; which is most of why it
+              A private bungalow rather than a room in someone else&rsquo;s building, which is most of why it
               works for a stay with a pet.
             </p>
           </div>
@@ -260,15 +243,14 @@ export default function PetFriendly() {
           </div>
 
           <div className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {villaFeatures.map(({ icon: Icon, label }) => (
+            {villaFeatures.map(({ label }) => (
               <div key={label} className="flex items-center gap-3 rounded-[1.1rem] border border-border bg-card px-6 py-5">
-                <Icon size={19} className="shrink-0 text-accent" strokeWidth={1.5} />
                 <span className="text-sm text-primary">{label}</span>
               </div>
             ))}
           </div>
 
-          <p className="mt-8 flex flex-wrap gap-x-6 gap-y-3 text-xs font-bold uppercase tracking-[.1em] text-primary">
+          <p className="mt-8 flex flex-wrap gap-x-6 gap-y-3 text-[13px] font-medium text-primary">
             <a href={`${basePath}/gallery`} className="underline decoration-accent decoration-2 underline-offset-4" data-testid="link-pet-gallery">
               Every room, in the gallery
             </a>
@@ -282,13 +264,12 @@ export default function PetFriendly() {
         </section>
 
         {/* --------------------------------- the honest bit: quiet hours */}
-        <section className="bg-primary py-20 text-primary-foreground md:py-24" aria-labelledby="quiet-title">
+        <section className="on-dark bg-primary py-20 text-primary-foreground md:py-24" aria-labelledby="quiet-title">
           <div className="section-shell grid gap-10 lg:grid-cols-[.8fr_1.2fr] lg:gap-20">
             <div>
-              <p className="eyebrow mb-5 text-secondary">Worth knowing first</p>
               <h2 id="quiet-title" className="font-journal text-4xl leading-[.96] md:text-6xl">
-                <Moon size={30} className="mb-5 text-secondary" strokeWidth={1.4} />
-                About<br /><em>barking.</em>
+               
+                About<br />barking.
               </h2>
             </div>
             <div className="max-w-[620px]">
@@ -298,7 +279,7 @@ export default function PetFriendly() {
               </p>
               <p className="mt-6 text-sm leading-7 text-primary-foreground/70">
                 If your dog settles when left alone, none of this will matter to you. If they bark at unfamiliar
-                sounds in an unfamiliar house &mdash; and plenty of dogs do on the first night &mdash; it is worth
+                sounds in an unfamiliar house (and plenty of dogs do on the first night), it is worth
                 planning around rather than discovering at midnight. Tell us honestly when you enquire and we will
                 talk it through. We would far rather have that conversation now than ask you to leave.
               </p>
@@ -315,9 +296,8 @@ export default function PetFriendly() {
 
         {/* ------------------------------------- practical pet information */}
         <section className="section-shell py-20 md:py-24" aria-labelledby="practical-title">
-          <p className="eyebrow mb-5 text-accent">The practical part</p>
           <h2 id="practical-title" className="max-w-[620px] font-journal text-4xl leading-[.96] text-primary md:text-6xl">
-            What we ask,<br /><em>and what we cannot promise.</em>
+            What we ask,<br />and what we cannot promise.
           </h2>
 
           <div className="mt-12 grid gap-5 lg:grid-cols-2">
@@ -325,7 +305,7 @@ export default function PetFriendly() {
               <p className="font-journal text-2xl text-primary">What we ask of you</p>
               <div className="mt-5 space-y-3 text-sm leading-6 text-muted-foreground">
                 <p>Keep them off the furniture and the linen.</p>
-                <p>Clean up after them &mdash; the same things you would do at home.</p>
+                <p>Clean up after them, the same things you would do at home.</p>
                 <p>Tell us they are coming, so the caretaker can prepare the house.</p>
                 <p>
                   Pet damage or soiling is charged from ₹1,000. That figure and every other repair cost is
@@ -351,7 +331,7 @@ export default function PetFriendly() {
                 </p>
                 <p>
                   Whether a particular market, temple or sanctuary will let your dog in this season. Policies
-                  change and we have not verified them. The caretaker knows what is currently true &mdash; ask
+                  change and we have not verified them. The caretaker knows what is currently true, so ask
                   before you set out.
                 </p>
               </div>
@@ -360,7 +340,7 @@ export default function PetFriendly() {
 
           <p className="mt-8 max-w-[640px] text-xs leading-6 text-muted-foreground">
             Check-in is from 12:00 PM and check-out by 11:00 AM. A valid photo ID is required for every adult
-            staying &mdash; a legal requirement for homestays, not a formality.
+            staying. It is a legal requirement for homestays, not a formality.
           </p>
         </section>
 
@@ -368,18 +348,17 @@ export default function PetFriendly() {
         <section className="border-y border-border bg-card py-20 md:py-24" aria-labelledby="food-title">
           <div className="section-shell grid gap-12 lg:grid-cols-[1.1fr_.9fr] lg:gap-20">
             <div>
-              <p className="eyebrow mb-5 text-accent">Eating in</p>
               <h2 id="food-title" className="font-journal text-4xl leading-[.96] text-primary md:text-5xl">
-                You do not have to leave them<br /><em>to get dinner.</em>
+                You do not have to leave them<br />to get dinner.
               </h2>
               <p className="mt-7 max-w-[520px] text-[15px] leading-7 text-muted-foreground">
-                The most tiring part of travelling with a dog is usually mealtimes &mdash; the choice between
+                The most tiring part of travelling with a dog is usually mealtimes: the choice between
                 leaving them alone in a strange room or eating something forgettable nearby. Here there are
                 several ways round it.
               </p>
               <div className="mt-8 space-y-4 text-sm leading-6 text-muted-foreground">
                 <p><strong className="text-primary"><a href={`${basePath}/cafe-soi-shantiniketan`} className="underline decoration-accent decoration-2 underline-offset-4" data-testid="link-pet-cafe">Cafe Soi</a> is on the premises.</strong> You are not going anywhere to eat.</p>
-                <p><strong className="text-primary">The villa has a kitchen for simple meals</strong> &mdash; refrigerator, microwave, water filter and basic utensils.</p>
+                <p><strong className="text-primary">The villa has a kitchen for simple meals</strong>: refrigerator, microwave, water filter and basic utensils.</p>
                 <p><strong className="text-primary">Home-cooked meals can be arranged</strong> with the designated caretaker. Talk to them about it when you arrive, or mention it in your enquiry.</p>
                 <p><strong className="text-primary">Zomato delivers to the area</strong>, subject to the usual delivery conditions.</p>
               </div>
@@ -402,9 +381,8 @@ export default function PetFriendly() {
         <section className="section-shell py-20 md:py-24" aria-labelledby="where-title">
           <div className="flex flex-col justify-between gap-8 md:flex-row md:items-end">
             <div>
-              <p className="eyebrow mb-5 text-accent">Where it is</p>
               <h2 id="where-title" className="font-journal text-4xl leading-[.96] text-primary md:text-6xl">
-                Bolpur,<br /><em>and the quiet side of it.</em>
+                Bolpur,<br />and the quiet side of it.
               </h2>
             </div>
             <p className="max-w-[340px] text-sm leading-6 text-muted-foreground">
@@ -414,15 +392,14 @@ export default function PetFriendly() {
 
           <div className="mt-12 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             {[
-              { icon: Train, title: 'Prantik station', distance: '~5 km', note: 'The closer halt, and the quieter one' },
-              { icon: Train, title: 'Bolpur Shantiniketan', distance: '~9 km', note: 'Where the fast trains stop' },
-              { icon: Leaf, title: 'Sonajhuri Khoai Haat', distance: '~4 km', note: 'Open-air forest market, weekend afternoons' },
-              { icon: Leaf, title: 'Kopai River', distance: '~4 km', note: "The 'Amader chhoto nodi' of the poem" },
-            ].map(({ icon: Icon, title, distance, note }) => (
+              { title: 'Prantik station', distance: '~5 km', note: 'The closer halt, and the quieter one' },
+              { title: 'Bolpur Shantiniketan', distance: '~9 km', note: 'Where the fast trains stop' },
+              { title: 'Sonajhuri Khoai Haat', distance: '~4 km', note: 'Open-air forest market, weekend afternoons' },
+              { title: 'Kopai River', distance: '~4 km', note: "The 'Amader chhoto nodi' of the poem" },
+            ].map(({ title, distance, note }) => (
               <div key={title} className="rounded-[1.4rem] border border-border bg-card p-6">
-                <Icon size={19} className="text-accent" strokeWidth={1.5} />
                 <p className="mt-5 font-journal text-xl leading-tight text-primary">{title}</p>
-                <p className="mt-1 font-mono-ui text-[11px] text-accent">{distance}</p>
+                <p className="mt-1 font-mono-ui text-xs text-accent">{distance}</p>
                 <p className="mt-2 text-xs leading-5 text-muted-foreground">{note}</p>
               </div>
             ))}
@@ -433,18 +410,17 @@ export default function PetFriendly() {
               href={CONFIG.mapsUrl}
               target="_blank"
               rel="noreferrer"
-              className="inline-flex items-center gap-2 rounded-full border border-border px-6 py-4 text-xs font-bold uppercase tracking-[.12em] text-primary transition-colors hover:border-primary"
+              className="inline-flex items-center gap-2 rounded-full border border-border px-6 py-4 text-sm font-semibold text-primary transition-colors hover:border-primary"
               data-testid="link-pet-maps"
             >
-              <MapPin size={15} /> Open in Google Maps
+              <MapPinIcon /> Open in Google Maps
             </a>
             <a
               href={`${basePath}/places-to-visit-in-shantiniketan`}
-              className="inline-flex items-center gap-2 rounded-full border border-border px-6 py-4 text-xs font-bold uppercase tracking-[.12em] text-primary transition-colors hover:border-primary"
+              className="inline-flex items-center gap-2 rounded-full border border-border px-6 py-4 text-sm font-semibold text-primary transition-colors hover:border-primary"
               data-testid="link-pet-neighbourhood"
             >
-              The whole neighbourhood <ArrowRight size={15} />
-            </a>
+              The whole neighbourhood            </a>
           </div>
         </section>
 
@@ -452,7 +428,6 @@ export default function PetFriendly() {
         <section className="border-t border-border bg-card py-20 md:py-24" aria-labelledby="pet-faq-title" id={FAQ_ANCHOR}>
           <div className="section-shell grid gap-12 lg:grid-cols-[.7fr_1.3fr] lg:gap-20">
             <div>
-              <p className="eyebrow mb-5 text-accent">Before you enquire</p>
               <h2 id="pet-faq-title" className="font-journal text-4xl leading-[.94] text-primary md:text-6xl">
                 The questions<br /><em>we actually get.</em>
               </h2>
@@ -477,16 +452,16 @@ export default function PetFriendly() {
               </h2>
               <p className="mt-6 max-w-[500px] text-[15px] leading-7 text-muted-foreground">
                 Send your dates and a sentence about who is travelling with you. We will come back with what is
-                available and the current rate for those nights &mdash; and an honest answer about whether this is
+                available and the current rate for those nights, and an honest answer about whether this is
                 the right house for your pet.
               </p>
               <div className="mt-9 flex flex-wrap gap-3">
                 <a
                   href={`${basePath}/#availability`}
-                  className="flex items-center gap-2 rounded-full bg-primary px-6 py-4 text-xs font-bold uppercase tracking-[.12em] text-primary-foreground transition-transform hover:-translate-y-0.5"
+                  className="flex items-center gap-2 rounded-full bg-primary px-6 py-4 text-sm font-semibold text-primary-foreground transition-transform hover:-translate-y-0.5"
                   data-testid="link-pet-cta-enquire"
                 >
-                  <CalendarDays size={15} /> Check availability &amp; current rate
+                  <CalendarIcon /> Check availability &amp; current rate
                 </a>
                 <a
                   href={`https://wa.me/916290399165?text=${encodeURIComponent(
@@ -494,44 +469,44 @@ export default function PetFriendly() {
                   )}`}
                   target="_blank"
                   rel="noreferrer"
-                  className="flex items-center gap-2 rounded-full border border-primary/25 px-6 py-4 text-xs font-bold uppercase tracking-[.12em] text-primary transition-colors hover:bg-primary/5"
+                  className="flex items-center gap-2 rounded-full border border-primary/25 px-6 py-4 text-sm font-semibold text-primary transition-colors hover:bg-primary/5"
                   data-testid="link-pet-cta-whatsapp"
                 >
-                  <MessageCircle size={15} /> Enquire on WhatsApp
+                  <WhatsappIcon /> Enquire on WhatsApp
                 </a>
               </div>
             </div>
             <div className="flex flex-col justify-center gap-4 border-t border-border pt-8 lg:border-l lg:border-t-0 lg:pl-14 lg:pt-0">
               <a href={phoneHref(CONFIG.hostPhone)} className="flex items-center gap-3 text-sm text-primary hover:text-accent" data-testid="link-pet-call-host">
-                <Phone size={16} className="text-accent" /> Host &middot; {CONFIG.hostPhone}
+                <PhoneIcon className="text-accent" /> Host &middot; {CONFIG.hostPhone}
               </a>
               <a href={phoneHref(CONFIG.caretakerPhone)} className="flex items-center gap-3 text-sm text-primary hover:text-accent" data-testid="link-pet-call-caretaker">
-                <Phone size={16} className="text-accent" /> Caretaker &middot; {CONFIG.caretakerPhone}
+                <PhoneIcon className="text-accent" /> Caretaker &middot; {CONFIG.caretakerPhone}
               </a>
               <a href={`${basePath}/house-rules`} className="flex items-center gap-3 text-sm text-primary hover:text-accent" data-testid="link-pet-house-rules-cta">
-                <PawPrint size={16} className="text-accent" /> Read the full house rules
+                Read the full house rules
               </a>
             </div>
           </div>
         </section>
       </main>
 
-      <footer className="bg-[#172d25] py-14 text-[#f5eadb]">
+      <footer className="on-dark bg-forest py-14 text-footer-ink">
         <div className="section-shell flex flex-col justify-between gap-6 sm:flex-row sm:items-center">
           <div>
             <p className="font-journal text-2xl">Raj Kuthir Homestays</p>
-            <p className="mt-2 max-w-[420px] text-sm text-[#f5eadb]/60">
-              Sobuj Potro &mdash; a private two-bedroom villa with a garden in Bolpur / Shantiniketan.
+            <p className="mt-2 max-w-[420px] text-sm text-footer-ink/60">
+              Sobuj Potro, a private two-bedroom villa with a garden in Bolpur / Shantiniketan.
             </p>
           </div>
-          <div className="flex flex-col gap-2 text-sm text-[#f5eadb]/70 sm:text-right">
-            <a href={`${basePath}/`} className="hover:text-[#e4c9a4]">The stay</a>
-            <a href={`${basePath}/gallery`} className="hover:text-[#e4c9a4]">Photos</a>
-            <a href={`${basePath}/places-to-visit-in-shantiniketan`} className="hover:text-[#e4c9a4]">Places to visit</a>
-            <a href={`${basePath}/our-story`} className="hover:text-[#e4c9a4]">Our story</a>
-            <a href={`${basePath}/house-rules`} className="hover:text-[#e4c9a4]">House rules</a>
-            <a href={`${basePath}/rates`} className="hover:text-[#e4c9a4]">Rates</a>
-            <a href={`${basePath}/#availability`} className="hover:text-[#e4c9a4]">Check availability</a>
+          <div className="flex flex-col gap-2 text-sm text-footer-ink/70 sm:text-right">
+            <a href={`${basePath}/`} className="hover:text-sand">The stay</a>
+            <a href={`${basePath}/gallery`} className="hover:text-sand">Photos</a>
+            <a href={`${basePath}/places-to-visit-in-shantiniketan`} className="hover:text-sand">Places to visit</a>
+            <a href={`${basePath}/our-story`} className="hover:text-sand">Our story</a>
+            <a href={`${basePath}/house-rules`} className="hover:text-sand">House rules</a>
+            <a href={`${basePath}/rates`} className="hover:text-sand">Rates</a>
+            <a href={`${basePath}/#availability`} className="hover:text-sand">Check availability</a>
           </div>
         </div>
       </footer>
