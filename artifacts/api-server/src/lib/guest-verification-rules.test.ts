@@ -340,10 +340,11 @@ const ENQUIRY_ROUTES_TS = readFileSync(path.join(here, "../routes/enquiries.ts")
 const ENQUIRIES_REPO_TS = readFileSync(path.join(here, "enquiries-repo.ts"), "utf8");
 
 test("quote · an unconfigured WhatsApp API no longer fails the request", () => {
-  // The send is attempted only when the API is actually configured.
+  // The send is attempted only when the API is actually configured (and the
+  // owner's Settings have WhatsApp on the Business API, not manual).
   assert.match(
     ENQUIRY_ROUTES_TS,
-    /const auto = isWhatsappEnabled\(\)\s*\?\s*await sendTemplate\(/,
+    /const auto = guestApiSendingOn\(\)\s*\?\s*await sendTemplate\(/,
     "the quote route still calls sendTemplate unconditionally",
   );
   // A 502 may only follow a real API failure, never a missing configuration.

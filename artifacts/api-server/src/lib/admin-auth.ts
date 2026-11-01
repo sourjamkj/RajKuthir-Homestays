@@ -1,6 +1,8 @@
 import crypto from "node:crypto";
 import type { Request, RequestHandler, Response } from "express";
 import { logger } from "./logger";
+import { deviceForToken } from "./owner-devices";
+import { bearerFrom } from "./owner-devices-rules";
 
 /**
  * Self-hosted admin auth.
@@ -162,19 +164,59 @@ export function isSignedIn(req: Request): boolean {
   return isValidSessionToken(cookies?.[ADMIN_COOKIE_NAME]);
 }
 
-export const requireAdmin: RequestHandler = (req, res, next) => {
+/**
+ * How this request is signed in: the web console's cookie, or one of the
+ * owner's phones (Authorization: Bearer rkd_…). Null when it is neither.
+ */
+export type AdminSessionInfo = { via: "web" } | { via: "app"; deviceId: string };
+
+export async function adminSession(req: Request): Promise<AdminSessionInfo | null> {
+  if (!isAdminAuthConfigured()) return null;
+  if (isSignedIn(req)) return { via: "web" };
+  const token = bearerFrom(req.headers.authorization);
+  if (!token) return null;
+  try {
+    const device = await deviceForToken(token);
+    return device ? { via: "app", deviceId: device.id } : null;
+  } catch (error) {
+    logger.error({ err: error }, "Could not check an owner app token");
+    return null;
+  }
+}
+
+/** The session requireAdmin found, for routes that need to know web or app. */
+export function sessionOf(res: Response): AdminSessionInfo {
+  return (res.locals.adminSession as AdminSessionInfo | undefined) ?? { via: "web" };
+}
+
+export const requireAdmin: RequestHandler = async (req, res, next) => {
   if (!isAdminAuthConfigured()) {
     res.status(503).json({ error: "Admin access is not configured yet." });
     return;
   }
 
-  if (!isSignedIn(req)) {
+  const session = await adminSession(req);
+  if (!session) {
     res.status(401).json({ error: "Admin sign-in required." });
     return;
   }
 
+  res.locals.adminSession = session;
   next();
 };
+
+/**
+ * Sensitive changes (where alerts go, phone numbers, WhatsApp mode, signing a
+ * phone out) need a fresh confirmation. The app has already asked for the
+ * owner's fingerprint before it could use its token, so an app session counts;
+ * a web session must send the admin password again as `confirmPassword`.
+ */
+export async function confirmedForSensitive(req: Request, res: Response): Promise<boolean> {
+  if (sessionOf(res).via === "app") return true;
+  const candidate: unknown = req.body?.confirmPassword;
+  if (typeof candidate !== "string" || candidate.length === 0 || candidate.length > 512) return false;
+  return verifyAdminPassword(candidate);
+}
 
 /**
  * Small in-memory throttle for the login endpoint. One process, one admin —

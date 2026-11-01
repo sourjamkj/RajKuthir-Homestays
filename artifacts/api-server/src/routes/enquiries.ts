@@ -29,7 +29,8 @@ import {
   buildEnquiryQuoteTemplate,
   upiDetails,
 } from "../lib/whatsapp-templates";
-import { isWhatsappEnabled, sendTemplate, toWhatsappNumber } from "../lib/whatsapp-client";
+import { sendTemplate, toWhatsappNumber } from "../lib/whatsapp-client";
+import { guestApiSendingOn } from "../lib/whatsapp-mode";
 
 const router: IRouter = Router();
 
@@ -271,7 +272,7 @@ router.get("/enquiries", requireAdmin, async (_req, res) => {
     */
     quotingReady: upiDetails() !== null,
     /** How a quote would go out right now, so the screen can say so. */
-    quoteDelivery: isWhatsappEnabled() ? "api" : "manual_whatsapp",
+    quoteDelivery: guestApiSendingOn() ? "api" : "manual_whatsapp",
   });
 });
 
@@ -364,7 +365,7 @@ router.post("/enquiries/:id/quote", requireAdmin, async (req, res) => {
     because opening WhatsApp is not delivering a message and this server has no
     way to learn whether the owner pressed send.
   */
-  const auto = isWhatsappEnabled()
+  const auto = guestApiSendingOn()
     ? await sendTemplate({
         to,
         templateName: template.name,

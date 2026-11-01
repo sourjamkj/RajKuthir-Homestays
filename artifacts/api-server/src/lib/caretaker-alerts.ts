@@ -2,6 +2,7 @@ import { gte } from "drizzle-orm";
 import { bookings, db, pool } from "@workspace/db";
 
 import { logger } from "./logger";
+import { caretakerWhatsappNumber, ownerWhatsappNumber } from "./owner-settings-state";
 import { dueAlerts, istDate, toE164, type AlertBooking } from "./caretaker-rules";
 
 /**
@@ -14,8 +15,8 @@ import { dueAlerts, istDate, toE164, type AlertBooking } from "./caretaker-rules
  *
  * Environment:
  *   BLUETICKS_API_KEY        required; without it this whole feature is idle
- *   CARETAKER_WHATSAPP       default +91 78726 85558 (the number on the site)
- *   OWNER_WHATSAPP_NUMBER    default +91 62903 99165; gets a copy of everything
+ *   CARETAKER_WHATSAPP       Settings first; default +91 78726 85558 (the number on the site)
+ *   OWNER_WHATSAPP_NUMBER    Settings first; default +91 62903 99165; gets a copy of everything
  *
  * Delivery is recorded per (booking, kind, recipient) in caretaker_alerts, a
  * table this file creates itself (additive, IF NOT EXISTS), so a message is
@@ -50,8 +51,8 @@ async function ensureTable(): Promise<void> {
 
 export function caretakerRecipients(): string[] {
   const list = [
-    toE164(process.env["CARETAKER_WHATSAPP"] ?? "+91 78726 85558"),
-    toE164(process.env["OWNER_WHATSAPP_NUMBER"] ?? "+91 62903 99165"),
+    toE164(caretakerWhatsappNumber()),
+    toE164(ownerWhatsappNumber()),
   ].filter((value): value is string => Boolean(value));
   return [...new Set(list)];
 }

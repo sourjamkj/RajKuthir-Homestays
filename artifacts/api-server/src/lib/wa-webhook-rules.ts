@@ -9,6 +9,7 @@
  */
 
 import { createHmac, timingSafeEqual } from "node:crypto";
+import { autoreplyEnabled } from "./owner-settings-state.ts";
 
 /**
  * Normalise a phone number for WhatsApp. Duplicates the logic from
@@ -32,8 +33,9 @@ function toWhatsappNumber(raw: string | null | undefined): string | null {
  * Configuration helpers
  * ------------------------------------------------------------------ */
 
+/** Settings first; WHATSAPP_AUTOREPLY_ENABLED on Railway until the owner sets it. */
 export function isAutoReplyEnabled(): boolean {
-  return process.env["WHATSAPP_AUTOREPLY_ENABLED"] === "true";
+  return autoreplyEnabled();
 }
 
 export function testNumbers(): Set<string> {

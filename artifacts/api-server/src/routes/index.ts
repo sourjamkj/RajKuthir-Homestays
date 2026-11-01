@@ -14,11 +14,13 @@ import bookRouter from "./book";
 import caretakerRouter from "./caretaker";
 import reviewsRouter from "./reviews";
 import invoicesRouter from "./invoices";
+import ownerAppRouter from "./owner-app";
 
 const router: IRouter = Router();
 
 router.use(healthRouter);
 router.use(adminRouter);
+router.use(ownerAppRouter);
 router.use(calendarRouter);
 router.use(ratesRouter);
 router.use(ledgerRouter);

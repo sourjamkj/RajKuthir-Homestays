@@ -2,7 +2,6 @@ import { logger } from "./logger";
 import type { Booking } from "@workspace/db";
 import { buildTemplate, type MessageKind } from "./whatsapp-templates";
 import {
-  isWhatsappEnabled,
   sendTemplate,
   toWhatsappNumber,
 } from "./whatsapp-client";
@@ -15,6 +14,7 @@ import {
   markSent,
   queueMessage,
 } from "./notifications-repo";
+import { guestApiSendingOn } from "./whatsapp-mode";
 
 /**
  * When each message goes out, and the rules about whether it goes out at all.
@@ -183,7 +183,8 @@ export type DrainResult = { attempted: number; sent: number; failed: number };
 export async function drainOutbox(now = new Date()): Promise<DrainResult> {
   const result: DrainResult = { attempted: 0, sent: 0, failed: 0 };
 
-  if (!isWhatsappEnabled()) return result;
+  // Manual mode: drafts wait for the owner to send them from their own WhatsApp.
+  if (!guestApiSendingOn()) return result;
   if (istHourOf(now) >= QUIET_START_HOUR || istHourOf(now) < QUIET_END_HOUR) {
     return result;
   }

@@ -1,6 +1,8 @@
 import { listForSync } from "./mail-repo";
 import { logger } from "./logger";
-import { isWhatsappEnabled, sendTemplate, toWhatsappNumber } from "./whatsapp-client";
+import { ownerAlertEmailSetting } from "./owner-settings-state";
+import { sendTemplate, toWhatsappNumber } from "./whatsapp-client";
+import { guestApiSendingOn } from "./whatsapp-mode";
 
 /**
  * Getting Book & Pay messages out, over whatever is already set up.
@@ -68,9 +70,9 @@ export async function sendEmail(
   }
 }
 
-/** Where owner alerts go: OWNER_ALERT_EMAIL, else the connected mailbox itself. */
+/** Where owner alerts go: Settings, else OWNER_ALERT_EMAIL, else the connected mailbox itself. */
 export async function ownerEmail(): Promise<string | null> {
-  const configured = process.env["OWNER_ALERT_EMAIL"]?.trim();
+  const configured = ownerAlertEmailSetting();
   if (configured) return configured;
   try {
     const [account] = await listForSync();
@@ -91,7 +93,7 @@ export async function sendWhatsappTemplate(
 ): Promise<boolean> {
   const templateName = process.env[templateEnv]?.trim();
   const to = toWhatsappNumber(phone);
-  if (!isWhatsappEnabled() || !templateName || !to) return false;
+  if (!guestApiSendingOn() || !templateName || !to) return false;
 
   const result = await sendTemplate({ to, templateName, params }).catch(() => null);
   if (!result?.ok) {
