@@ -524,6 +524,7 @@ const CLIENT_ROUTES = new Set([
   "/admin/guests",
   "/admin/reviews",
   "/admin/guest-info",
+  "/admin/caretaker",
   "/pre-arrival",
   "/management-documents",
   "/pay",

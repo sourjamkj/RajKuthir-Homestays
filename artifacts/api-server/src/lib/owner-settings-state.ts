@@ -2,7 +2,9 @@ import {
   eventEnabled,
   resolveAlertEmail,
   resolveAutoreply,
+  resolveCaretakerName,
   resolveCaretakerWhatsapp,
+  resolveOwnerSignature,
   resolveOwnerWhatsapp,
   resolveWhatsappMode,
   type OwnerEvent,
@@ -36,6 +38,8 @@ export const ownerWhatsappNumberIfSet = (): string | null => {
   return r.source === "default" ? null : r.value;
 };
 export const caretakerWhatsappNumber = (): string => resolveCaretakerWhatsapp(current, process.env).value;
+export const caretakerName = (): string | null => resolveCaretakerName(current).value;
+export const ownerSignature = (): string => resolveOwnerSignature(current).value;
 export const autoreplyEnabled = (): boolean => resolveAutoreply(current, process.env).value;
 export const whatsappMode = (): WhatsappMode => resolveWhatsappMode(current, process.env).value;
 export const pushEnabledFor = (event: OwnerEvent): boolean => eventEnabled(current.pushEvents, event);

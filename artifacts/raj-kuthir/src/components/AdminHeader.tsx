@@ -25,6 +25,7 @@ import { getWhatsappApp, installWhatsappLinks, setWhatsappApp, type WhatsappApp 
 const LINKS = [
   { href: '/admin', label: 'Calendar', testId: 'link-admin-calendar' },
   { href: '/admin/guest-info', label: 'Arrival pack', testId: 'link-admin-guest-info' },
+  { href: '/admin/caretaker', label: 'Caretaker', testId: 'link-admin-caretaker' },
   { href: '/admin/guests', label: 'Guests', testId: 'link-admin-guests' },
   { href: '/admin/reviews', label: 'Reviews', testId: 'link-admin-reviews' },
   { href: '/admin/earnings', label: 'Earnings', testId: 'link-admin-earnings' },

@@ -113,6 +113,8 @@ export type SettingsView = {
     alertEmail: Resolved<string | null>;
     ownerWhatsapp: Resolved<string>;
     caretakerWhatsapp: Resolved<string>;
+    caretakerName: Resolved<string | null>;
+    ownerSignature: Resolved<string>;
   };
   whatsapp: {
     mode: Resolved<WhatsappMode>;
@@ -129,6 +131,8 @@ export type SettingsPatch = Partial<{
   alertEmail: string | null;
   ownerWhatsapp: string | null;
   caretakerWhatsapp: string | null;
+  caretakerName: string | null;
+  ownerSignature: string | null;
   whatsappAutoreply: boolean | null;
   whatsappMode: WhatsappMode;
   pushEvents: Partial<Record<OwnerEvent, boolean>>;
@@ -167,3 +171,72 @@ export const markMessageSentManually = (id: string) => adminFetch<OutboxMessage>
 export function manualWhatsappLink(toPhone: string, text: string): string {
   return `https://wa.me/${toPhone.replace(/\D/g, '')}?text=${encodeURIComponent(text)}`;
 }
+
+/* -------------------------------------------------- caretaker console */
+
+export type CaretakerMessageKind = 'salary_credited' | 'bonus_credited' | 'day_off' | 'notice';
+export type CaretakerFieldSpec = {
+  key: string;
+  label: string;
+  type: 'month' | 'date' | 'choice' | 'text' | 'longtext';
+  required: boolean;
+  options?: readonly string[];
+  max?: number;
+  hint?: string;
+};
+export type CaretakerTemplate = { kind: CaretakerMessageKind; title: string; description: string; fields: CaretakerFieldSpec[] };
+export type CaretakerMessage = {
+  id: string;
+  kind: CaretakerMessageKind;
+  fields: Record<string, string>;
+  body: string;
+  toPhone: string;
+  via: 'web' | 'app';
+  createdAt: string;
+  sentAt: string | null;
+};
+export type CaretakerConsole = {
+  caretaker: { name: string | null; phone: string };
+  signature: string;
+  templates: CaretakerTemplate[];
+  /** Today in India, YYYY-MM-DD: the default "paid on" date. */
+  today: string;
+  history: CaretakerMessage[];
+};
+export type CaretakerDraft = { kind: CaretakerMessageKind; fields: Record<string, string> };
+
+export const getCaretakerConsole = () => adminFetch<CaretakerConsole>('/api/admin/caretaker/messages');
+export const previewCaretakerMessage = (draft: CaretakerDraft) =>
+  adminFetch<{ body: string }>('/api/admin/caretaker/messages/preview', json('POST', draft));
+/** Saves it to the history and returns the wa.me link that opens your WhatsApp on her chat with it typed. */
+export const createCaretakerMessage = (draft: CaretakerDraft) =>
+  adminFetch<{ message: CaretakerMessage; whatsappUrl: string }>('/api/admin/caretaker/messages', json('POST', draft));
+export const markCaretakerMessageSent = (id: string) =>
+  adminFetch<CaretakerMessage>(`/api/admin/caretaker/messages/${encodeURIComponent(id)}/sent`, json('POST'));
+
+/* ----------------------------------------------------- month calendar */
+
+export type CalendarDayStatus = 'past' | 'free' | 'booked' | 'blocked' | 'held';
+export type CalendarDay = {
+  date: string;
+  weekday: number;
+  status: CalendarDayStatus;
+  source: string | null;
+  label: string | null;
+  checkIn: boolean;
+  checkOut: boolean;
+  pricePaise: number | null;
+  peak: string | null;
+  minNights: number | null;
+};
+export type CalendarMonth = {
+  month: string;
+  previous: string;
+  next: string;
+  today: string;
+  days: CalendarDay[];
+  summary: { bookedNights: number; heldNights: number; blockedNights: number; freeNights: number; occupancyAheadPercent: number | null };
+};
+/** month is YYYY-MM; omit it for this month. */
+export const getCalendarMonth = (month?: string) =>
+  adminFetch<CalendarMonth>(`/api/admin/calendar/month${month ? `?month=${encodeURIComponent(month)}` : ''}`);
