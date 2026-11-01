@@ -4,6 +4,7 @@ import { Alert, RefreshControl, ScrollView, View } from 'react-native';
 import { blockDates, getCalendar, syncCalendars, unblockDates, type CalendarEvent } from '../api';
 import { addDays, color, longDate, shortDate, space, todayIst } from '../theme';
 import { Body, Button, Card, Field, Heading, Notice, Row, Title } from '../ui';
+import { MonthGrid } from '../MonthGrid';
 import { useLoad } from '../useLoad';
 
 const SOURCE: Record<CalendarEvent['source'], string> = {
@@ -93,6 +94,7 @@ export default function Calendar() {
       keyboardShouldPersistTaps="handled"
     >
       <Title>Calendar</Title>
+      <MonthGrid onChanged={() => void cal.reload()} />
       {message && <Notice tone={message.tone}>{message.text}</Notice>}
       {cal.error && <Notice tone="error">{cal.error}</Notice>}
 

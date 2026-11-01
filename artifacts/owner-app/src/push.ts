@@ -94,7 +94,7 @@ export async function unregisterPush(): Promise<void> {
 
 /** Where a tapped alert should land, from its console path. */
 export type Destination =
-  | { tab: 'today' | 'enquiries' | 'calendar' }
+  | { tab: 'today' | 'enquiries' | 'calendar' | 'caretaker' }
   | { screen: 'messages' }
   | { web: string };
 
@@ -104,6 +104,7 @@ export function destinationFor(href: string | undefined | null): Destination {
   if (h.startsWith('/admin/guests#enquiry-')) return { tab: 'enquiries' };
   if (h.startsWith('/admin/guests#stay-')) return { tab: 'calendar' };
   if (h.startsWith('/admin/guests#messages')) return { screen: 'messages' };
+  if (h.startsWith('/admin/caretaker')) return { tab: 'caretaker' };
   if (h.startsWith('/admin/reviews')) return { web: h };
   return { tab: 'calendar' };
 }
