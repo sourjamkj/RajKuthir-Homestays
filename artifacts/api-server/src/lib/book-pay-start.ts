@@ -133,7 +133,7 @@ export async function startHold<Tx>(
       tokenHash: hashPayToken(token),
       totalPaise: quote.totalPaise,
       advancePaise: quote.advancePaise,
-      advancePercent: settings.advancePercent,
+      advancePercent: quote.advancePercent,
       quoteSentAt: now,
       holdExpiresAt: holdExpiry(now, settings),
     };

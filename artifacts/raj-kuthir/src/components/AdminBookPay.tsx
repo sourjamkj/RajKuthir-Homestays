@@ -40,6 +40,8 @@ type Row = {
   overdue: boolean;
   rebookWhatsappUrl: string | null;
   online: OnlinePayment | null;
+  /** What the cancellation policy refunds if the guest cancels today. */
+  policyRefund?: { daysBefore: number; peak: boolean; refundPaise: number; creditPaise: number; rule: string } | null;
 };
 
 type OnlinePayment = {
@@ -162,11 +164,19 @@ export function AdminBookPay() {
     mutationFn: async (row: Row) => {
       if (!row.online) throw new Error('No online payment on this booking.');
       const max = refundable(row.online);
+      // Start from what the cancellation policy says, never above what is left.
+      const policy = row.policyRefund ?? null;
+      const suggested = policy ? Math.min(policy.refundPaise, max) : max;
+      const policyLine = policy
+        ? `\n\nPolicy if cancelled today: ${policy.rule} → ${formatRupees(policy.refundPaise)}.` +
+          (policy.creditPaise ? ` Or offer ${formatRupees(policy.creditPaise)} as credit for a stay within 6 months.` : '') +
+          ' If you have rebooked the nights, you can refund more (less ₹200).'
+        : '';
       const answer = window.prompt(
-        `Refund to ${row.guestName}'s original payment method.\n\nAmount in ₹ (up to ${(max / 100).toFixed(2)}` +
+        `Refund to ${row.guestName}'s original payment method.${policyLine}\n\nAmount in ₹ (up to ${(max / 100).toFixed(2)}` +
           (row.online.feePaise ? `; the ${formatRupees(row.online.feePaise)} convenience fee is not refundable` : '') +
           `):`,
-        (max / 100).toFixed(2),
+        (suggested / 100).toFixed(2),
       );
       if (answer === null) throw new Error('Refund cancelled.');
       const rupees = Number(answer.replace(/[₹,\s]/g, ''));

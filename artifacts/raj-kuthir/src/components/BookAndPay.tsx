@@ -318,7 +318,7 @@ export function BookAndPay({ id = 'book-online' }: { id?: string }) {
               <span className="font-journal text-3xl text-primary" data-testid="text-book-total">{formatRupees(quote.totalPaise)}</span>
             </div>
             <div className="mt-2 flex justify-between text-xs text-muted-foreground tabular-nums">
-              <span>Advance now ({quote.advancePercent}%): <strong className="text-primary">{formatRupees(quote.advancePaise)}</strong></span>
+              <span>{quote.advancePercent >= 100 ? 'Peak dates, paid in full now' : `Advance now (${quote.advancePercent}%)`}: <strong className="text-primary">{formatRupees(quote.advancePaise)}</strong></span>
               <span>At check-in: {formatRupees(quote.balancePaise)}</span>
             </div>
           </div>

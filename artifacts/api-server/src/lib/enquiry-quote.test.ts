@@ -192,3 +192,22 @@ test("quote · uses the stay rules: weekly discount on the nights, peak minimum 
   assert.equal(oneNight.ok, false);
   assert.match(!oneNight.ok ? oneNight.reason : "", /2-night minimum/);
 });
+
+test("a stay touching a peak period is paid in full at booking", () => {
+  const rate = () => 400_000;
+  const party = { checkIn: "2026-12-24", checkOut: "2026-12-26", adults: 2, children: 0, pets: 0 };
+  const peak = quoteForEnquiry(party, rate, {
+    minimumStay: () => ({ minNights: 2, label: "Poush Mela, Christmas & New Year" }),
+    advancePercent: 50,
+  });
+  assert.ok(peak.ok);
+  assert.equal(peak.advancePercent, 100);
+  assert.equal(peak.advancePaise, peak.totalPaise);
+  assert.equal(peak.balancePaise, 0);
+  assert.equal(peak.peak, "Poush Mela, Christmas & New Year");
+
+  const regular = quoteForEnquiry(party, rate, { minimumStay: () => null, advancePercent: 50 });
+  assert.ok(regular.ok);
+  assert.equal(regular.advancePercent, 50);
+  assert.equal(regular.peak, null);
+});

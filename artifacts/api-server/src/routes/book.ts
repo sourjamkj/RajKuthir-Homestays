@@ -47,6 +47,7 @@ import { buildConfirmation } from "../lib/invoices";
 import { CashfreeError, cashfreeConfig } from "../lib/cashfree-client";
 import { checkoutMethod, looksLikeOrderId, orderIdFromWebhook, verifyWebhook } from "../lib/cashfree-rules";
 import { findOrder, gatewayInfoFor } from "../lib/cashfree-repo";
+import { cancellationRefund } from "../lib/cancellation-rules";
 import { cardFeeFor, onlinePaymentMode, refundOnline, settleOrder, startCheckout } from "../lib/cashfree-service";
 
 /**
@@ -218,7 +219,8 @@ router.post("/book/quote", async (req, res) => {
       totalPaise: quote.totalPaise,
       advancePaise: quote.advancePaise,
       balancePaise: quote.balancePaise,
-      advancePercent: settings.advancePercent,
+      advancePercent: quote.advancePercent,
+      peak: quote.peak,
       holdMinutes: settings.holdMinutes,
       onlineBooking: upiDetails() !== null || onlinePaymentMode() !== null,
     });
@@ -635,6 +637,19 @@ router.get("/admin/book-pay", requireAdmin, async (_req, res) => {
     const [settings, rows] = await Promise.all([getBookPaySettings(), listForAdmin()]);
     const online = await gatewayInfoFor(rows.map((row) => row.id)).catch(() => new Map());
     const now = new Date();
+    const plan = await getRatePlan().catch(() => null);
+    // What the cancellation policy would refund if the guest cancelled today,
+    // so the owner's Refund button starts from the policy, not from a guess.
+    const policyRefundFor = (row: (typeof rows)[number], paid: { amountPaise: number; feePaise?: number } | null) => {
+      if (!paid || !row.checkIn || !row.checkOut) return null;
+      const peak = plan ? minimumStay(plan, nightsOf(row.checkIn, row.checkOut)) !== null : false;
+      return cancellationRefund({
+        checkIn: row.checkIn,
+        cancelledAt: now,
+        paidPaise: paid.amountPaise - (paid.feePaise ?? 0),
+        peak,
+      });
+    };
     res.json({
       settings,
       upiReady: upiDetails() !== null,
@@ -642,6 +657,7 @@ router.get("/admin/book-pay", requireAdmin, async (_req, res) => {
       payments: rows.map((row) => ({
         ...row,
         online: online.get(row.id) ?? null,
+        policyRefund: policyRefundFor(row, online.get(row.id) ?? null),
         overdue: row.status === "submitted" && now >= row.holdExpiresAt,
         // For an expired hold the guest was not told about automatically.
         rebookWhatsappUrl:

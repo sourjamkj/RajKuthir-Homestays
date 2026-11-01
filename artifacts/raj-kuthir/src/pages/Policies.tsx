@@ -14,7 +14,7 @@ import { CONFIG, basePath, phoneHref } from '@/lib/site';
 
 export type PolicyKind = 'terms' | 'privacy' | 'cancellation' | 'contact';
 
-const UPDATED = '31 October 2026';
+const UPDATED = '1 November 2026';
 
 const ADDRESS = 'Sobuj, Dopati 148, Potro Bunglow, Bandh Nabagram, Bolpur, West Bengal 731204, India';
 
@@ -50,7 +50,7 @@ const CONTENT: Record<Exclude<PolicyKind, 'contact'>, Section[]> = {
       title: 'Your booking',
       lines: [
         'Prices are shown in Indian rupees on the Rates page and in the booking form before you pay. The price you are quoted when you book is the price you pay.',
-        `A booking is confirmed once the advance (${advance} of the stay) has been received. The balance is paid at check-in.`,
+        `A booking is confirmed once the advance (${advance} of the stay) has been received. The balance is paid at check-in. Peak dates marked on the Rates page are paid in full at booking.`,
         'When you pay online, the payment is processed by Cashfree Payments, a payment gateway regulated by the Reserve Bank of India. We never see or store your card details or UPI PIN.',
         'Paying online by UPI is free. Paying online by card or net banking may carry a convenience fee, a percentage of the advance that covers the bank charges; when it applies, it is shown before you pay, and you can always choose UPI instead. The convenience fee is not refundable.',
         'Dates are held for a short time while you pay. If the payment is not completed in that time, the dates are released.',
@@ -123,21 +123,33 @@ const CONTENT: Record<Exclude<PolicyKind, 'contact'>, Section[]> = {
     {
       title: 'Cancelling a direct booking',
       lines: [
-        '7 days or more before check-in: full refund of the advance.',
-        '3 to 6 days before check-in: 50% of the advance is refunded.',
-        'Less than 3 days before check-in, or not arriving: the advance is not refunded.',
-        'Festival dates (Poush Mela, Basanta Utsav and other peak dates marked on the Rates page): cancellations 15 days or more before check-in get a full refund of the advance; after that the advance is not refunded, as these nights cannot be resold at short notice.',
+        '15 days or more before check-in: the advance is refunded in full, less ₹200 for payment processing.',
+        '7 to 14 days before check-in: 50% of the advance is refunded. Or, if you prefer, the full advance is kept as credit for a stay within 6 months.',
+        'Less than 7 days before check-in, or not arriving: the advance is not refunded.',
+        'If we manage to rebook the nights you cancelled, we refund what we recover, less ₹200.',
+      ],
+    },
+    {
+      title: 'Peak dates',
+      lines: [
+        'Poush Mela, Christmas and New Year, Basanta Utsav and the other peak dates marked on the Rates page are paid in full at booking, as these nights cannot be resold at short notice.',
+        '30 days or more before check-in: 90% of what you paid is refunded.',
+        'Less than 30 days before check-in: no refund. If we rebook the nights, you get credit for another stay.',
       ],
     },
     {
       title: 'Changing your dates',
       lines: [
-        'You can move your booking once, free of charge, if you ask 7 days or more before check-in and the new dates are available. Any difference in price is settled at check-in.',
+        'You can move your booking once, free of charge, if you ask 7 days or more before check-in (15 days or more for peak dates) and the new dates are available. Any difference in price is settled at check-in.',
+        'A second change counts as a cancellation.',
       ],
     },
     {
       title: 'If we have to cancel',
-      lines: ['If we ever cannot host you, you get a full refund of everything you paid us, or new dates if you prefer.'],
+      lines: [
+        'If we ever cannot host you, you get a full refund of everything you paid us, or new dates if you prefer.',
+        'If floods, a strike or a government order stop you from travelling, you get credit for new dates within 12 months, even when the cancellation would otherwise not be refunded.',
+      ],
     },
     {
       title: 'How refunds are paid',
