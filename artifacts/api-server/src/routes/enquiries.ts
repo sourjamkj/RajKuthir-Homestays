@@ -22,7 +22,8 @@ import { findByEnquiryId, holdDeadlinesByEnquiry } from "../lib/book-pay-repo";
 import { quoteForEnquiry, type QuoteResult } from "../lib/enquiry-quote";
 import { holdExpiryOf, holdStateOf } from "../lib/enquiry-hold";
 import { firstConflict } from "../lib/availability";
-import { listPublicBlocks } from "../lib/calendar-repo";
+import { listAllEvents, listPublicBlocks } from "../lib/calendar-repo";
+import { datesTakenFor } from "../lib/enquiry-clash";
 import { getRatePlan, minimumStay, rateForNight, stayNightPrices } from "../lib/rates-repo";
 import {
   buildEnquiryQuoteTemplate,
@@ -211,7 +212,8 @@ router.post("/admin/enquiries", requireAdmin, async (req, res) => {
       requests: text(req.body?.requests, 1000),
     });
 
-    res.status(201).json({ id: created.id });
+    const clash = datesTakenFor(created, await listAllEvents().catch(() => []));
+    res.status(201).json({ id: created.id, datesTaken: clash });
   } catch (error) {
     logger.error({ err: error }, "Could not save hand-entered enquiry");
     res.status(500).json({ error: "Could not save this enquiry. Please try again." });
@@ -244,12 +246,16 @@ router.get("/enquiries", requireAdmin, async (_req, res) => {
   const now = new Date();
   // Book & Pay holds run on their own deadline (minutes, extended on UTR).
   const deadlines = await holdDeadlinesByEnquiry();
+  // Calendar blocks and confirmed bookings, without live holds: an open
+  // enquiry on nights that are already gone says so on its card.
+  const taken = await listAllEvents().catch(() => []);
 
   res.json({
     enquiries: rows.map((row) => ({
       ...row,
       quote: quoteForEnquiry(row, nightlyRate, rules),
       hold: holdStateOf({ ...row, holdExpiresAt: deadlines.get(row.id) ?? null }, now),
+      datesTaken: datesTakenFor(row, taken),
     })),
     /*
       The screen disables the send button and explains itself rather than
