@@ -68,11 +68,11 @@ export function Button({
   );
 }
 
-export function Field({ label, ...props }: TextInputProps & { label: string }) {
+export function Field({ label, style, ...props }: TextInputProps & { label: string }) {
   return (
     <View style={{ marginBottom: space(3) }}>
       <Text style={s.label}>{label}</Text>
-      <TextInput placeholderTextColor={color.muted} style={s.input} {...props} />
+      <TextInput placeholderTextColor={color.muted} style={[s.input, style]} {...props} />
     </View>
   );
 }

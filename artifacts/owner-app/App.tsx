@@ -9,6 +9,7 @@ import { currentToken, forgetToken, loadToken, signOut, unlock } from './src/aut
 import { destinationFor, registerForPush, setupChannels, unregisterPush } from './src/push';
 import Alerts from './src/screens/Alerts';
 import Calendar from './src/screens/Calendar';
+import Caretaker from './src/screens/Caretaker';
 import Enquiries from './src/screens/Enquiries';
 import Messages from './src/screens/Messages';
 import Settings from './src/screens/Settings';
@@ -17,11 +18,12 @@ import Today from './src/screens/Today';
 import { color, space } from './src/theme';
 import { Body, Button } from './src/ui';
 
-type Tab = 'today' | 'enquiries' | 'calendar' | 'settings';
+type Tab = 'today' | 'enquiries' | 'calendar' | 'caretaker' | 'settings';
 const TABS: Array<{ key: Tab; label: string }> = [
   { key: 'today', label: 'Today' },
   { key: 'enquiries', label: 'Enquiries' },
   { key: 'calendar', label: 'Calendar' },
+  { key: 'caretaker', label: 'Caretaker' },
   { key: 'settings', label: 'Settings' },
 ];
 
@@ -215,6 +217,7 @@ export default function App() {
                   {tab === 'today' && <Today />}
                   {tab === 'enquiries' && <Enquiries />}
                   {tab === 'calendar' && <Calendar />}
+                  {tab === 'caretaker' && <Caretaker />}
                   {tab === 'settings' && <Settings onSignOut={doSignOut} />}
                 </View>
               )}
@@ -234,7 +237,7 @@ export default function App() {
                     accessibilityState={{ selected }}
                     style={{ flex: 1, minHeight: 56, alignItems: 'center', justifyContent: 'center' }}
                   >
-                    <Text style={{ fontSize: 14, fontWeight: selected ? '700' : '500', color: selected ? color.brand : color.muted }}>{t.label}</Text>
+                    <Text numberOfLines={1} style={{ fontSize: 13, fontWeight: selected ? '700' : '500', color: selected ? color.brand : color.muted }}>{t.label}</Text>
                     {selected && <View style={{ marginTop: 4, height: 3, width: 24, borderRadius: 2, backgroundColor: color.brand }} />}
                   </Pressable>
                 );
