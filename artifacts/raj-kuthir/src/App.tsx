@@ -250,6 +250,20 @@ function Home() {
   const heroRef = useRef<HTMLElement | null>(null);
   const [overHero, setOverHero] = useState(true);
   const [pastHero, setPastHero] = useState(false);
+  // While the booking section is on screen, a phone shows the calendar and the
+  // form and nothing floating over them: the directions / arrival-pack buttons
+  // and the contact bar step aside (the quote bar still appears with dates).
+  const [inBooking, setInBooking] = useState(false);
+  useEffect(() => {
+    const section = document.getElementById('booking');
+    if (!section || typeof IntersectionObserver === 'undefined') return;
+    const observer = new IntersectionObserver(([entry]) => setInBooking(Boolean(entry?.isIntersecting)), {
+      // "On screen" means it fills the middle of the viewport, not a sliver at an edge.
+      rootMargin: '-35% 0px -35% 0px',
+    });
+    observer.observe(section);
+    return () => observer.disconnect();
+  }, []);
   useEffect(() => {
     let frame = 0;
     const measure = () => {
@@ -395,7 +409,13 @@ function Home() {
     );
   }, [publicCalendar.data?.blocks, form.checkIn, form.checkOut]);
 
-  const daysInView = useMemo(() => calendarDays(calendarMonth), [calendarMonth]);
+  // Only the weeks this month needs: a sixth row of next month's greyed days
+  // cost a phone a whole screen-height of nothing.
+  const daysInView = useMemo(() => {
+    const days = calendarDays(calendarMonth);
+    while (days.length > 28 && days.slice(-7).every((d) => d.getMonth() !== calendarMonth.getMonth())) days.splice(-7, 7);
+    return days;
+  }, [calendarMonth]);
   const calendarMonthLabel = new Intl.DateTimeFormat('en-IN', { month: 'long', year: 'numeric' }).format(calendarMonth);
 
   /*
@@ -531,6 +551,16 @@ function Home() {
     has settled — after it, not during, or the browser fights its own animation.
   */
   const enquiryCardRef = useRef<HTMLDivElement | null>(null);
+  // Once the form itself is on screen, the quote bar has done its job and
+  // would only cover the form's own button.
+  const [formInView, setFormInView] = useState(false);
+  useEffect(() => {
+    const card = enquiryCardRef.current;
+    if (!card || typeof IntersectionObserver === 'undefined') return;
+    const observer = new IntersectionObserver(([entry]) => setFormInView(Boolean(entry?.isIntersecting)), { threshold: 0.2 });
+    observer.observe(card);
+    return () => observer.disconnect();
+  }, []);
   const nameFieldRef = useRef<HTMLInputElement | null>(null);
 
   const goToEnquiry = () => {
@@ -959,11 +989,11 @@ function Home() {
                 channel — that sentence is in the section intro above now, read
                 once rather than filling half a column with empty space. */}
             <div id="availability" className="scroll-mt-24 mt-12 grid items-start gap-5 lg:grid-cols-2">
-            <div className="rounded-[1.5rem] border border-border bg-card p-5 md:p-8">
-              <div className="flex flex-col justify-between gap-4 border-b border-border pb-5 sm:flex-row sm:items-center">
+            <div className="rounded-[1.5rem] border border-border bg-card p-3.5 sm:p-5 md:p-8">
+              <div className="flex flex-row items-center justify-between gap-3 border-b border-border pb-4 sm:pb-5">
                 <div>
                   <p className="eyebrow text-accent">Availability</p>
-                  <p className="mt-2 font-journal text-3xl text-primary">{calendarMonthLabel}</p>
+                  <p className="mt-1 font-journal text-2xl text-primary sm:mt-2 sm:text-3xl">{calendarMonthLabel}</p>
                 </div>
                 <div className="flex items-center gap-2">
                   <button type="button" onClick={() => shiftCalendarMonth(-1)} className="grid h-9 w-9 place-items-center rounded-full border border-border text-primary transition-colors hover:border-primary" aria-label="Previous month" data-testid="button-calendar-previous"><CaretLeftIcon /></button>
@@ -978,8 +1008,8 @@ function Home() {
                   and pets that change the number are actually asked for.
                   Picking a number here fills the form in, so choosing the
                   dates and the party is one gesture rather than two. */}
-              <div className="mt-5 border-b border-border pb-5">
-                <div className="flex flex-wrap items-center gap-3">
+              <div className="mt-4 border-b border-border pb-4 sm:mt-5 sm:pb-5">
+                <div className="flex flex-wrap items-center gap-2 sm:gap-3">
                   <span className="text-[13px] font-medium text-muted-foreground">Prices for</span>
                   <div className="flex flex-wrap gap-1.5" role="group" aria-label="Number of guests">
                     {[1, 2, 3, 4, 5].map((count) => (
@@ -1002,15 +1032,25 @@ function Home() {
                   <span className="text-xs text-muted-foreground">{calendarGuests === 1 ? 'guest' : 'guests'}</span>
                 </div>
 
-                <p className="mt-3 text-xs leading-5 text-muted-foreground" data-testid="text-large-party-note">
+                <p className="mt-3 hidden text-xs leading-5 text-muted-foreground sm:block" data-testid="text-large-party-note">
                   Staying with more than {ratePlan.data?.maxGuests ?? 5}? Put the
                   numbers into the booking form below and the estimate there works
                   out the whole party, children and pets included.
                 </p>
               </div>
 
-              <div className="mt-6 grid select-none grid-cols-7 gap-1.5 text-center">
-                {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((day) => <p key={day} className="pb-2 text-[13px] text-muted-foreground">{day}</p>)}
+              {/* Said where the eye is, before the first tap. After it, the
+                  strip under the grid takes over. */}
+              <p className="mt-4 text-[13px] font-medium text-primary sm:mt-5" data-testid="text-calendar-hint">
+                {!shownStay.checkIn
+                  ? 'Tap your check-in date, then your check-out date.'
+                  : !shownStay.checkOut
+                    ? 'Now tap your check-out date.'
+                    : 'Your dates are in the booking form. Tap a new date to start again.'}
+              </p>
+
+              <div className="mt-3 grid select-none grid-cols-7 gap-1 text-center sm:gap-1.5">
+                {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((day) => <p key={day} className="pb-1 text-xs text-muted-foreground sm:pb-2 sm:text-[13px]"><span className="sm:hidden">{day.slice(0, 1)}</span><span className="hidden sm:inline">{day}</span></p>)}
                 {daysInView.map((day) => {
                   const key = dateKey(day);
                   const dayEvents = busyPeriods.filter((event) => eventTouchesDay(event, key));
@@ -1081,14 +1121,16 @@ function Home() {
                       }}
                       aria-pressed={onEnds}
                       aria-label={`${shortDate(key)}${held ? ', booked' : ''}${isCheckIn ? ', check-in' : ''}${isCheckOut ? ', check-out' : ''}`}
-                      className={`min-h-[76px] rounded-lg border p-2 text-left transition-colors ${tone} ${isToday ? 'ring-2 ring-accent/60 ring-offset-1 ring-offset-card' : ''} ${selectable ? 'cursor-pointer hover:border-primary' : 'cursor-default'} ${onEnds ? 'md:cursor-ew-resize' : ''}`}
+                      className={`min-h-[46px] rounded-lg border p-1 text-left transition-colors sm:min-h-[76px] sm:p-2 ${tone} ${isToday ? 'ring-2 ring-accent/60 ring-offset-1 ring-offset-card' : ''} ${selectable ? 'cursor-pointer hover:border-primary' : 'cursor-default'} ${onEnds ? 'md:cursor-ew-resize' : ''}`}
                       data-testid={`calendar-day-${key}`}
                     >
                       <span className={`block text-xs font-bold ${onEnds ? 'text-primary-foreground' : isToday ? 'text-accent' : 'text-primary'}`}>{day.getDate()}</span>
-                      <span className="mt-2 block space-y-1">
-                        {dayEvents.slice(0, 1).map((event) => <span key={`${event.id}-${key}`} className="block truncate rounded bg-clay px-1.5 py-1 text-xs font-bold leading-none text-primary" title="Booked">Booked</span>)}
-                        {nightPaise !== null && !isOutsideMonth && (
-                          <span className={`block font-mono-ui text-xs leading-none ${onEnds ? 'text-primary-foreground/80' : held ? 'text-muted-foreground/50 line-through' : 'text-muted-foreground'}`} data-testid={`calendar-price-${key}`}>
+                      <span className="mt-1 block space-y-1 sm:mt-2">
+                        {dayEvents.slice(0, 1).map((event) => <span key={`${event.id}-${key}`} className="hidden truncate rounded bg-clay px-1.5 py-1 text-xs font-bold leading-none text-primary sm:block" title="Booked">Booked</span>)}
+                        {/* On a phone a booked night is the clay colour alone: "B…" helped nobody. */}
+                        {held && !onEnds && <span className="block h-1.5 w-full rounded-full bg-clay sm:hidden" aria-hidden="true" />}
+                        {nightPaise !== null && !isOutsideMonth && !(held && !onEnds) && (
+                          <span className={`block font-mono-ui text-[10px] leading-none tracking-tight sm:text-xs sm:tracking-normal ${onEnds ? 'text-primary-foreground/80' : 'text-muted-foreground'}`} data-testid={`calendar-price-${key}`}>
                             {formatRupeesCompact(nightPaise)}
                           </span>
                         )}
@@ -1158,7 +1200,8 @@ function Home() {
                         className="flex items-center gap-2 rounded-full bg-primary px-6 py-3 text-sm font-semibold text-primary-foreground transition-transform hover:-translate-y-0.5 active:scale-95"
                         data-testid="button-calendar-reserve"
                       >
-                        Reserve                      </button>
+                        Book these dates
+                      </button>
                     </div>
                   )}
                 </div>
@@ -1180,7 +1223,7 @@ function Home() {
             price scrolls off the moment the guest looks at anything else. This
             bar follows them down until they act on it, and is never shown on desktop, where the strip beside
             the calendar is already on screen next to the form. */}
-        {quotedStay && (
+        {quotedStay && !formInView && (
           <div
             className="fixed inset-x-0 bottom-0 z-40 flex items-center justify-between gap-4 border-t border-border bg-background px-5 py-3 shadow-[0_-6px_24px_rgba(0,0,0,.08)] lg:hidden"
             data-testid="bar-mobile-reserve"
@@ -1198,7 +1241,8 @@ function Home() {
               className="flex shrink-0 items-center gap-2 rounded-full bg-primary px-6 py-3 text-sm font-semibold text-primary-foreground active:scale-95"
               data-testid="button-mobile-reserve"
             >
-              Reserve            </button>
+              Book these dates
+            </button>
           </div>
         )}
 
@@ -1454,7 +1498,7 @@ function Home() {
           scrolled away, so they never sit on top of its buttons, and then
           sit clear of the booking bar below them; on a laptop they take the
           bottom-right corner, where nothing else lives. */}
-      <div className={`fixed bottom-[5.4rem] right-3 z-40 flex-col items-end gap-2 md:bottom-6 md:right-6 md:flex ${pastHero ? 'flex' : 'hidden'}`}>
+      <div className={`fixed bottom-[5.4rem] right-3 z-40 flex-col items-end gap-2 md:bottom-6 md:right-6 ${inBooking ? 'hidden' : pastHero ? 'flex' : 'hidden md:flex'}`}>
         <a
           href={CONFIG.mapsUrl}
           target="_blank"
@@ -1483,7 +1527,7 @@ function Home() {
           scrolling beneath it. It appears once the hero photo has gone (the
           hero has its own buttons) and steps aside while the quote bar above
           is showing. */}
-      {pastHero && !quotedStay && (
+      {pastHero && !quotedStay && !inBooking && (
         <div className="glass-bar fixed inset-x-3 bottom-3 z-40 flex items-center gap-2 rounded-full p-2 md:hidden" data-testid="mobile-contact-bar">
           <a href={phoneHref(CONFIG.hostPhone)} className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-secondary text-primary" aria-label={`Call the host on ${CONFIG.hostPhone}`} data-testid="button-sticky-call">
             <PhoneIcon size="md" />
