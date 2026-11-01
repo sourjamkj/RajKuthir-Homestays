@@ -49,6 +49,8 @@ import { bookingSummaryMessages, confirmedMessage, expiredMessage, ownerUtrAlert
 import { ownerEmail, sendEmail, sendWhatsappTemplate } from "../lib/book-pay-notify";
 import { ownerWhatsappNumberIfSet } from "../lib/owner-settings-state";
 import { buildBookingSummary, buildConfirmation, sendConfirmation } from "../lib/invoices";
+import { notifyOwner } from "../lib/owner-alerts";
+import { holdAlert, utrAlert } from "../lib/owner-alert-rules";
 
 /**
  * Self-serve Book & Pay by UPI, on top of the existing enquiry pipeline:
@@ -341,7 +343,20 @@ async function sendSummaryEmails(paymentRequestId: string): Promise<void> {
       ? [{ filename: built.invoice.filename, content: built.invoice.pdf, contentType: "application/pdf" }]
       : undefined;
     const guestEmailed = await sendEmail(found.enquiry.email, message.guest.subject, message.guest.text, attachment);
-    await sendEmail(await ownerEmail(), message.owner.subject, message.owner.text, attachment);
+    // The owner: the app's alert list, a push, and the email as before (Settings decide).
+    await notifyOwner({
+      event: "booking_hold",
+      ...holdAlert({
+        guestName: found.enquiry.name,
+        checkIn: found.enquiry.checkIn,
+        checkOut: found.enquiry.checkOut,
+        advancePaise: found.request.advancePaise,
+        payBy: found.request.holdExpiresAt,
+      }),
+      href: "/admin/guests#payments",
+      dedupeKey: `hold:${paymentRequestId}`,
+      email: { subject: message.owner.subject, text: message.owner.text, attachments: attachment },
+    });
     await logPaymentEvent(paymentRequestId, "summary_sent", guestEmailed ? "Booking summary PDF emailed to the guest" : "Booking summary on the /pay page (no guest email sent)");
   } catch (error) {
     logger.warn({ err: error, paymentRequestId }, "Could not send the booking summary emails");
@@ -531,7 +546,20 @@ router.post("/book/pay/utr", async (req, res) => {
       adminUrl: `${SITE_ORIGIN}/admin/guests#payments`,
     });
     void (async () => {
-      await sendEmail(await ownerEmail(), alert.subject, alert.text);
+      await notifyOwner({
+        event: "payment_submitted",
+        ...utrAlert({
+          guestName: found.enquiry.name,
+          checkIn: found.enquiry.checkIn,
+          checkOut: found.enquiry.checkOut,
+          advancePaise: result.request.advancePaise,
+          utr,
+          hasScreenshot: Boolean(screenshot),
+        }),
+        href: `/admin/guests#payment-${result.request.id}`,
+        dedupeKey: `utr:${result.request.id}:${utr}`,
+        email: { subject: alert.subject, text: alert.text },
+      });
       await sendWhatsappTemplate(ownerWhatsappNumberIfSet(), "WHATSAPP_OWNER_ALERT_TEMPLATE", [
         found.enquiry.name,
         `₹${result.request.advancePaise / 100}`,

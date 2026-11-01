@@ -102,6 +102,7 @@ export const OWNER_EVENTS = [
   'message_failed',
   'documents_uploaded',
   'invoice_check_failed',
+  'review_received',
 ] as const;
 export type OwnerEvent = (typeof OWNER_EVENTS)[number];
 export type SettingSource = 'console' | 'railway' | 'default';
@@ -122,7 +123,14 @@ export type SettingsView = {
     readiness: { ready: boolean; missing: string[]; warnings: string[] };
     requireApproval: boolean;
   };
-  alerts: { push: Record<OwnerEvent, boolean>; email: Record<OwnerEvent, boolean> };
+  alerts: {
+    push: Record<OwnerEvent, boolean>;
+    email: Record<OwnerEvent, boolean>;
+    /** IST "HH:MM"; alerts arrive without sound inside it. Null: always with sound. */
+    quietHours: { start: string; end: string } | null;
+    /** Labels and descriptions for the Settings list, in display order. */
+    events: { event: OwnerEvent; label: string; description: string }[];
+  };
   railway: { name: string; group: string; set: boolean; value: string | null }[];
   sensitiveFields: readonly string[];
 };
@@ -133,6 +141,7 @@ export type SettingsPatch = Partial<{
   caretakerWhatsapp: string | null;
   caretakerName: string | null;
   ownerSignature: string | null;
+  quietHours: { start: string; end: string } | null;
   whatsappAutoreply: boolean | null;
   whatsappMode: WhatsappMode;
   pushEvents: Partial<Record<OwnerEvent, boolean>>;
@@ -240,3 +249,24 @@ export type CalendarMonth = {
 /** month is YYYY-MM; omit it for this month. */
 export const getCalendarMonth = (month?: string) =>
   adminFetch<CalendarMonth>(`/api/admin/calendar/month${month ? `?month=${encodeURIComponent(month)}` : ''}`);
+
+/* --------------------------------------------------------------- alerts */
+
+export type OwnerAlert = {
+  id: string;
+  event: OwnerEvent | 'test' | string;
+  title: string;
+  body: string;
+  /** Console path to open: map it to an app screen (e.g. /admin/guests#payments → Payments). */
+  href: string;
+  createdAt: string;
+  read: boolean;
+  pushed: boolean;
+  emailed: boolean;
+};
+
+export const getAlerts = (limit = 50) => adminFetch<{ alerts: OwnerAlert[]; unread: number }>(`/api/admin/alerts?limit=${limit}`);
+/** Omit ids to mark everything read. */
+export const markAlertsRead = (ids?: string[]) => adminFetch<void>('/api/admin/alerts/read', json('POST', ids ? { ids } : {}));
+/** From the app: a test push to this phone. From the web: to every signed-in phone. */
+export const sendTestAlert = () => adminFetch<{ sent: number; quiet: boolean; signedOutPhones: number }>('/api/admin/alerts/test', json('POST'));
