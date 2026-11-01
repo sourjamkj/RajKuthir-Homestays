@@ -1,0 +1,169 @@
+/**
+ * The owner console's API client, shared by the web console and the phone app.
+ *
+ * Transport only differs in two ways, both set once at start-up:
+ *  - the web console calls relative /api paths with its HttpOnly cookie
+ *    (the default: nothing to configure);
+ *  - the phone app calls https://rajkuthirhomestays.casa with
+ *    `Authorization: Bearer <token>`, the token read from secure storage.
+ *
+ * Plain async functions, no React: each client wraps them in its own hooks.
+ */
+
+export class AdminApiError extends Error {
+  readonly status: number;
+  /** True when the server wants the password (web) or fingerprint (app) again. */
+  readonly needsConfirmation: boolean;
+
+  constructor(message: string, status: number, needsConfirmation = false) {
+    super(message);
+    this.name = 'AdminApiError';
+    this.status = status;
+    this.needsConfirmation = needsConfirmation;
+  }
+}
+
+type TokenGetter = () => Promise<string | null> | string | null;
+
+let baseUrl = '';
+let getToken: TokenGetter | null = null;
+let onUnauthorized: (() => void) | null = null;
+
+/** Phone app: `configureAdminClient({ baseUrl: 'https://…', getToken })`. The web console never calls this. */
+export function configureAdminClient(options: { baseUrl?: string; getToken?: TokenGetter | null; onUnauthorized?: (() => void) | null }): void {
+  if (options.baseUrl !== undefined) baseUrl = options.baseUrl.replace(/\/+$/, '');
+  if (options.getToken !== undefined) getToken = options.getToken;
+  if (options.onUnauthorized !== undefined) onUnauthorized = options.onUnauthorized;
+}
+
+export async function adminFetch<T>(path: string, init?: RequestInit): Promise<T> {
+  const headers = new Headers(init?.headers);
+  if (!headers.has('Content-Type') && !(init?.body instanceof FormData)) headers.set('Content-Type', 'application/json');
+  const token = getToken ? await getToken() : null;
+  if (token) headers.set('Authorization', `Bearer ${token}`);
+
+  const response = await fetch(`${baseUrl}${path}`, {
+    credentials: token ? 'omit' : 'include',
+    ...init,
+    headers,
+  });
+
+  if (!response.ok) {
+    const body = (await response.json().catch(() => ({}))) as { error?: unknown; needsConfirmation?: unknown };
+    if (response.status === 401) onUnauthorized?.();
+    throw new AdminApiError(
+      typeof body.error === 'string' ? body.error : `Request failed (${response.status})`,
+      response.status,
+      body.needsConfirmation === true,
+    );
+  }
+
+  return response.status === 204 ? (undefined as T) : ((await response.json()) as T);
+}
+
+const json = (method: string, body?: unknown): RequestInit => ({ method, body: body === undefined ? undefined : JSON.stringify(body) });
+
+/* ------------------------------------------------------------- session */
+
+export type AdminSession = { signedIn: boolean; configured: boolean; via: 'web' | 'app' | null };
+export const getSession = () => adminFetch<AdminSession>('/api/admin/me');
+
+/* -------------------------------------------------------- phone sign-in */
+
+export type OwnerDevice = {
+  id: string;
+  name: string;
+  platform: string;
+  createdAt: string;
+  lastSeenAt: string;
+  signedOut: boolean;
+  pushEnabled: boolean;
+  thisDevice: boolean;
+};
+
+export const appLogin = (input: { password: string; deviceName: string; platform: 'android' | 'ios' }) =>
+  adminFetch<{ token: string; device: OwnerDevice }>('/api/admin/app/login', json('POST', input));
+export const appLogout = () => adminFetch<void>('/api/admin/app/logout', json('POST'));
+export const setPushToken = (pushToken: string | null) => adminFetch<void>('/api/admin/app/push-token', json('PUT', { pushToken }));
+export const listDevices = () => adminFetch<{ devices: OwnerDevice[] }>('/api/admin/devices');
+export const revokeDevice = (id: string, confirmPassword?: string) =>
+  adminFetch<void>(`/api/admin/devices/${encodeURIComponent(id)}`, json('DELETE', confirmPassword ? { confirmPassword } : {}));
+
+/* ------------------------------------------------------------- settings */
+
+export const OWNER_EVENTS = [
+  'booking_hold',
+  'payment_submitted',
+  'enquiry',
+  'ota_booking',
+  'ota_cancellation',
+  'checkin_tomorrow',
+  'message_draft',
+  'message_failed',
+  'documents_uploaded',
+  'invoice_check_failed',
+] as const;
+export type OwnerEvent = (typeof OWNER_EVENTS)[number];
+export type SettingSource = 'console' | 'railway' | 'default';
+export type Resolved<T> = { value: T; source: SettingSource };
+export type WhatsappMode = 'manual' | 'api';
+
+export type SettingsView = {
+  contacts: {
+    alertEmail: Resolved<string | null>;
+    ownerWhatsapp: Resolved<string>;
+    caretakerWhatsapp: Resolved<string>;
+  };
+  whatsapp: {
+    mode: Resolved<WhatsappMode>;
+    autoreply: Resolved<boolean>;
+    readiness: { ready: boolean; missing: string[]; warnings: string[] };
+    requireApproval: boolean;
+  };
+  alerts: { push: Record<OwnerEvent, boolean>; email: Record<OwnerEvent, boolean> };
+  railway: { name: string; group: string; set: boolean; value: string | null }[];
+  sensitiveFields: readonly string[];
+};
+
+export type SettingsPatch = Partial<{
+  alertEmail: string | null;
+  ownerWhatsapp: string | null;
+  caretakerWhatsapp: string | null;
+  whatsappAutoreply: boolean | null;
+  whatsappMode: WhatsappMode;
+  pushEvents: Partial<Record<OwnerEvent, boolean>>;
+  emailEvents: Partial<Record<OwnerEvent, boolean>>;
+}> & { confirmPassword?: string };
+
+export const getSettings = () => adminFetch<SettingsView>('/api/admin/settings');
+export const patchSettings = (patch: SettingsPatch) =>
+  adminFetch<{ changed: string[]; settings: SettingsView }>('/api/admin/settings', json('PATCH', patch));
+
+export type AuditEntry = { at: string; via: 'web' | 'app'; action: string; detail: Record<string, unknown> };
+export const getAudit = () => adminFetch<{ entries: AuditEntry[] }>('/api/admin/audit');
+
+/* --------------------------------------------------- WhatsApp messages */
+
+export type OutboxMessage = {
+  id: string;
+  bookingId: string | null;
+  kind: 'booking_confirmed' | 'checkin_reminder' | 'checkout_today' | 'review_request';
+  status: 'draft' | 'pending' | 'sent' | 'failed' | 'cancelled';
+  toPhone: string;
+  preview: string;
+  sendAfter: string;
+  error: string | null;
+  providerMessageId: string | null;
+  sentAt: string | null;
+};
+
+export const getOutbox = () =>
+  adminFetch<{ configured: boolean; enabled: boolean; mode: WhatsappMode; messages: OutboxMessage[] }>('/api/notifications');
+export const approveMessage = (id: string) => adminFetch<OutboxMessage>(`/api/notifications/${id}/approve`, json('POST'));
+export const cancelMessage = (id: string) => adminFetch<OutboxMessage>(`/api/notifications/${id}/cancel`, json('POST'));
+export const markMessageSentManually = (id: string) => adminFetch<OutboxMessage>(`/api/notifications/${id}/sent-manually`, json('POST'));
+
+/** A wa.me link that opens the owner's own WhatsApp on the guest's chat with the text filled in. */
+export function manualWhatsappLink(toPhone: string, text: string): string {
+  return `https://wa.me/${toPhone.replace(/\D/g, '')}?text=${encodeURIComponent(text)}`;
+}

@@ -1,9 +1,15 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { AdminApiError, adminFetch } from '@workspace/admin-client';
+
+// The transport (fetch, errors) is shared with the phone app; see
+// lib/admin-client. Re-exported so every console page keeps its import.
+export { AdminApiError, adminFetch };
 
 /**
  * Client for the owner console. Auth is a signed HttpOnly cookie set by
  * POST /api/admin/login, so there is no token to hold in JavaScript — the
- * browser attaches it to same-origin requests automatically.
+ * browser attaches it to same-origin requests automatically. (The phone app
+ * uses the same @workspace/admin-client with a bearer token instead.)
  */
 
 export const ADMIN_SESSION_KEY = ['/api/admin/me'];
@@ -42,16 +48,6 @@ export type FeedInfoResponse = {
   makeMyTrip: string;
 };
 
-export class AdminApiError extends Error {
-  readonly status: number;
-
-  constructor(message: string, status: number) {
-    super(message);
-    this.name = 'AdminApiError';
-    this.status = status;
-  }
-}
-
 /**
  * Whether the last failure was an expired session.
  *
@@ -71,29 +67,6 @@ export function consumeSessionExpired(): boolean {
   const was = sessionExpired;
   sessionExpired = false;
   return was;
-}
-
-export async function adminFetch<T>(
-  path: string,
-  init?: RequestInit,
-): Promise<T> {
-  const response = await fetch(path, {
-    credentials: 'include',
-    headers: { 'Content-Type': 'application/json' },
-    ...init,
-  });
-
-  if (!response.ok) {
-    const body = await response.json().catch(() => ({}) as { error?: string });
-    throw new AdminApiError(
-      typeof body.error === 'string'
-        ? body.error
-        : `Request failed (${response.status})`,
-      response.status,
-    );
-  }
-
-  return response.status === 204 ? (undefined as T) : response.json();
 }
 
 export function useAdminSession() {

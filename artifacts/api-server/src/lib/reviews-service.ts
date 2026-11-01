@@ -10,6 +10,7 @@ import {
 } from "@workspace/db";
 
 import { logger } from "./logger";
+import { ownerWhatsappNumber } from "./owner-settings-state";
 import { ownerEmail, sendEmail } from "./book-pay-notify";
 import { draftReply, isDrafterConfigured } from "./review-drafter";
 import {
@@ -129,7 +130,7 @@ async function alertOwner(review: GoogleReview): Promise<void> {
   });
 
   let sent = false;
-  const owner = toWhatsappNumber(process.env["OWNER_WHATSAPP_NUMBER"] ?? "+91 62903 99165");
+  const owner = toWhatsappNumber(ownerWhatsappNumber());
   if (owner && isWhatsappEnabled()) {
     try {
       const { rows } = await pool.query<{ last_inbound_at: Date | null }>(

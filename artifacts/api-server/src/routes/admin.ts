@@ -4,7 +4,7 @@ import {
   clearAttempts,
   clearSessionCookie,
   isAdminAuthConfigured,
-  isSignedIn,
+  adminSession,
   recordFailedAttempt,
   setSessionCookie,
   tooManyAttempts,
@@ -17,11 +17,13 @@ function clientKey(req: { ip?: string }): string {
   return req.ip ?? "unknown";
 }
 
-router.get("/admin/me", (req, res) => {
+router.get("/admin/me", async (req, res) => {
   res.setHeader("Cache-Control", "no-store");
+  const session = await adminSession(req);
   res.json({
-    signedIn: isSignedIn(req),
+    signedIn: Boolean(session),
     configured: isAdminAuthConfigured(),
+    via: session?.via ?? null,
   });
 });
 

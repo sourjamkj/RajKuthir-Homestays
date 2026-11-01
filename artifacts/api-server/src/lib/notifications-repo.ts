@@ -1,4 +1,4 @@
-import { and, asc, eq, lte, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, lte, sql } from "drizzle-orm";
 import {
   db,
   bookings,
@@ -155,5 +155,20 @@ export async function setMessageStatus(
     .where(eq(whatsappMessages.id, id))
     .returning();
 
+  return updated ?? null;
+}
+
+/**
+ * The owner sent this one from their own WhatsApp (manual mode). Recorded as
+ * sent, with "manual" in place of a provider id, so the history reads the
+ * same whichever way a message went. Only a message that has not gone yet
+ * (draft, pending or failed) can be marked; anything else returns null.
+ */
+export async function markSentManually(id: string, via: "web" | "app"): Promise<WhatsappMessage | null> {
+  const [updated] = await db
+    .update(whatsappMessages)
+    .set({ status: "sent", providerMessageId: `manual:${via}`, sentAt: new Date(), error: null, updatedAt: new Date() })
+    .where(and(eq(whatsappMessages.id, id), inArray(whatsappMessages.status, ["draft", "pending", "failed"])))
+    .returning();
   return updated ?? null;
 }

@@ -10,7 +10,7 @@ import { upiDetails } from "./whatsapp-templates";
 import { documentsForRefs, type OtaDocumentMeta } from "./ota-documents";
 import { createHash, randomBytes } from "node:crypto";
 import { SITE_ORIGIN } from "./seo";
-import { isWhatsappEnabled, sendTemplate, toWhatsappNumber, uploadMedia } from "./whatsapp-client";
+import { sendTemplate, toWhatsappNumber, uploadMedia } from "./whatsapp-client";
 import {
   AUTO_EMAIL_SOURCES,
   SEND_WINDOW_DAYS,
@@ -27,6 +27,7 @@ import {
   nextSequence,
   type InvoiceContent,
 } from "./invoice-rules";
+import { guestApiSendingOn } from "./whatsapp-mode";
 
 /**
  * Guest invoices: issued once per booking with a number that never changes,
@@ -233,7 +234,7 @@ export async function emailInvoice(
  * name, invoice number).
  */
 export function invoiceWhatsappReady(): boolean {
-  return isWhatsappEnabled() && Boolean(process.env["WHATSAPP_INVOICE_TEMPLATE"]?.trim());
+  return guestApiSendingOn() && Boolean(process.env["WHATSAPP_INVOICE_TEMPLATE"]?.trim());
 }
 
 /** Sends the invoice PDF on WhatsApp through the Cloud API. */
@@ -290,7 +291,7 @@ export async function sendConfirmation(
 
     const template = process.env["WHATSAPP_CONFIRMATION_TEMPLATE"]?.trim();
     const to = toWhatsappNumber(content.billedTo.phone);
-    if (isWhatsappEnabled() && template && to) {
+    if (guestApiSendingOn() && template && to) {
       const media = await uploadMedia({ bytes: built.invoice.pdf, mimeType: "application/pdf", filename: built.invoice.filename });
       if (media.ok) {
         const sent = await sendTemplate({

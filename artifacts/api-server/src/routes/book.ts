@@ -46,6 +46,7 @@ import {
 } from "../lib/book-pay-repo";
 import { confirmedMessage, expiredMessage, ownerUtrAlert } from "../lib/book-pay-messages";
 import { ownerEmail, sendEmail, sendWhatsappTemplate } from "../lib/book-pay-notify";
+import { ownerWhatsappNumberIfSet } from "../lib/owner-settings-state";
 import { buildConfirmation, sendConfirmation } from "../lib/invoices";
 
 /**
@@ -448,7 +449,7 @@ router.post("/book/pay/utr", async (req, res) => {
     });
     void (async () => {
       await sendEmail(await ownerEmail(), alert.subject, alert.text);
-      await sendWhatsappTemplate(process.env["OWNER_WHATSAPP_NUMBER"], "WHATSAPP_OWNER_ALERT_TEMPLATE", [
+      await sendWhatsappTemplate(ownerWhatsappNumberIfSet(), "WHATSAPP_OWNER_ALERT_TEMPLATE", [
         found.enquiry.name,
         `₹${result.request.advancePaise / 100}`,
         utr,

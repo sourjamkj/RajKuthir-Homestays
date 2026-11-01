@@ -28,7 +28,7 @@ import {
   saveReplyDraft,
   skipReview,
 } from "../lib/reviews-service";
-import { isWhatsappEnabled } from "../lib/whatsapp-client";
+import { guestApiSendingOn } from "../lib/whatsapp-mode";
 
 /**
  * /admin "Reviews": the review-request queue (Part A) and replies to Google
@@ -54,7 +54,7 @@ router.get("/admin/reviews", requireAdmin, async (_req, res) => {
   const [reviews, requests, stays] = await Promise.all([listReviews(), listReviewRequests(), recentStays()]);
   res.json({
     ...reviewSettings(),
-    whatsappSending: isWhatsappEnabled(),
+    whatsappSending: guestApiSendingOn(),
     newTemplatesLive: reviewTemplatesLive(),
     listingUrl: LISTING_URL,
     leaveReviewUrl: LEAVE_REVIEW_URL,
@@ -97,7 +97,7 @@ router.post("/admin/review-requests/:id/approve", requireAdmin, async (req, res)
     res.status(result.status).json({ error: result.error });
     return;
   }
-  res.json({ ok: true, sendsAutomatically: isWhatsappEnabled() });
+  res.json({ ok: true, sendsAutomatically: guestApiSendingOn() });
 });
 
 router.post("/admin/review-requests/:id/sent-manually", requireAdmin, async (req, res) => {
