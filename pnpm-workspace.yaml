@@ -29,6 +29,8 @@ minimumReleaseAge: 1440
 
 packages:
   - artifacts/*
+  # The Android owner app is an Expo project with its own npm install.
+  - '!artifacts/owner-app'
   - lib/*
   - lib/integrations/*
   - scripts
