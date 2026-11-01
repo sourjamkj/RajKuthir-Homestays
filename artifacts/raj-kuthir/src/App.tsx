@@ -43,6 +43,7 @@ import CafeSoi from '@/pages/CafeSoi';
 import Rates from '@/pages/Rates';
 import Welcome from '@/pages/Welcome';
 import AdminGuestInfo from '@/pages/AdminGuestInfo';
+import AdminCaretakerConsole from '@/pages/AdminCaretakerConsole';
 import PreArrival from '@/pages/PreArrival';
 import Pay from '@/pages/Pay';
 import GuestInvoice from '@/pages/GuestInvoice';
@@ -1740,6 +1741,7 @@ function Router() {
         <Route path="/admin/guests" component={AdminGuests} />
         <Route path="/admin/reviews" component={AdminReviews} />
         <Route path="/admin/guest-info" component={AdminGuestInfo} />
+        <Route path="/admin/caretaker" component={AdminCaretakerConsole} />
         {/* Legacy sign-in path, kept so existing bookmarks still land somewhere useful. */}
         <Route path="/sign-in/*?" component={AdminLogin} />
         <Route component={NotFound} />
