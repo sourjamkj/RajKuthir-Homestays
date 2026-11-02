@@ -201,3 +201,25 @@ test("invoice says how the guest paid, never naming the channel as seller", asyn
   assert.match(invoiceProblem({ ...base, source: "bookingCom" })!, /before the channel's commission/);
   assert.match(invoiceProblem({ ...base, source: "direct" })!, /Add the total/);
 });
+
+test("a Booking.com stay shows the platform's GST as its own line, and is paid", async () => {
+  const { invoiceContent, platformGstSplit, PLATFORM_GST_NOTE } = await import("./invoice-rules.ts");
+  // The reservation: 2 nights × ₹5,050 = ₹10,100 + GST ₹505 = ₹10,605.
+  assert.deepEqual(platformGstSplit(1_060_500, 2), { basePaise: 1_010_000, gstPaise: 50_500, ratePercent: 5 });
+  // Above ₹7,500 a night it is 18%.
+  assert.deepEqual(platformGstSplit(1_180_000, 1), { basePaise: 1_000_000, gstPaise: 180_000, ratePercent: 18 });
+  const booking = { id: "b", reference: null, source: "bookingCom", status: "confirmed", guestName: "Sanjeev Ramachandran", guestPhone: null, checkIn: "2026-12-26", checkOut: "2026-12-28", guests: 3, pets: 0, grossPaise: 1_060_500, receivedPaise: 867_696 };
+  const c = invoiceContent({ booking, number: "RK/2026-27/0008", issuedOn: "2026-12-28", email: null });
+  assert.equal(c.totalPaise, 1_060_500);
+  assert.deepEqual(c.lines.map((l) => l.amountPaise), [1_010_000, 50_500]);
+  assert.match(c.lines[1]!.description, /GST @ 5%/);
+  assert.equal(c.paidPaise, 1_060_500, "the guest paid the channel in full; the payout is not what they paid");
+  assert.equal(c.balancePaise, 0);
+  assert.equal(c.gstNote, PLATFORM_GST_NOTE);
+  assert.doesNotMatch(JSON.stringify(c), /booking\.com/i);
+  // A direct stay is unchanged: one line, the usual note.
+  const direct = invoiceContent({ booking: { ...booking, source: "direct", receivedPaise: 500_000 }, number: "X", issuedOn: "2026-12-28", email: null });
+  assert.equal(direct.lines.length, 1);
+  assert.equal(direct.paidPaise, 500_000);
+  assert.equal(direct.gstNote, undefined);
+});

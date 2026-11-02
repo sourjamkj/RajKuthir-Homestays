@@ -171,7 +171,10 @@ export async function renderInvoicePdf(
   page.drawText(pdfSafe(confirmation ? "GUEST" : "BILLED TO"), { x: left, y, size: 8, font: bold, color: MUTED });
   page.drawText(pdfSafe("STAY"), { x: 320, y, size: 8, font: bold, color: MUTED });
   y -= 16;
-  const billed = [invoice.billedTo.name, invoice.billedTo.phone, invoice.billedTo.email].filter(Boolean) as string[];
+  // A channel's relay address (…@guest.booking.com) is not the guest's own, and
+  // would print the channel's name on our invoice: leave it off.
+  const shownEmail = invoice.billedTo.email && !/@guest\.booking\.com$/i.test(invoice.billedTo.email) ? invoice.billedTo.email : null;
+  const billed = [invoice.billedTo.name, invoice.billedTo.phone, shownEmail].filter(Boolean) as string[];
   const stay = [
     `Check-in: ${prettyDate(invoice.stay.checkIn)}, from 12 noon`,
     `Check-out: ${prettyDate(invoice.stay.checkOut)}, by 11 am`,
@@ -295,13 +298,16 @@ export async function renderInvoicePdf(
       ]
     : [
         "Thank you for staying with us. We hope to welcome you back to Sobuj Potro.",
-        GST_NOTE,
+        invoice.gstNote ?? GST_NOTE,
         "This is a computer-generated invoice and needs no signature.",
       ];
   let fy = 72;
   for (const line of footer) {
-    page.drawText(pdfSafe(line), { x: left, y: fy, size: 8.5, font: line === footer[0] ? bold : regular, color: line === footer[0] ? GREEN : MUTED });
-    fy -= 12;
+    const font = line === footer[0] ? bold : regular;
+    for (const part of wrap(pdfSafe(line), font, 8.5, right - left)) {
+      page.drawText(part, { x: left, y: fy, size: 8.5, font, color: line === footer[0] ? GREEN : MUTED });
+      fy -= 12;
+    }
   }
 
   return pdf.save();
