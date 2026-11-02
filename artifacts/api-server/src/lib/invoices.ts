@@ -33,6 +33,8 @@ import {
   invoiceWhatsappText,
   istDateOf,
   nextSequence,
+  OTA_SOURCES,
+  paymentMethodLine,
   type InvoiceContent,
 } from "./invoice-rules";
 import { guestApiSendingOn } from "./whatsapp-mode";
@@ -172,7 +174,22 @@ export async function buildInvoice(
     issuedOn: row.issued_on,
     email: (await guestEmailFor(booking.id)) ?? row.email_to,
   });
-  const pdf = await renderInvoicePdf(content);
+  // How the guest paid: Booking.com requires it on the invoice (and the law expects it).
+  const paid = OTA_SOURCES.includes(booking.source) || content.paidPaise <= 0 ? null : await paymentSourceForBooking(booking.id).catch(() => null);
+  const receipt = paymentMethodLine({
+    source: booking.source,
+    paidPaise: content.paidPaise,
+    receipt:
+      paid && (paid.online || paid.utr)
+        ? advanceReceiptLine({
+            online: paid.online
+              ? { method: methodLabel(paid.online.paymentGroup), paidAt: paid.online.paidAt, cfPaymentId: paid.online.cfPaymentId, feePaise: paid.online.feePaise }
+              : null,
+            utr: paid.utr,
+          })
+        : null,
+  });
+  const pdf = await renderInvoicePdf(content, { receipt });
   return { ok: true, invoice: { content, pdf, filename: `Invoice-${row.number.replace(/\//g, "-")}.pdf` } };
 }
 

@@ -15,9 +15,35 @@ export const BUSINESS = {
   website: "rajkuthirhomestays.casa",
 } as const;
 
+/** Bookings that came through a channel (and were paid to the channel by the guest). */
+export const OTA_SOURCES: readonly string[] = ["bookingCom", "airbnb", "makeMyTrip"];
+
+/**
+ * How the guest paid, for the invoice. Booking.com asks for it on every guest
+ * invoice and forbids naming Booking.com as the seller, so a channel booking
+ * says how the money came, never through whom.
+ */
+export function paymentMethodLine(input: {
+  source: string;
+  paidPaise: number;
+  /** Book & Pay: the advance's own receipt line (online method or UTR), when known. */
+  receipt?: string | null;
+}): string | null {
+  if (input.paidPaise <= 0) return "Payment: due at the property.";
+  if (OTA_SOURCES.includes(input.source)) return "Payment method: card, paid online when the stay was booked.";
+  if (input.receipt) return input.receipt;
+  return "Payment method: UPI / bank transfer to the property.";
+}
+
 export const GST_NOTE = "Not registered under GST. No GST has been charged on this invoice.";
 
-/** Own bookings get the automatic email; OTA guests are invoiced by the channel (owner can still download one). */
+/**
+ * Own bookings get the automatic email. OTA guests do not: their contact is
+ * usually a channel alias. But the channels do NOT invoice the guest for us
+ * (Booking.com says so outright: the property is the supplier and issues the
+ * invoice for the full stay), so the owner downloads this one and sends it
+ * when a guest asks. It never names the channel as the seller.
+ */
 export const AUTO_EMAIL_SOURCES = ["direct", "manual"] as const;
 
 /** Check-out is by 11 am; the invoice goes at noon IST that day. */
@@ -111,7 +137,11 @@ export type InvoiceBooking = {
 /** What stops an invoice being made at all. Null when one can be. */
 export function invoiceProblem(booking: InvoiceBooking): string | null {
   if (booking.status === "cancelled") return "The booking is cancelled.";
-  if (!booking.grossPaise || booking.grossPaise <= 0) return "Add the total for the stay first (Edit details → Total).";
+  if (!booking.grossPaise || booking.grossPaise <= 0) {
+    return OTA_SOURCES.includes(booking.source)
+      ? "Add the full amount the guest paid for the stay first, before the channel's commission (Edit details → Total)."
+      : "Add the total for the stay first (Edit details → Total).";
+  }
   if (!booking.guestName?.trim()) return "Add the guest's name first.";
   return null;
 }
@@ -193,7 +223,7 @@ export function autoEmailDecision(input: {
   const { booking, now } = input;
   if (input.alreadyEmailed) return { send: false, reason: "Already sent", kind: "skip" };
   if (!(AUTO_EMAIL_SOURCES as readonly string[]).includes(booking.source)) {
-    return { send: false, reason: "OTA booking — download the invoice and send it through the channel if asked", kind: "skip" };
+    return { send: false, reason: "Channel booking: the channel does not invoice the guest, so download this invoice (full stay amount) and send it if the guest asks", kind: "skip" };
   }
   if (booking.status !== "confirmed") return { send: false, reason: "Booking is not confirmed", kind: "skip" };
 

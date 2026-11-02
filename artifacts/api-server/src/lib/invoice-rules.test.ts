@@ -189,3 +189,15 @@ test("the booking summary renders with a QR for the advance and no paid band", a
   });
   assert.equal(Buffer.from(noDeadline.slice(0, 5)).toString(), "%PDF-");
 });
+
+test("invoice says how the guest paid, never naming the channel as seller", async () => {
+  const { paymentMethodLine, invoiceProblem } = await import("./invoice-rules.ts");
+  assert.equal(paymentMethodLine({ source: "bookingCom", paidPaise: 500000 }), "Payment method: card, paid online when the stay was booked.");
+  assert.doesNotMatch(paymentMethodLine({ source: "bookingCom", paidPaise: 500000 })!, /booking\.com/i);
+  assert.equal(paymentMethodLine({ source: "airbnb", paidPaise: 0 }), "Payment: due at the property.");
+  assert.equal(paymentMethodLine({ source: "direct", paidPaise: 100, receipt: "Advance paid online · UPI" }), "Advance paid online · UPI");
+  assert.match(paymentMethodLine({ source: "direct", paidPaise: 100 })!, /UPI/);
+  const base = { id: "b", reference: null, status: "confirmed", guestName: "A", guestPhone: null, checkIn: "2026-11-03", checkOut: "2026-11-05", guests: 2, pets: 0, grossPaise: null, receivedPaise: null };
+  assert.match(invoiceProblem({ ...base, source: "bookingCom" })!, /before the channel's commission/);
+  assert.match(invoiceProblem({ ...base, source: "direct" })!, /Add the total/);
+});
