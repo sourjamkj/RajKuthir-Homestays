@@ -35,6 +35,29 @@ export function paymentMethodLine(input: {
   return "Payment method: UPI / bank transfer to the property.";
 }
 
+/**
+ * Channels that charge the guest GST on our stays and pay it themselves: an
+ * e-commerce operator is liable for the GST on accommodation it books for a
+ * supplier who is not registered (CGST Act 2017, s.9(5)). Booking.com shows
+ * it on the reservation ("Goods & services tax"). Its total includes it.
+ */
+export const PLATFORM_GST_SOURCES: readonly string[] = ["bookingCom"];
+
+/** Accommodation up to ₹7,500 a night is 5%; above it 18%. */
+export const GST_LOW_RATE_LIMIT_PAISE = 750_000;
+
+/** Splits a channel total that includes GST into the stay and the GST, in whole rupees. */
+export function platformGstSplit(totalPaise: number, nights: number): { basePaise: number; gstPaise: number; ratePercent: 5 | 18 } {
+  const rupee = (p: number) => Math.round(p / 100) * 100;
+  const low = rupee(totalPaise / 1.05);
+  const ratePercent = low / Math.max(1, nights) <= GST_LOW_RATE_LIMIT_PAISE ? 5 : 18;
+  const basePaise = ratePercent === 5 ? low : rupee(totalPaise / 1.18);
+  return { basePaise, gstPaise: totalPaise - basePaise, ratePercent };
+}
+
+export const PLATFORM_GST_NOTE =
+  "Raj Kuthir Homestays is not registered under GST. The GST on this stay was charged and paid by the booking platform under section 9(5) of the CGST Act, 2017.";
+
 export const GST_NOTE = "Not registered under GST. No GST has been charged on this invoice.";
 
 /**
@@ -157,6 +180,8 @@ export type InvoiceContent = {
   totalPaise: number;
   paidPaise: number;
   balancePaise: number;
+  /** Replaces the usual "No GST has been charged" line when a platform paid the GST. */
+  gstNote?: string;
 };
 
 export function invoiceContent(input: {
@@ -167,7 +192,8 @@ export function invoiceContent(input: {
 }): InvoiceContent {
   const { booking } = input;
   const total = booking.grossPaise ?? 0;
-  const paid = Math.min(total, Math.max(0, booking.receivedPaise ?? 0));
+  // A channel guest paid the channel in full; what reached us is the payout, not what they paid.
+  const paid = OTA_SOURCES.includes(booking.source) ? total : Math.min(total, Math.max(0, booking.receivedPaise ?? 0));
   const nights = nightsBetween(booking.checkIn, booking.checkOut);
   const pets = booking.pets ?? 0;
   const party = [
@@ -177,21 +203,30 @@ export function invoiceContent(input: {
     .filter(Boolean)
     .join(", ");
 
+  const stayDetail = `${prettyDate(booking.checkIn)} to ${prettyDate(booking.checkOut)} · ${nights} night${nights === 1 ? "" : "s"}${party ? ` · ${party}` : ""}`;
+  const platformGst = PLATFORM_GST_SOURCES.includes(booking.source) ? platformGstSplit(total, nights) : null;
+  const lines = (): InvoiceLine[] =>
+    platformGst
+      ? [
+          { description: "Accommodation – entire two-bedroom villa", detail: stayDetail, amountPaise: platformGst.basePaise },
+          {
+            description: `GST @ ${platformGst.ratePercent}%`,
+            detail: "Charged and paid by the booking platform (CGST Act 2017, s.9(5))",
+            amountPaise: platformGst.gstPaise,
+          },
+        ]
+      : [{ description: "Accommodation – entire two-bedroom villa", detail: stayDetail, amountPaise: total }];
+
   return {
     number: input.number,
     issuedOn: input.issuedOn,
     billedTo: { name: booking.guestName!.trim(), phone: booking.guestPhone, email: input.email },
     stay: { reference: booking.reference, checkIn: booking.checkIn, checkOut: booking.checkOut, nights, guests: booking.guests, pets },
-    lines: [
-      {
-        description: "Accommodation – entire two-bedroom villa",
-        detail: `${prettyDate(booking.checkIn)} to ${prettyDate(booking.checkOut)} · ${nights} night${nights === 1 ? "" : "s"}${party ? ` · ${party}` : ""}`,
-        amountPaise: total,
-      },
-    ],
+    lines: lines(),
     totalPaise: total,
     paidPaise: paid,
     balancePaise: total - paid,
+    ...(platformGst ? { gstNote: PLATFORM_GST_NOTE } : {}),
   };
 }
 
