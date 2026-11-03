@@ -99,11 +99,13 @@ export function DetailsForm({
         </View>
       </Row>
       <Field
-        label="How the price is made up (shown to the guest)"
+        label="How the price is made up (shown to the guest, one line per bullet)"
         value={v.priceNote}
         onChangeText={set('priceNote')}
-        maxLength={300}
-        placeholder="₹3,500 a night for 5 + ₹750 per extra guest"
+        maxLength={600}
+        multiline
+        style={{ minHeight: 96, textAlignVertical: 'top', paddingTop: space(3) }}
+        placeholder={'20 and 21 Dec: ₹3,500 a night for 5 guests\n22 Dec: ₹5,000 for 5 guests (Poush Mela week)\n4 more guests with extra bedding: ₹750 each a night'}
       />
       <Small>
         {nights ? `${nights} night${nights === 1 ? '' : 's'}` : 'Dates optional'}

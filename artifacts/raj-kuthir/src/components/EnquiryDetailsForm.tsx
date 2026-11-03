@@ -165,9 +165,16 @@ export function EnquiryDetailsForm({
           <span className={LABEL}>Advance to confirm (₹)</span>
           <input inputMode="numeric" placeholder="Usual share" value={v.agreedAdvanceRupees} onChange={set('agreedAdvanceRupees')} className={INPUT} />
         </label>
-        <label className="sm:col-span-2">
-          <span className={LABEL}>How the price is made up (shown to the guest)</span>
-          <input maxLength={300} placeholder="₹3,500 a night for 5 + ₹750 per extra guest" value={v.priceNote} onChange={set('priceNote')} className={INPUT} />
+        <label className="sm:col-span-4">
+          <span className={LABEL}>How the price is made up (shown to the guest, one line per bullet)</span>
+          <textarea
+            maxLength={600}
+            rows={3}
+            placeholder={'20 and 21 Dec: ₹3,500 a night for 5 guests\n22 Dec: ₹5,000 for 5 guests (Poush Mela week)\n4 more guests with extra bedding: ₹750 each a night'}
+            value={v.priceNote}
+            onChange={set('priceNote')}
+            className={INPUT}
+          />
         </label>
       </div>
       <div className="mt-4 flex flex-wrap items-center gap-3">

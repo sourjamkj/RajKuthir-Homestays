@@ -116,7 +116,8 @@ export function buildEnquiryFollowUp(
         ? `• Stay: ${plural(q.nights, "night")} for ${plural(q.guests, "guest")}${pets > 0 ? ` and ${plural(pets, "pet")}` : ""}`
         : `• Stay: ${plural(q.nights, "night")} for ${plural(q.guests, "guest")}: ${rupees(q.roomPaise + q.extraGuestPaise)}`,
       !agreed && pets > 0 ? `• ${plural(pets, "pet")}: ${rupees(q.petPaise)}` : null,
-      agreed && input.quote.priceNote ? `• ${input.quote.priceNote}` : null,
+      // The owner's breakdown, one bullet per line he typed (night by night, extra guests…).
+      ...(agreed ? breakdownLines(input.quote.priceNote) : []),
       `• Total: ${rupees(q.totalPaise)}`,
       agreed ? `• Advance to confirm: ${rupees(q.advancePaise)}${q.balancePaise > 0 ? ", the balance at check-in" : ""}` : null,
       q.peak ? `• ${q.peak}: paid in full when you book` : null,
@@ -134,6 +135,16 @@ export function buildEnquiryFollowUp(
       : `You asked about ${dates}. How many of you are coming, and will you bring any pets? I will send you the best direct rate.`
     : `Are you still planning a trip? Share your dates and number of guests, and I will check availability and send you the best direct rate.`;
   return `${hello}\n\n${sorry}${ask}\n\n${VILLA}\n\nPhotos and availability: ${SITE}${SIGN}`;
+}
+
+/** The agreed price's breakdown as bullets: one per line, any bullet the owner typed removed. */
+export function breakdownLines(note: string | null | undefined): string[] {
+  return (note ?? "")
+    .split(/\r?\n/)
+    .map((line) => line.replace(/^\s*[•\-*]\s*/, "").trim())
+    .filter(Boolean)
+    .slice(0, 8)
+    .map((line) => `• ${line}`);
 }
 
 /** A guest who has stayed before: a past stay on file, or tagged by the owner. */
