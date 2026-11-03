@@ -24,6 +24,9 @@ import { holdExpiryOf, holdStateOf } from "../lib/enquiry-hold";
 import { firstConflict } from "../lib/availability";
 import { listAllEvents, listPublicBlocks } from "../lib/calendar-repo";
 import { datesTakenFor } from "../lib/enquiry-clash";
+import { buildEnquiryFollowUp, isReturningGuest } from "../lib/enquiry-followup";
+import { todayInIndia } from "../lib/guest-lookup";
+import { normalisePhone } from "@workspace/db";
 import { getRatePlan, minimumStay, rateForNight, stayNightPrices } from "../lib/rates-repo";
 import {
   buildEnquiryQuoteTemplate,
@@ -269,14 +272,27 @@ router.get("/enquiries", requireAdmin, async (_req, res) => {
   // Calendar blocks and confirmed bookings, without live holds: an open
   // enquiry on nights that are already gone says so on its card.
   const taken = await listAllEvents().catch(() => []);
+  // Who has stayed before (a past booking, or tagged "Repeat guest"), so the
+  // WhatsApp reply can welcome them back.
+  const contacts = new Map((await listContacts().catch(() => [])).map((c) => [c.phone, c]));
+  const today = todayInIndia(now);
 
   res.json({
-    enquiries: rows.map((row) => ({
-      ...row,
-      quote: quoteForEnquiry(row, nightlyRate, rules),
-      hold: holdStateOf({ ...row, holdExpiresAt: deadlines.get(row.id) ?? null }, now),
-      datesTaken: datesTakenFor(row, taken),
-    })),
+    enquiries: rows.map((row) => {
+      const quote = quoteForEnquiry(row, nightlyRate, rules);
+      const datesTaken = datesTakenFor(row, taken);
+      const phone = normalisePhone(row.phone);
+      const returningGuest = isReturningGuest(phone ? contacts.get(phone) : undefined, today);
+      return {
+        ...row,
+        quote,
+        hold: holdStateOf({ ...row, holdExpiresAt: deadlines.get(row.id) ?? null }, now),
+        datesTaken,
+        returningGuest,
+        /** The WhatsApp reply the console and the app open; written here once. */
+        followUpText: buildEnquiryFollowUp(row, { quote, datesTaken, returning: returningGuest, now }),
+      };
+    }),
     /*
       The screen disables the send button and explains itself rather than
       offering an action that cannot work.

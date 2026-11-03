@@ -131,6 +131,10 @@ type Enquiry = {
   convertedBookingId: string | null;
   /** Set when an open enquiry asks for nights already blocked or booked. */
   datesTaken?: { startDate: string; endDate: string; label: string } | null;
+  /** Has stayed before (a past booking, or tagged "Repeat guest"). */
+  returningGuest?: boolean;
+  /** The WhatsApp reply, written by the server (lib/enquiry-followup.ts). */
+  followUpText?: string;
 };
 
 
@@ -282,7 +286,7 @@ function buildEnquiryFollowUp(row: Enquiry): string {
     : `Are you still planning a trip? Share your dates and number of guests, and I will check availability and send you the best direct rate.`;
   return (
     `Hi ${first}, this is Raj Kuthir Homestays – Sobuj Potro, Shantiniketan. ` +
-    `Thank you for enquiring on our website${waited ? ' — and sorry we did not get back sooner' : ''}!\n\n` +
+    `Thank you for getting in touch${waited ? ' — and sorry we did not get back sooner' : ''}!\n\n` +
     `${ask}\n\n` +
     `• The entire 2-bedroom villa is yours: 2 AC bedrooms, private garden, parking\n` +
     `• Pets welcome\n` +
@@ -292,7 +296,7 @@ function buildEnquiryFollowUp(row: Enquiry): string {
 }
 
 function enquiryFollowUpUrl(row: Enquiry): string {
-  return `https://wa.me/${waNumber(row.phone)}?text=${encodeURIComponent(buildEnquiryFollowUp(row))}`;
+  return `https://wa.me/${waNumber(row.phone)}?text=${encodeURIComponent(row.followUpText ?? buildEnquiryFollowUp(row))}`;
 }
 
 export default function AdminGuests() {
