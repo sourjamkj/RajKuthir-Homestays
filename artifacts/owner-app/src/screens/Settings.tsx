@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Alert, RefreshControl, ScrollView, Switch, View } from 'react-native';
 
-import { getSettings, listDevices, patchSettings, revokeDevice, type WhatsappMode } from '../api';
+import { disconnectConnector, getConnectorStatus, getSettings, listDevices, patchSettings, revokeDevice, type WhatsappMode } from '../api';
 import Notifications from './NotificationSettings';
 import { unlock } from '../auth';
 import { color, space, when } from '../theme';
@@ -11,6 +11,7 @@ import { useLoad } from '../useLoad';
 export default function Settings({ onSignOut }: { onSignOut: () => void }) {
   const settings = useLoad(getSettings);
   const devices = useLoad(listDevices);
+  const connector = useLoad(getConnectorStatus);
   const [message, setMessage] = useState<{ text: string; tone: 'ok' | 'error' } | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
 
@@ -117,8 +118,49 @@ export default function Settings({ onSignOut }: { onSignOut: () => void }) {
           ))}
       </Card>
 
+      <Card>
+        <Heading>Claude</Heading>
+        <Body muted style={{ marginBottom: space(2) }}>
+          With the Raj Kuthir connector, Claude can add and edit enquiries, send quotes, mark advances and create bookings for you. It cannot touch settings, rates or money records.
+        </Body>
+        {connector.data?.connected ? (
+          <>
+            <Body>Connected{connector.data.lastUsed ? ` · last used ${when(connector.data.lastUsed)}` : ''}</Body>
+            <Button
+              label="Disconnect Claude"
+              kind="secondary"
+              busy={busy === 'claude'}
+              style={{ marginTop: space(2) }}
+              onPress={() =>
+                Alert.alert('Disconnect Claude?', 'Claude will stop working with your console until you connect it again.', [
+                  { text: 'Keep', style: 'cancel' },
+                  {
+                    text: 'Disconnect',
+                    style: 'destructive',
+                    onPress: async () => {
+                      setBusy('claude');
+                      try {
+                        await disconnectConnector();
+                        setMessage({ text: 'Claude disconnected.', tone: 'ok' });
+                        await connector.reload();
+                      } catch (e) {
+                        setMessage({ text: e instanceof Error ? e.message : 'Could not disconnect.', tone: 'error' });
+                      } finally {
+                        setBusy(null);
+                      }
+                    },
+                  },
+                ])
+              }
+            />
+          </>
+        ) : (
+          <Body>Not connected. In Claude: Settings → Connectors → Add custom connector → {connector.data?.url ?? 'https://rajkuthirhomestays.casa/mcp'}</Body>
+        )}
+      </Card>
+
       <Button label="Sign out of this phone" kind="danger" onPress={() => signOutPhone('', '', true)} busy={busy === 'signout'} />
-      <Body muted style={{ marginTop: space(4), textAlign: 'center' }}>Raj Kuthir Owner · version 1.0.0</Body>
+      <Body muted style={{ marginTop: space(4), textAlign: 'center' }}>Raj Kuthir Owner · version 1.5.0</Body>
     </ScrollView>
   );
 }

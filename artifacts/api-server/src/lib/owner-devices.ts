@@ -182,7 +182,7 @@ export async function activePushTokens(now = new Date()): Promise<string[]> {
 export type AuditEntry = { at: string; via: string; action: string; detail: Record<string, unknown> };
 
 /** Who changed what. Never throws: a failed log line must not undo the change it records. */
-export async function audit(entry: { via: "web" | "app"; deviceId: string | null; action: string; detail?: Record<string, unknown> }): Promise<void> {
+export async function audit(entry: { via: "web" | "app" | "claude"; deviceId: string | null; action: string; detail?: Record<string, unknown> }): Promise<void> {
   try {
     await ensureOwnerAppTables();
     await pool.query(`INSERT INTO owner_audit (via, device_id, action, detail) VALUES ($1, $2, $3, $4)`, [

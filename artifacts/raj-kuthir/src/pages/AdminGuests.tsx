@@ -29,6 +29,7 @@ import { CONFIG, asset } from '@/lib/site';
 import { useFocusTarget } from '@/hooks/use-focus-target';
 import { AdminBookPay } from '@/components/AdminBookPay';
 import { EnquiryBookForm } from '@/components/EnquiryBookForm';
+import { EnquiryDetailsForm, EMPTY_ENQUIRY_DETAILS, detailsBody, detailsFrom, type EnquiryDetailsValues } from '@/components/EnquiryDetailsForm';
 import { preferredWhatsappUrl } from '@/lib/whatsapp-link';
 import { StayInvoice, useInvoiceStatuses } from '@/components/StayInvoice';
 import { AdminHeader } from '@/components/AdminHeader';
@@ -93,6 +94,9 @@ type QuoteResult =
       totalPaise: number;
       advancePaise: number;
       balancePaise: number;
+      /** True when this is the owner's agreed price, not the rate card. */
+      agreed?: boolean;
+      priceNote?: string | null;
     }
   | { ok: false; reason: string };
 
@@ -135,6 +139,12 @@ type Enquiry = {
   returningGuest?: boolean;
   /** The WhatsApp reply, written by the server (lib/enquiry-followup.ts). */
   followUpText?: string;
+  /** The owner's extra details (enquiry_terms). */
+  childrenAges?: string | null;
+  ownerNote?: string | null;
+  agreedTotalPaise?: number | null;
+  agreedAdvancePaise?: number | null;
+  priceNote?: string | null;
 };
 
 
@@ -468,25 +478,20 @@ export default function AdminGuests() {
    * the Earnings page, never typed in here).
    */
   const [addingEnquiry, setAddingEnquiry] = useState(false);
-  const [enquiryDraft, setEnquiryDraft] = useState({
-    name: '',
-    phone: '',
-    checkIn: '',
-    checkOut: '',
-  });
+  const [addFormKey, setAddFormKey] = useState(0);
+  const [editingEnquiry, setEditingEnquiry] = useState<string | null>(null);
 
   // Said once, right after Add, when the nights entered are already taken.
   const [addedClash, setAddedClash] = useState<string | null>(null);
 
   const createEnquiry = useMutation({
-    mutationFn: () =>
+    mutationFn: (values: EnquiryDetailsValues) =>
       adminFetch<{ id: string; datesTaken?: { startDate: string; endDate: string; label: string } | null }>('/api/admin/enquiries', {
         method: 'POST',
         body: JSON.stringify({
-          name: enquiryDraft.name,
-          phone: enquiryDraft.phone,
-          checkIn: enquiryDraft.checkIn || undefined,
-          checkOut: enquiryDraft.checkOut || undefined,
+          ...detailsBody(values),
+          checkIn: values.checkIn || undefined,
+          checkOut: values.checkOut || undefined,
         }),
       }),
     onSuccess: (data) => {
@@ -496,8 +501,18 @@ export default function AdminGuests() {
           ? `Saved — but ${format(parseISO(taken.startDate), 'd MMM')} → ${format(parseISO(taken.endDate), 'd MMM yyyy')} is already taken (${taken.label}). If this is the guest who booked, mark the enquiry Converted.`
           : null,
       );
-      setEnquiryDraft({ name: '', phone: '', checkIn: '', checkOut: '' });
+      setAddFormKey((k) => k + 1);
       setAddingEnquiry(false);
+      void queryClient.invalidateQueries({ queryKey: ENQUIRIES_KEY });
+    },
+  });
+
+  // Correcting or completing an enquiry: party, ages, notes, the agreed price.
+  const editEnquiry = useMutation({
+    mutationFn: ({ id, values }: { id: string; values: EnquiryDetailsValues }) =>
+      adminFetch(`/api/enquiries/${id}`, { method: 'PATCH', body: JSON.stringify(detailsBody(values)) }),
+    onSuccess: () => {
+      setEditingEnquiry(null);
       void queryClient.invalidateQueries({ queryKey: ENQUIRIES_KEY });
     },
   });
@@ -768,39 +783,15 @@ export default function AdminGuests() {
           />
 
           {addingEnquiry && (
-            <form
-              onSubmit={(event) => {
-                event.preventDefault();
-                createEnquiry.mutate();
-              }}
-              className="mt-4 grid gap-3 rounded-2xl border border-border bg-card p-5 sm:grid-cols-2 lg:grid-cols-[1.3fr_1fr_.8fr_.8fr_auto]"
-              data-testid="form-add-enquiry"
-            >
-              <label className="block">
-                <span className="mb-1 block text-[10px] font-bold uppercase tracking-[.08em] text-muted-foreground">Name *</span>
-                <input required maxLength={200} value={enquiryDraft.name} onChange={(e) => setEnquiryDraft({ ...enquiryDraft, name: e.target.value })} className="w-full rounded-lg border border-border bg-background px-3 py-2.5 text-sm outline-none focus:border-primary" data-testid="input-enquiry-name" />
-              </label>
-              <label className="block">
-                <span className="mb-1 block text-[10px] font-bold uppercase tracking-[.08em] text-muted-foreground">Phone *</span>
-                <input required type="tel" inputMode="tel" placeholder="+91 98765 43210" maxLength={20} value={enquiryDraft.phone} onChange={(e) => setEnquiryDraft({ ...enquiryDraft, phone: e.target.value })} className="w-full rounded-lg border border-border bg-background px-3 py-2.5 text-sm outline-none focus:border-primary" data-testid="input-enquiry-phone" />
-              </label>
-              <label className="block">
-                <span className="mb-1 block text-[10px] font-bold uppercase tracking-[.08em] text-muted-foreground">Check-in</span>
-                <input type="date" value={enquiryDraft.checkIn} onChange={(e) => setEnquiryDraft({ ...enquiryDraft, checkIn: e.target.value })} className="w-full rounded-lg border border-border bg-background px-3 py-2.5 text-sm outline-none focus:border-primary" data-testid="input-enquiry-checkin" />
-              </label>
-              <label className="block">
-                <span className="mb-1 block text-[10px] font-bold uppercase tracking-[.08em] text-muted-foreground">Check-out</span>
-                <input type="date" value={enquiryDraft.checkOut} onChange={(e) => setEnquiryDraft({ ...enquiryDraft, checkOut: e.target.value })} className="w-full rounded-lg border border-border bg-background px-3 py-2.5 text-sm outline-none focus:border-primary" data-testid="input-enquiry-checkout" />
-              </label>
-              <button type="submit" disabled={createEnquiry.isPending || !enquiryDraft.name.trim() || !enquiryDraft.phone.trim()} className="flex h-[42px] items-center justify-center gap-1.5 self-end rounded-lg bg-primary px-4 py-2.5 text-[10px] font-bold uppercase tracking-[.07em] text-primary-foreground disabled:opacity-40" data-testid="button-save-enquiry">
-                {createEnquiry.isPending ? <Loader2 size={12} className="animate-spin" /> : <Check size={12} />} Add
-              </button>
-              {createEnquiry.isError && (
-                <p className="sm:col-span-2 lg:col-span-5 text-xs text-[#A65E45]" role="alert">
-                  {createEnquiry.error instanceof Error ? createEnquiry.error.message : 'Could not save this enquiry.'}
-                </p>
-              )}
-            </form>
+            <EnquiryDetailsForm
+              key={addFormKey}
+              initial={EMPTY_ENQUIRY_DETAILS}
+              submitLabel="Add"
+              busy={createEnquiry.isPending}
+              error={createEnquiry.isError ? (createEnquiry.error instanceof Error ? createEnquiry.error.message : 'Could not save this enquiry.') : null}
+              onSubmit={(values) => createEnquiry.mutate(values)}
+              testId="form-add-enquiry"
+            />
           )}
 
           {addedClash && (
@@ -870,6 +861,16 @@ export default function AdminGuests() {
                         “{row.requests}”
                       </p>
                     )}
+                    {row.childrenAges && <p className="mt-1 text-xs text-muted-foreground">Children's ages: {row.childrenAges}</p>}
+                    {row.ownerNote && <p className="mt-1 max-w-[560px] text-xs italic text-muted-foreground">Note: {row.ownerNote}</p>}
+                    <button
+                      type="button"
+                      onClick={() => setEditingEnquiry(editingEnquiry === row.id ? null : row.id)}
+                      className="mt-2 text-[10px] font-bold uppercase tracking-[.07em] text-primary underline decoration-accent underline-offset-2"
+                      data-testid={`button-edit-enquiry-${row.id}`}
+                    >
+                      {editingEnquiry === row.id ? 'Close' : 'Edit details & price'}
+                    </button>
                   </div>
 
                   <div className="flex shrink-0 items-center gap-2">
@@ -900,6 +901,17 @@ export default function AdminGuests() {
                   </div>
                 </div>
 
+                {editingEnquiry === row.id && (
+                  <EnquiryDetailsForm
+                    initial={detailsFrom(row)}
+                    submitLabel="Save"
+                    busy={editEnquiry.isPending}
+                    error={editEnquiry.isError ? (editEnquiry.error instanceof Error ? editEnquiry.error.message : 'Could not save the changes.') : null}
+                    onSubmit={(values) => editEnquiry.mutate({ id: row.id, values })}
+                    testId={`form-edit-enquiry-${row.id}`}
+                  />
+                )}
+
                 {/*
                   The price, and the one button that sends it. Shown on every
                   card rather than behind a menu: the owner's first question
@@ -925,7 +937,9 @@ export default function AdminGuests() {
                       <div>
                         <p className="text-[10px] font-bold uppercase tracking-[.1em] text-muted-foreground">
                           {row.quote.nights} night{row.quote.nights === 1 ? '' : 's'} · {row.quote.guests} guest{row.quote.guests === 1 ? '' : 's'}
+                          {row.quote.agreed ? ' · your agreed price' : ''}
                         </p>
+                        {row.quote.agreed && row.quote.priceNote && <p className="mt-1 text-xs text-muted-foreground">{row.quote.priceNote}</p>}
                         <p className="mt-1 text-sm text-primary">
                           <span className="font-bold">
                             {formatRupees(row.quote.totalPaise)}

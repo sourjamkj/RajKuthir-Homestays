@@ -23,7 +23,7 @@ export function BookForm({ row, onBooked }: { row: Enquiry; onBooked: (reference
     children: String(row.children ?? 0),
     pets: String(row.pets ?? 0),
     total: rupeesText(row.quotedTotalPaise ?? (row.quote.ok ? row.quote.totalPaise : null)),
-    advance: rupeesText(row.quotedAdvancePaise),
+    advance: rupeesText(row.quotedAdvancePaise ?? row.agreedAdvancePaise),
     noAdvance: false,
   }));
   const [busy, setBusy] = useState(false);

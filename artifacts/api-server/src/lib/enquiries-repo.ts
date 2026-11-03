@@ -33,6 +33,26 @@ export async function listEnquiries(limit = 200): Promise<Enquiry[]> {
     .limit(limit);
 }
 
+/** The owner's corrections to an enquiry: only the fields given change. */
+export async function updateEnquiryFields(
+  id: string,
+  fields: Partial<{
+    name: string;
+    phone: string;
+    email: string | null;
+    checkIn: string | null;
+    checkOut: string | null;
+    adults: number | null;
+    children: number | null;
+    pets: number | null;
+    requests: string | null;
+  }>,
+): Promise<Enquiry | null> {
+  if (Object.keys(fields).length === 0) return getEnquiry(id);
+  const [updated] = await db.update(enquiries).set(fields).where(eq(enquiries.id, id)).returning();
+  return updated ?? null;
+}
+
 /** One enquiry, for the screens that act on a single row. */
 export async function getEnquiry(id: string): Promise<Enquiry | null> {
   const [found] = await db

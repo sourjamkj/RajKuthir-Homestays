@@ -17,6 +17,8 @@ import { ensureWaInboundTables } from "./lib/wa-webhook";
 import { ensureOwnerAppTables } from "./lib/owner-devices";
 import { ensureCaretakerMessagesTable } from "./lib/caretaker-messages";
 import { ensureOwnerAlertsTable } from "./lib/owner-alerts";
+import { ensureEnquiryTermsTable } from "./lib/enquiry-terms";
+import { ensureMcpTables } from "./lib/mcp-oauth";
 import { startOwnerAlertWatch } from "./lib/owner-alerts-watch";
 import { startOwnerSettingsRefresh } from "./lib/owner-settings";
 
@@ -94,6 +96,10 @@ app.listen(port, (err) => {
   // cancellations, ID uploads, WhatsApp drafts or failures) and the evening
   // check-in list into alerts, every two minutes.
   void ensureOwnerAlertsTable();
+  // The owner's extra enquiry details (ages, note, agreed price): additive.
+  void ensureEnquiryTermsTable();
+  // The Claude connector's OAuth clients and tokens: additive.
+  void ensureMcpTables();
   startOwnerAlertWatch();
   startOwnerSettingsRefresh();
 

@@ -337,40 +337,44 @@ test("arrival pack · the /welcome flow is not touched by any of this", () => {
 // possible, because the previous version answered 502 and recorded nothing.
 
 const ENQUIRY_ROUTES_TS = readFileSync(path.join(here, "../routes/enquiries.ts"), "utf8");
+// The quote is sent by lib/enquiry-actions.ts (shared by the console, the app
+// and the Claude connector); the route only calls it.
+const QUOTE_SEND_TS = readFileSync(path.join(here, "enquiry-actions.ts"), "utf8");
 const ENQUIRIES_REPO_TS = readFileSync(path.join(here, "enquiries-repo.ts"), "utf8");
 
 test("quote · an unconfigured WhatsApp API no longer fails the request", () => {
   // The send is attempted only when the API is actually configured (and the
   // owner's Settings have WhatsApp on the Business API, not manual).
   assert.match(
-    ENQUIRY_ROUTES_TS,
+    QUOTE_SEND_TS,
     /const auto = guestApiSendingOn\(\)\s*\?\s*await sendTemplate\(/,
     "the quote route still calls sendTemplate unconditionally",
   );
   // A 502 may only follow a real API failure, never a missing configuration.
-  assert.match(ENQUIRY_ROUTES_TS, /if \(auto && !auto\.ok\)/);
+  assert.match(QUOTE_SEND_TS, /if \(auto && !auto\.ok\)/);
 });
 
 test("quote · the manual path returns an encoded wa.me link and is labelled honestly", () => {
   assert.match(
-    ENQUIRY_ROUTES_TS,
+    QUOTE_SEND_TS,
     /https:\/\/wa\.me\/\$\{to\}\?text=\$\{encodeURIComponent\(template\.preview\)\}/,
     "the manual quote link is missing or not URL-encoded",
   );
   // "sent" is a claim this server cannot make about a deep link.
-  assert.match(ENQUIRY_ROUTES_TS, /delivery: auto \? "api" : "manual_whatsapp"/);
+  assert.match(QUOTE_SEND_TS, /delivery: \(?auto \? "api" : "manual_whatsapp"/);
   assert.ok(
-    !/delivery: "sent"/.test(ENQUIRY_ROUTES_TS),
+    !/delivery: "sent"/.test(QUOTE_SEND_TS),
     "the manual path claims delivery it cannot verify",
   );
 });
 
 test("quote · the hold still starts, and is reversible when it should not have", () => {
   // Recorded on both paths, or dates go unheld and get double-sold.
-  assert.match(ENQUIRY_ROUTES_TS, /const updated = await markQuoteSent\(/);
+  assert.match(QUOTE_SEND_TS, /const updated = await markQuoteSent\(/);
 
   // And the undo exists, which is what makes recording it optimistically safe.
   assert.match(ENQUIRY_ROUTES_TS, /router\.delete\("\/enquiries\/:id\/quote"/);
+  assert.match(ENQUIRY_ROUTES_TS, /await sendEnquiryQuote\(id\)/, "the quote route no longer uses the shared send");
   assert.match(ENQUIRIES_REPO_TS, /export async function clearQuoteSent/);
 
   // The undo must clear the amounts too, not just the timestamp.

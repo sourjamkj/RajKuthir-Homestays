@@ -96,8 +96,24 @@ export type Enquiry = {
   hold?: HoldState;
   convertedBookingId: string | null;
   quote:
-    | { ok: true; totalPaise: number; advancePaise: number; balancePaise?: number; nights: number; guests?: number }
+    | {
+        ok: true;
+        totalPaise: number;
+        advancePaise: number;
+        balancePaise?: number;
+        nights: number;
+        guests?: number;
+        /** The owner's agreed price, not the rate card. */
+        agreed?: boolean;
+        priceNote?: string | null;
+      }
     | { ok: false; reason: string };
+  /** The owner's extra details. */
+  childrenAges?: string | null;
+  ownerNote?: string | null;
+  agreedTotalPaise?: number | null;
+  agreedAdvancePaise?: number | null;
+  priceNote?: string | null;
   datesTaken?: { startDate: string; endDate: string; label: string } | null;
   /** Has stayed before (a past booking, or tagged "Repeat guest"). */
   returningGuest?: boolean;
@@ -110,9 +126,32 @@ type DatesTaken = { startDate: string; endDate: string; label: string } | null;
 export const getEnquiries = () => adminFetch<{ enquiries: Enquiry[]; quotingReady?: boolean }>('/api/enquiries');
 export const setEnquiryStatus = (id: string, status: EnquiryStatus) =>
   adminFetch<unknown>(`/api/enquiries/${id}`, json('PATCH', { status }));
-/** A lead taken by phone or in person: name and phone are enough. */
-export const createEnquiry = (input: { name: string; phone: string; checkIn?: string; checkOut?: string }) =>
-  adminFetch<{ id: string; datesTaken?: DatesTaken }>('/api/admin/enquiries', json('POST', input));
+/**
+ * The enquiry fields the owner fills in or corrects. Strings as typed:
+ * empty clears an optional field; rupees, not paise, for the agreed price.
+ */
+export type EnquiryDetails = {
+  name: string;
+  phone: string;
+  checkIn: string;
+  checkOut: string;
+  adults: string;
+  children: string;
+  childrenAges: string;
+  pets: string;
+  requests: string;
+  ownerNote: string;
+  agreedTotalRupees: string;
+  agreedAdvanceRupees: string;
+  priceNote: string;
+};
+/** A lead taken by phone or in person: name and phone are enough, the rest helps the reply. */
+export const createEnquiry = (input: EnquiryDetails) =>
+  adminFetch<{ id: string; datesTaken?: DatesTaken }>(
+    '/api/admin/enquiries',
+    json('POST', { ...input, checkIn: input.checkIn || undefined, checkOut: input.checkOut || undefined }),
+  );
+export const updateEnquiry = (id: string, input: EnquiryDetails) => adminFetch<Enquiry>(`/api/enquiries/${id}`, json('PATCH', input));
 export const deleteEnquiry = (id: string) => adminFetch<void>(`/api/enquiries/${id}`, json('DELETE'));
 /** Records the quote and holds the dates; manual WhatsApp returns the link to open. */
 export const sendQuote = (id: string) =>
@@ -282,3 +321,9 @@ export const blockDates = (startDate: string, endDate: string, title?: string) =
   adminFetch<CalendarEvent>('/api/calendar/block', json('POST', { startDate, endDate, ...(title ? { title } : {}) }));
 export const unblockDates = (id: string) => adminFetch<void>(`/api/calendar/block/${id}`, json('DELETE'));
 export const syncCalendars = () => adminFetch<unknown>('/api/calendar/sync', json('POST'));
+
+/* ------------------------------------------------- Claude connector */
+
+export type ConnectorStatus = { url: string; connected: boolean; since: string | null; lastUsed: string | null };
+export const getConnectorStatus = () => adminFetch<ConnectorStatus>('/api/admin/claude-connector');
+export const disconnectConnector = () => adminFetch<{ disconnected: boolean; revoked: number }>('/api/admin/claude-connector/disconnect', json('POST', {}));
