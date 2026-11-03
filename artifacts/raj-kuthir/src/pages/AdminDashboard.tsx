@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { AdminClaudeConnector } from '@/components/AdminClaudeConnector';
 import { Link, useLocation } from 'wouter';
 import { format, isAfter, isBefore, parseISO, startOfToday } from 'date-fns';
 import {
@@ -262,6 +263,8 @@ export default function AdminDashboard() {
             </div>
           )}
         </section>
+
+        <AdminClaudeConnector />
       </main>
     </div>
   );
