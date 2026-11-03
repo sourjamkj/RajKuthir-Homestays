@@ -19,7 +19,7 @@ export type EnquiryTerms = {
   agreedTotalPaise: number | null;
   /** The advance asked for, in paise. Null: the usual share of the agreed total. */
   agreedAdvancePaise: number | null;
-  /** How the agreed price is made up, in the owner's words; shown to the guest. */
+  /** How the agreed price is made up, in the owner's words, one line per bullet; shown to the guest. */
   priceNote: string | null;
 };
 
@@ -109,7 +109,7 @@ export function parseEnquiryEdit(
   if (has(body, "requests")) fields.requests = textOrNull(body.requests, 1000);
   if (has(body, "childrenAges")) terms.childrenAges = textOrNull(body.childrenAges, 100);
   if (has(body, "ownerNote")) terms.ownerNote = textOrNull(body.ownerNote, 1000);
-  if (has(body, "priceNote")) terms.priceNote = textOrNull(body.priceNote, 300);
+  if (has(body, "priceNote")) terms.priceNote = textOrNull(body.priceNote, 600);
 
   if (has(body, "agreedTotalRupees")) {
     const total = rupeesToPaise(body.agreedTotalRupees);

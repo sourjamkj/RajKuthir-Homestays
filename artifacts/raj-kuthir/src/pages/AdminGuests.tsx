@@ -939,7 +939,7 @@ export default function AdminGuests() {
                           {row.quote.nights} night{row.quote.nights === 1 ? '' : 's'} · {row.quote.guests} guest{row.quote.guests === 1 ? '' : 's'}
                           {row.quote.agreed ? ' · your agreed price' : ''}
                         </p>
-                        {row.quote.agreed && row.quote.priceNote && <p className="mt-1 text-xs text-muted-foreground">{row.quote.priceNote}</p>}
+                        {row.quote.agreed && row.quote.priceNote && <p className="mt-1 whitespace-pre-line text-xs text-muted-foreground">{row.quote.priceNote}</p>}
                         <p className="mt-1 text-sm text-primary">
                           <span className="font-bold">
                             {formatRupees(row.quote.totalPaise)}

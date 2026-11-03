@@ -93,7 +93,12 @@ const detailsShape = {
   ownerNote: z.string().max(1000).nullable().optional().describe("Private note for the owner; never sent to the guest"),
   agreedTotalRupees: z.number().int().positive().max(10_000_000).nullable().optional().describe("The whole stay at the price the owner agreed; replaces the rate card"),
   agreedAdvanceRupees: z.number().int().positive().max(10_000_000).nullable().optional().describe("Advance to confirm; leave out for the usual share"),
-  priceNote: z.string().max(300).nullable().optional().describe("How the agreed price is made up; shown to the guest"),
+  priceNote: z
+    .string()
+    .max(600)
+    .nullable()
+    .optional()
+    .describe("How the agreed price is made up, one line per bullet, e.g. '20 and 21 Dec: ₹3,500 a night for 5 guests\n22 Dec: ₹5,000 for 5 guests (Poush Mela week)\n4 more guests with extra bedding: ₹750 each a night'; shown to the guest"),
 };
 
 /** Only the keys Claude sent, with null meaning "clear". */

@@ -98,3 +98,23 @@ test("agreed price · the WhatsApp reply gives the owner's price, breakdown and 
   assert.match(text, /• Advance to confirm: ₹10,500, the balance at check-in/);
   assert.doesNotMatch(text, /how many of you/i);
 });
+
+test("agreed price · a breakdown typed on several lines becomes one bullet per line", () => {
+  const note = "20 and 21 Dec: ₹3,500 a night for 5 guests\n• 22 Dec: ₹5,000 for 5 guests, as it is the first night of the Poush Mela week\n\n- 4 more guests with extra bedding: ₹750 each a night";
+  const quote = withAgreedPrice(aritra, quoteForEnquiry(aritra, () => 425_000), { ...agreed, priceNote: note });
+  const text = buildEnquiryFollowUp(
+    { name: "Aritra Sinha", ...aritra, status: "new", createdAt: "2026-11-03T17:15:00Z", quoteSentAt: null },
+    { quote, datesTaken: null, returning: false, now: new Date("2026-11-03T17:30:00Z") },
+  );
+  assert.ok(
+    text.includes(
+      "• Stay: 3 nights for 9 guests\n" +
+        "• 20 and 21 Dec: ₹3,500 a night for 5 guests\n" +
+        "• 22 Dec: ₹5,000 for 5 guests, as it is the first night of the Poush Mela week\n" +
+        "• 4 more guests with extra bedding: ₹750 each a night\n" +
+        "• Total: ₹21,000\n" +
+        "• Advance to confirm: ₹10,500, the balance at check-in",
+    ),
+    text,
+  );
+});
