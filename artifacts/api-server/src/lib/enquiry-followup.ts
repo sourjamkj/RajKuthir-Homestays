@@ -58,7 +58,8 @@ function plural(n: number, one: string, many = `${one}s`): string {
 export function buildEnquiryFollowUp(
   row: FollowUpEnquiry,
   input: {
-    quote: QuoteResult;
+    /** The rate-card quote, or the owner's agreed price (withAgreedPrice). */
+    quote: QuoteResult & { agreed?: boolean; priceNote?: string | null };
     datesTaken: { startDate: string; endDate: string } | null;
     /** Has stayed with us before. */
     returning: boolean;
@@ -107,12 +108,17 @@ export function buildEnquiryFollowUp(
   if (input.quote.ok && knowsParty) {
     const q = input.quote;
     const pets = row.pets ?? 0;
+    const agreed = input.quote.agreed === true;
     const lines = [
       `• Check-in: ${weekdayDay(q.checkIn)}, from 12 noon`,
       `• Check-out: ${weekdayDay(q.checkOut)}, by 11 am`,
-      `• Stay: ${plural(q.nights, "night")} for ${plural(q.guests, "guest")}: ${rupees(q.roomPaise + q.extraGuestPaise)}`,
-      pets > 0 ? `• ${plural(pets, "pet")}: ${rupees(q.petPaise)}` : null,
+      agreed
+        ? `• Stay: ${plural(q.nights, "night")} for ${plural(q.guests, "guest")}${pets > 0 ? ` and ${plural(pets, "pet")}` : ""}`
+        : `• Stay: ${plural(q.nights, "night")} for ${plural(q.guests, "guest")}: ${rupees(q.roomPaise + q.extraGuestPaise)}`,
+      !agreed && pets > 0 ? `• ${plural(pets, "pet")}: ${rupees(q.petPaise)}` : null,
+      agreed && input.quote.priceNote ? `• ${input.quote.priceNote}` : null,
       `• Total: ${rupees(q.totalPaise)}`,
+      agreed ? `• Advance to confirm: ${rupees(q.advancePaise)}${q.balancePaise > 0 ? ", the balance at check-in" : ""}` : null,
       q.peak ? `• ${q.peak}: paid in full when you book` : null,
     ].filter((line): line is string => line !== null);
     return (

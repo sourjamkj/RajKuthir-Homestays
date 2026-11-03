@@ -7,6 +7,7 @@ import { fileURLToPath } from "node:url";
 import { existsSync, readFileSync } from "node:fs";
 import router from "./routes";
 import waWebhookRouter from "./routes/wa-webhook";
+import mcpRouter from "./routes/mcp";
 import { logger } from "./lib/logger";
 import { prerenderFileFor, staticCacheControl, withPrerender, wwwRedirectTarget } from "./lib/site-host";
 import { injectMeta, isKnownPath, isPrivatePath, llmsTxt, sitemapXml } from "./lib/seo";
@@ -125,6 +126,10 @@ app.use(express.urlencoded({ extended: true }));
 // WhatsApp Cloud API webhook — outside /api because Meta's verification
 // handshake is a plain GET that must return hub.challenge directly.
 app.use(waWebhookRouter);
+
+// The Claude connector (MCP + its OAuth sign-in): /mcp, /authorize, /token,
+// /register, /revoke, /oauth/consent and /.well-known/*. See routes/mcp.ts.
+app.use(mcpRouter);
 
 app.use("/api", router);
 

@@ -8,17 +8,18 @@ import {
   sendQuote,
   setAdvanceReceived,
   setEnquiryStatus,
+  updateEnquiry,
   withdrawQuote,
   type Enquiry,
   type EnquiryStatus,
   type HoldState,
 } from '../../api';
-import { DateField } from '../../DateField';
 import { followUpLink } from '../../followUp';
 import { helloText, waUrl } from '../../guestMessages';
 import { color, longDate, rupees, shortDate, space, when } from '../../theme';
 import { Body, Button, Card, Field, Heading, Notice, Row } from '../../ui';
 import { BookForm } from './BookForm';
+import { DetailsForm, detailsOf, EMPTY_DETAILS } from './DetailsForm';
 import { errorText, Pill, Placed, SmallButton, Small, type Loaded, type Say } from './shared';
 
 const STATUSES: EnquiryStatus[] = ['new', 'contacted', 'converted', 'closed'];
@@ -53,8 +54,9 @@ export function EnquiriesSection({
   const [booked, setBooked] = useState<Record<string, string>>({});
 
   const [adding, setAdding] = useState(false);
-  const [draft, setDraft] = useState({ name: '', phone: '', checkIn: '', checkOut: '' });
+  const [addError, setAddError] = useState<string | null>(null);
   const [addedClash, setAddedClash] = useState<string | null>(null);
+  const [editing, setEditing] = useState<string | null>(null);
 
   /** Runs one card's action, keeping its error on that card. */
   const act = async (id: string, key: string, fn: () => Promise<void>, fallback: string) => {
@@ -70,27 +72,22 @@ export function EnquiriesSection({
     }
   };
 
-  const add = async () => {
+  const add = async (values: typeof EMPTY_DETAILS) => {
     setBusy('add');
+    setAddError(null);
     try {
-      const result = await createEnquiry({
-        name: draft.name.trim(),
-        phone: draft.phone.trim(),
-        checkIn: draft.checkIn || undefined,
-        checkOut: draft.checkOut || undefined,
-      });
+      const result = await createEnquiry(values);
       const taken = result?.datesTaken;
       setAddedClash(
         taken
           ? `Saved — but ${shortDate(taken.startDate)} → ${longDate(taken.endDate)} is already taken (${taken.label}). If this is the guest who booked, mark the enquiry Converted.`
           : null,
       );
-      setDraft({ name: '', phone: '', checkIn: '', checkOut: '' });
       setAdding(false);
       if (!taken) say('Enquiry added.');
       await load.reload();
     } catch (e) {
-      say(errorText(e, 'Could not add the enquiry.'), 'error');
+      setAddError(errorText(e, 'Could not add the enquiry.'));
     } finally {
       setBusy(null);
     }
@@ -135,11 +132,7 @@ export function EnquiriesSection({
 
       {adding && (
         <Card>
-          <Field label="Name" value={draft.name} onChangeText={(name) => setDraft({ ...draft, name })} maxLength={200} />
-          <Field label="Phone" value={draft.phone} onChangeText={(phone) => setDraft({ ...draft, phone })} keyboardType="phone-pad" maxLength={20} placeholder="+91 98765 43210" />
-          <DateField label="Check-in (optional)" value={draft.checkIn} onChange={(checkIn) => setDraft({ ...draft, checkIn })} optional />
-          <DateField label="Check-out (optional)" value={draft.checkOut} onChange={(checkOut) => setDraft({ ...draft, checkOut })} optional />
-          <Button label="Save" onPress={() => void add()} busy={busy === 'add'} disabled={!draft.name.trim() || !draft.phone.trim()} />
+          <DetailsForm initial={EMPTY_DETAILS} submitLabel="Save" busy={busy === 'add'} error={addError} onSubmit={(values) => void add(values)} />
         </Card>
       )}
 
@@ -169,13 +162,38 @@ export function EnquiriesSection({
                   {` · received ${when(row.createdAt)}`}
                 </Small>
                 {row.requests ? <Body style={{ marginTop: space(2) }}>“{row.requests}”</Body> : null}
+                {row.childrenAges ? <Small>Children's ages: {row.childrenAges}</Small> : null}
+                {row.ownerNote ? <Small>Note: {row.ownerNote}</Small> : null}
               </View>
             </Row>
             <Row style={{ marginTop: space(2) }}>
               <SmallButton label="Call" onPress={() => void Linking.openURL(`tel:${row.phone}`)} />
               <SmallButton label="WhatsApp" onPress={() => void Linking.openURL(waUrl(row.phone, helloText(row.name)))} />
+              <SmallButton label={editing === row.id ? 'Close' : 'Edit details & price'} onPress={() => setEditing(editing === row.id ? null : row.id)} />
               <SmallButton label="Delete" tone="danger" onPress={() => remove(row)} disabled={busy === `delete:${row.id}`} />
             </Row>
+            {editing === row.id && (
+              <View style={{ marginTop: space(3), paddingTop: space(3), borderTopWidth: 1, borderTopColor: color.line }}>
+                <DetailsForm
+                  initial={detailsOf(row)}
+                  submitLabel="Save changes"
+                  busy={busy === `edit:${row.id}`}
+                  error={errors[row.id] || null}
+                  onSubmit={(values) =>
+                    void act(
+                      row.id,
+                      'edit',
+                      async () => {
+                        await updateEnquiry(row.id, values);
+                        setEditing(null);
+                        say(`${values.name}'s enquiry saved.`);
+                      },
+                      'Could not save the changes.',
+                    )
+                  }
+                />
+              </View>
+            )}
 
             {/* The price, and the button that sends it. */}
             <View style={{ marginTop: space(3), paddingTop: space(3), borderTopWidth: 1, borderTopColor: color.line }}>
@@ -193,7 +211,9 @@ export function EnquiriesSection({
                   <Small>
                     {row.quote.nights} night{row.quote.nights === 1 ? '' : 's'}
                     {row.quote.guests ? ` · ${row.quote.guests} guest${row.quote.guests === 1 ? '' : 's'}` : ''}
+                    {row.quote.agreed ? ' · your agreed price' : ''}
                   </Small>
+                  {row.quote.agreed && row.quote.priceNote ? <Small>{row.quote.priceNote}</Small> : null}
                   <Body style={{ marginTop: space(1) }}>
                     <Body style={{ fontWeight: '700' }}>{rupees(row.quote.totalPaise)}</Body> total
                     <Body muted> · {rupees(row.quote.advancePaise)} advance</Body>

@@ -15,19 +15,19 @@ import {
   updateContact,
   type EnquiryStatus,
   setBookingDetails,
+  updateEnquiryFields,
 } from "../lib/enquiries-repo";
+import { enquiryViews } from "../lib/enquiry-view";
+import { bookEnquiryWithDetails, sendEnquiryQuote } from "../lib/enquiry-actions";
+import { saveTerms, termsOf } from "../lib/enquiry-terms";
+import { datesProblem, parseEnquiryEdit, termsProblem, type EnquiryTerms } from "../lib/enquiry-terms-rules";
 import { convertEnquiry } from "../lib/enquiry-convert-service";
 import { sendConfirmation } from "../lib/invoices";
-import { findByEnquiryId, holdDeadlinesByEnquiry } from "../lib/book-pay-repo";
-import { quoteForEnquiry, type QuoteResult } from "../lib/enquiry-quote";
+import { findByEnquiryId } from "../lib/book-pay-repo";
 import { holdExpiryOf, holdStateOf } from "../lib/enquiry-hold";
 import { firstConflict } from "../lib/availability";
 import { listAllEvents, listPublicBlocks } from "../lib/calendar-repo";
 import { datesTakenFor } from "../lib/enquiry-clash";
-import { buildEnquiryFollowUp, isReturningGuest } from "../lib/enquiry-followup";
-import { todayInIndia } from "../lib/guest-lookup";
-import { normalisePhone } from "@workspace/db";
-import { getRatePlan, minimumStay, rateForNight, stayNightPrices } from "../lib/rates-repo";
 import {
   buildEnquiryQuoteTemplate,
   upiDetails,
@@ -56,6 +56,18 @@ function text(value: unknown, max: number): string | null {
   const raw = String(value ?? "").trim();
   return raw ? raw.slice(0, max) : null;
 }
+
+/** The terms keys only, so the create form's base fields are read as before. */
+function pickTerms(body: unknown): Record<string, unknown> {
+  const b = (body ?? {}) as Record<string, unknown>;
+  const out: Record<string, unknown> = {};
+  for (const key of ["childrenAges", "ownerNote", "priceNote", "agreedTotalRupees", "agreedAdvanceRupees"]) {
+    if (Object.prototype.hasOwnProperty.call(b, key)) out[key] = b[key];
+  }
+  return out;
+}
+
+const NO_TERMS_COPY = (): EnquiryTerms => ({ childrenAges: null, ownerNote: null, agreedTotalPaise: null, agreedAdvancePaise: null, priceNote: null });
 
 function count(value: unknown): number | null {
   if (value === null || value === undefined || value === "") return null;
@@ -222,6 +234,20 @@ router.post("/admin/enquiries", requireAdmin, async (req, res) => {
   const checkIn = text(req.body?.checkIn, 10);
   const checkOut = text(req.body?.checkOut, 10);
 
+  // The owner's extra details (children's ages, a note, the agreed price),
+  // read the same way as an edit so both forms accept the same fields.
+  const extra = parseEnquiryEdit(pickTerms(req.body), normaliseMobile);
+  if (!extra.ok) {
+    res.status(400).json({ error: extra.error });
+    return;
+  }
+  const newTerms: EnquiryTerms = { ...NO_TERMS_COPY(), ...extra.terms };
+  const termsError = termsProblem(newTerms) ?? datesProblem(checkIn, checkOut);
+  if (termsError) {
+    res.status(400).json({ error: termsError });
+    return;
+  }
+
   try {
     const created = await createEnquiry({
       name,
@@ -235,6 +261,7 @@ router.post("/admin/enquiries", requireAdmin, async (req, res) => {
       requests: text(req.body?.requests, 1000),
     });
 
+    if (Object.values(newTerms).some((v) => v !== null)) await saveTerms(created.id, newTerms);
     const clash = datesTakenFor(created, await listAllEvents().catch(() => []));
     res.status(201).json({ id: created.id, datesTaken: clash });
   } catch (error) {
@@ -255,44 +282,9 @@ router.get("/enquiries", requireAdmin, async (_req, res) => {
   res.setHeader("Cache-Control", "no-store");
 
   const rows = await listEnquiries();
-  const plan = await getRatePlan();
-
-  const nightlyRate = (isoDate: string, guests: number) =>
-    rateForNight(plan, isoDate, guests);
-  const rules = {
-    nightPrices: (nights: string[], guests: number) => stayNightPrices(plan, nights, guests),
-    minimumStay: (nights: string[]) => minimumStay(plan, nights),
-  };
-
-  // One clock for the whole list, so two rows quoted in the same second can
-  // never disagree about how long they have left.
-  const now = new Date();
-  // Book & Pay holds run on their own deadline (minutes, extended on UTR).
-  const deadlines = await holdDeadlinesByEnquiry();
-  // Calendar blocks and confirmed bookings, without live holds: an open
-  // enquiry on nights that are already gone says so on its card.
-  const taken = await listAllEvents().catch(() => []);
-  // Who has stayed before (a past booking, or tagged "Repeat guest"), so the
-  // WhatsApp reply can welcome them back.
-  const contacts = new Map((await listContacts().catch(() => [])).map((c) => [c.phone, c]));
-  const today = todayInIndia(now);
 
   res.json({
-    enquiries: rows.map((row) => {
-      const quote = quoteForEnquiry(row, nightlyRate, rules);
-      const datesTaken = datesTakenFor(row, taken);
-      const phone = normalisePhone(row.phone);
-      const returningGuest = isReturningGuest(phone ? contacts.get(phone) : undefined, today);
-      return {
-        ...row,
-        quote,
-        hold: holdStateOf({ ...row, holdExpiresAt: deadlines.get(row.id) ?? null }, now),
-        datesTaken,
-        returningGuest,
-        /** The WhatsApp reply the console and the app open; written here once. */
-        followUpText: buildEnquiryFollowUp(row, { quote, datesTaken, returning: returningGuest, now }),
-      };
-    }),
+    enquiries: await enquiryViews(rows),
     /*
       The screen disables the send button and explains itself rather than
       offering an action that cannot work.
@@ -330,126 +322,12 @@ router.post("/enquiries/:id/quote", requireAdmin, async (req, res) => {
     return;
   }
 
-  const enquiry = await getEnquiry(id);
-
-  if (!enquiry) {
-    res.status(404).json({ error: "That enquiry no longer exists." });
+  const result = await sendEnquiryQuote(id);
+  if (!result.ok) {
+    res.status(result.status).json(result.body);
     return;
   }
-
-  const upi = upiDetails();
-
-  if (!upi) {
-    res.status(503).json({
-      error:
-        "RAJ_KUTHIR_UPI_ID and RAJ_KUTHIR_UPI_NAME are not set on the server, so there are no payment details to send.",
-    });
-    return;
-  }
-
-  const to = toWhatsappNumber(enquiry.phone);
-
-  if (!to) {
-    res.status(422).json({
-      error: "That phone number cannot be used for WhatsApp.",
-    });
-    return;
-  }
-
-  const plan = await getRatePlan();
-  const quote: QuoteResult = quoteForEnquiry(
-    enquiry,
-    (isoDate, guests) => rateForNight(plan, isoDate, guests),
-    {
-      nightPrices: (nights, guests) => stayNightPrices(plan, nights, guests),
-      minimumStay: (nights) => minimumStay(plan, nights),
-    },
-  );
-
-  if (!quote.ok) {
-    res.status(422).json({ error: quote.reason });
-    return;
-  }
-
-  // The deadline the guest is told is measured from this moment, and the
-  // hold shown on the screen is measured from the quoteSentAt written below.
-  // Same instant, so the message and the dashboard cannot drift apart.
-  const sentAt = new Date();
-
-  const template = buildEnquiryQuoteTemplate({
-    guestName: enquiry.name,
-    quote,
-    upi,
-    holdExpiresAt: holdExpiryOf(sentAt),
-  });
-
-  /*
-    Two ways out of here, and the difference is honest in the response.
-
-    With WHATSAPP_PHONE_NUMBER_ID and WHATSAPP_ACCESS_TOKEN set, the message
-    goes through Meta's API and the server knows it was accepted.
-
-    Without them — which is the state this property is in today — the send used
-    to fail and this endpoint answered 502, so the quote was never recorded and
-    the hold never started. The whole feature was unusable while waiting for a
-    Business API account. So the fallback returns the composed message and a
-    wa.me link for the owner to send from their own WhatsApp, exactly as the
-    guest onboarding handoff already does.
-
-    `delivery` says which happened. It is never "sent" for the manual path,
-    because opening WhatsApp is not delivering a message and this server has no
-    way to learn whether the owner pressed send.
-  */
-  const auto = guestApiSendingOn()
-    ? await sendTemplate({
-        to,
-        templateName: template.name,
-        languageCode: template.languageCode,
-        params: template.params,
-      })
-    : null;
-
-  if (auto && !auto.ok) {
-    logger.error(
-      { enquiryId: id, error: auto.error, retryable: auto.retryable },
-      "Could not send the enquiry quote",
-    );
-    res.status(502).json({ error: auto.error });
-    return;
-  }
-
-  /*
-    The quote is recorded either way, because the 24-hour hold is measured from
-    quoteSentAt and dates that are not held are dates that get double-sold.
-
-    On the manual path that is optimistic: the owner might open WhatsApp and
-    wander off. That is why DELETE /enquiries/:id/quote exists — the mistake is
-    one click to undo, which is the price of not making every quote two clicks
-    to send.
-  */
-  const updated = await markQuoteSent(
-    id,
-    { totalPaise: quote.totalPaise, advancePaise: quote.advancePaise },
-    sentAt,
-  );
-
-  // No phone number and no payment handle in this line — it is a log, and
-  // logs get shipped, read and kept.
-  logger.info(
-    { enquiryId: id, nights: quote.nights, guests: quote.guests, delivery: auto ? "api" : "manual_whatsapp" },
-    auto ? "Enquiry quote sent" : "Enquiry quote prepared for manual WhatsApp send",
-  );
-
-  res.json({
-    enquiry: updated,
-    quote,
-    preview: template.preview,
-    delivery: auto ? "api" : "manual_whatsapp",
-    // Only on the manual path, and only ever used to open WhatsApp.
-    whatsappUrl: auto
-      ? null
-      : `https://wa.me/${to}?text=${encodeURIComponent(template.preview)}`,
-  });
+  res.json(result.body);
 });
 
 /**
@@ -523,89 +401,8 @@ router.post("/enquiries/:id/book", requireAdmin, async (req, res) => {
     res.status(400).json({ error: "Invalid enquiry id." });
     return;
   }
-  const enquiry = await getEnquiry(id);
-  if (!enquiry) {
-    res.status(404).json({ error: "That enquiry no longer exists." });
-    return;
-  }
-  if (enquiry.convertedBookingId) {
-    res.status(409).json({ error: "This enquiry is already booked." });
-    return;
-  }
-
-  const b = (req.body ?? {}) as Record<string, unknown>;
-  const ISO = /^\d{4}-\d{2}-\d{2}$/;
-  const whole = (value: unknown, min: number, max: number) => {
-    const n = Number(value ?? 0);
-    return Number.isInteger(n) && n >= min && n <= max ? n : null;
-  };
-  const checkIn = String(b.checkIn ?? "");
-  const checkOut = String(b.checkOut ?? "");
-  const adults = whole(b.adults, 1, 20);
-  const children = whole(b.children, 0, 20);
-  const pets = whole(b.pets, 0, 10);
-  const total = whole(b.totalRupees, 1, 10_000_000);
-  const advance = whole(b.advanceRupees, 0, 10_000_000);
-
-  if (!ISO.test(checkIn) || !ISO.test(checkOut) || checkOut <= checkIn) {
-    res.status(400).json({ error: "Check-in and check-out dates are needed, with check-out after check-in." });
-    return;
-  }
-  if (adults === null || children === null || pets === null) {
-    res.status(400).json({ error: "Check the number of adults, children and pets." });
-    return;
-  }
-  if (total === null) {
-    res.status(400).json({ error: "Enter the total for the stay in rupees." });
-    return;
-  }
-  if (advance === null || advance > total) {
-    res.status(400).json({ error: "The advance must be between ₹0 and the total." });
-    return;
-  }
-  if (advance === 0 && b.confirmWithoutAdvance !== true) {
-    res.status(409).json({ error: "No advance entered. Tick “Confirm without an advance” if you want to book it anyway." });
-    return;
-  }
-
-  const updated = await setBookingDetails(id, {
-    checkIn,
-    checkOut,
-    adults,
-    children,
-    pets,
-    totalPaise: total * 100,
-    advancePaise: advance * 100,
-  });
-  if (!updated) {
-    res.status(404).json({ error: "That enquiry no longer exists." });
-    return;
-  }
-
-  const paymentRequest = await findByEnquiryId(id);
-  const outcome = await convertEnquiry(updated, { reference: paymentRequest?.reference ?? null });
-  if (!outcome.ok) {
-    const { ok: _ok, status, ...body } = outcome;
-    res.status(status).json(body);
-    return;
-  }
-
-  logger.info({ enquiryId: id, bookingId: outcome.booking.id }, "Enquiry booked with the owner's details");
-  // The guest gets the booking confirmation PDF (payment summary + UPI QR)
-  // right away: by email, or by WhatsApp when that is set up.
-  const confirmation = outcome.booking.status === "confirmed" ? await sendConfirmation(outcome.booking.id) : null;
-
-  res.status(201).json({
-    booking: {
-      id: outcome.booking.id,
-      reference: outcome.booking.reference,
-      status: outcome.booking.status,
-      checkIn: outcome.booking.checkIn,
-      checkOut: outcome.booking.checkOut,
-    },
-    enquiry: outcome.enquiry,
-    confirmation,
-  });
+  const result = await bookEnquiryWithDetails(id, (req.body ?? {}) as Record<string, unknown>);
+  res.status(result.ok ? 201 : result.status).json(result.body);
 });
 
 /**
@@ -663,6 +460,12 @@ router.post("/enquiries/:id/advance-received", requireAdmin, async (req, res) =>
   res.json({ enquiry: updated, hold: holdStateOf(updated, new Date()) });
 });
 
+/**
+ * Changes an enquiry: its status, and/or the details the owner corrects or
+ * adds (name, phone, dates, adults, children with their ages, pets, the
+ * guest's requests, a private note, the agreed price). Only the keys sent
+ * change; an empty value clears an optional field.
+ */
 router.patch("/enquiries/:id", requireAdmin, async (req, res) => {
   const id = Array.isArray(req.params.id) ? "" : req.params.id;
 
@@ -671,21 +474,50 @@ router.patch("/enquiries/:id", requireAdmin, async (req, res) => {
     return;
   }
 
-  const status = String(req.body?.status ?? "") as EnquiryStatus;
-
-  if (!STATUSES.includes(status)) {
-    res.status(400).json({ error: "Choose a valid status." });
-    return;
-  }
-
-  const updated = await setEnquiryStatus(id, status);
-
-  if (!updated) {
+  const body = (req.body ?? {}) as Record<string, unknown>;
+  const existing = await getEnquiry(id);
+  if (!existing) {
     res.status(404).json({ error: "That enquiry no longer exists." });
     return;
   }
 
-  res.json(updated);
+  let status: EnquiryStatus | null = null;
+  if (body.status !== undefined) {
+    status = String(body.status) as EnquiryStatus;
+    if (!STATUSES.includes(status)) {
+      res.status(400).json({ error: "Choose a valid status." });
+      return;
+    }
+  }
+
+  const edit = parseEnquiryEdit(body, normaliseMobile);
+  if (!edit.ok) {
+    res.status(400).json({ error: edit.error });
+    return;
+  }
+  const checkIn = edit.fields.checkIn !== undefined ? edit.fields.checkIn : existing.checkIn;
+  const checkOut = edit.fields.checkOut !== undefined ? edit.fields.checkOut : existing.checkOut;
+  const terms: EnquiryTerms = { ...(await termsOf(id)), ...edit.terms };
+  const problem = datesProblem(checkIn, checkOut) ?? termsProblem(terms);
+  if (problem) {
+    res.status(400).json({ error: problem });
+    return;
+  }
+
+  try {
+    let updated = await updateEnquiryFields(id, edit.fields);
+    if (Object.keys(edit.terms).length > 0) await saveTerms(id, terms);
+    if (status) updated = await setEnquiryStatus(id, status);
+    if (!updated) {
+      res.status(404).json({ error: "That enquiry no longer exists." });
+      return;
+    }
+    const [view] = await enquiryViews([updated]);
+    res.json(view);
+  } catch (error) {
+    logger.error({ err: error, enquiryId: id }, "Could not update enquiry");
+    res.status(500).json({ error: error instanceof Error && error.message.startsWith("Could not") ? error.message : "Could not save the changes. Please try again." });
+  }
 });
 
 router.delete("/enquiries/:id", requireAdmin, async (req, res) => {
