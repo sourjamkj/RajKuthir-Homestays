@@ -1,7 +1,8 @@
 /**
- * The WhatsApp follow-up for an enquiry. Same wording as the web console's
- * Follow up button (AdminGuests.tsx buildEnquiryFollowUp): if the nights are
- * already taken it says so; otherwise a first reply or a short nudge.
+ * The WhatsApp follow-up for an enquiry. The server writes it
+ * (api-server lib/enquiry-followup.ts, the same text the web console opens):
+ * the price when dates and party are known, a welcome back for a returning
+ * guest. The builder below is only the fallback for an older server.
  */
 import { manualWhatsappLink, SITE, type Enquiry } from './api';
 import { shortDate } from './theme';
@@ -39,7 +40,7 @@ export function buildEnquiryFollowUp(row: Enquiry, now = Date.now()): string {
     : `Are you still planning a trip? Share your dates and number of guests, and I will check availability and send you the best direct rate.`;
   return (
     `Hi ${first}, this is Raj Kuthir Homestays – Sobuj Potro, Shantiniketan. ` +
-    `Thank you for enquiring on our website${waited ? ' — and sorry we did not get back sooner' : ''}!\n\n` +
+    `Thank you for getting in touch${waited ? ' — and sorry we did not get back sooner' : ''}!\n\n` +
     `${ask}\n\n` +
     `• The entire 2-bedroom villa is yours: 2 AC bedrooms, private garden, parking\n` +
     `• Pets welcome\n` +
@@ -51,5 +52,5 @@ export function buildEnquiryFollowUp(row: Enquiry, now = Date.now()): string {
 export function followUpLink(row: Enquiry): string {
   const digits = row.phone.replace(/\D/g, '');
   const to = digits.length === 10 ? `91${digits}` : digits;
-  return manualWhatsappLink(to, buildEnquiryFollowUp(row));
+  return manualWhatsappLink(to, row.followUpText ?? buildEnquiryFollowUp(row));
 }

@@ -85,6 +85,10 @@ export type Enquiry = {
   convertedBookingId: string | null;
   quote: { ok: true; totalPaise: number; advancePaise: number; nights: number } | { ok: false; reason: string };
   datesTaken?: { startDate: string; endDate: string; label: string } | null;
+  /** Has stayed before (a past booking, or tagged "Repeat guest"). */
+  returningGuest?: boolean;
+  /** The WhatsApp reply, written by the server: the price when it is known, a welcome back for a returning guest. */
+  followUpText?: string;
 };
 
 export const getEnquiries = () => adminFetch<{ enquiries: Enquiry[] }>('/api/enquiries');
