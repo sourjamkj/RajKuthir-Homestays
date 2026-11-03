@@ -17,9 +17,21 @@ import type { QuoteResult } from "./enquiry-quote.ts";
 export const SITE = "https://rajkuthirhomestays.casa";
 const SIGN = "\n\nWarm regards,\nTeam Raj Kuthir Homestays – Sobuj Potro";
 const VILLA =
-  "• The entire 2-bedroom villa is yours: 2 AC bedrooms, private garden, parking\n" +
+  "• The entire 2-bedroom villa is yours: 2 AC bedrooms, private garden, parking, Wi-Fi\n" +
   "• Pets welcome\n" +
   "• Booking direct costs less than the booking apps";
+
+/**
+ * What the guest needs to decide, with the pages that show it: the food
+ * (Cafe Soi in the grounds, home-cooked meals through the caretaker), the
+ * photos, the full tariff and the live calendar. Every reply carries it, the
+ * one with a price included.
+ */
+const DETAILS =
+  `• Food: Cafe Soi in the villa grounds serves breakfast, Bengali home cooking, tea and snacks (menu: ${SITE}/cafe-soi-shantiniketan). Home-cooked meals can also be arranged with the caretaker.\n` +
+  `• Photos: ${SITE}/gallery\n` +
+  `• Rates: ${SITE}/rates\n` +
+  `• Live availability: ${SITE}/#availability`;
 
 export type FollowUpEnquiry = {
   name: string;
@@ -125,6 +137,7 @@ export function buildEnquiryFollowUp(
     return (
       `${hello}\n\n${sorry}` +
       `Yes, the villa is free for your dates.\n${lines.join("\n")}\n\n` +
+      `${VILLA}\n${DETAILS}\n\n` +
       `Shall I hold these dates for you? Reply here and I will send the payment details, or book directly at ${SITE}${SIGN}`
     );
   }
@@ -134,7 +147,7 @@ export function buildEnquiryFollowUp(
       ? `You asked about ${dates}. Let me check and send you the best direct rate.`
       : `You asked about ${dates}. How many of you are coming, and will you bring any pets? I will send you the best direct rate.`
     : `Are you still planning a trip? Share your dates and number of guests, and I will check availability and send you the best direct rate.`;
-  return `${hello}\n\n${sorry}${ask}\n\n${VILLA}\n\nPhotos and availability: ${SITE}${SIGN}`;
+  return `${hello}\n\n${sorry}${ask}\n\n${VILLA}\n${DETAILS}${SIGN}`;
 }
 
 /** The agreed price's breakdown as bullets: one per line, any bullet the owner typed removed. */

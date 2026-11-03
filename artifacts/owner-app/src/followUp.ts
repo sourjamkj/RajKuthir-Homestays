@@ -42,10 +42,13 @@ export function buildEnquiryFollowUp(row: Enquiry, now = Date.now()): string {
     `Hi ${first}, this is Raj Kuthir Homestays – Sobuj Potro, Shantiniketan. ` +
     `Thank you for getting in touch${waited ? ' — and sorry we did not get back sooner' : ''}!\n\n` +
     `${ask}\n\n` +
-    `• The entire 2-bedroom villa is yours: 2 AC bedrooms, private garden, parking\n` +
+    `• The entire 2-bedroom villa is yours: 2 AC bedrooms, private garden, parking, Wi-Fi\n` +
     `• Pets welcome\n` +
-    `• Booking direct costs less than the booking apps\n\n` +
-    `Photos and availability: ${SITE}${sign}`
+    `• Booking direct costs less than the booking apps\n` +
+    `• Food: Cafe Soi in the villa grounds serves breakfast, Bengali home cooking, tea and snacks (menu: ${SITE}/cafe-soi-shantiniketan). Home-cooked meals can also be arranged with the caretaker.\n` +
+    `• Photos: ${SITE}/gallery\n` +
+    `• Rates: ${SITE}/rates\n` +
+    `• Live availability: ${SITE}/#availability${sign}`
   );
 }
 
