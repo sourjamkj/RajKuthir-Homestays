@@ -298,10 +298,13 @@ function buildEnquiryFollowUp(row: Enquiry): string {
     `Hi ${first}, this is Raj Kuthir Homestays – Sobuj Potro, Shantiniketan. ` +
     `Thank you for getting in touch${waited ? ' — and sorry we did not get back sooner' : ''}!\n\n` +
     `${ask}\n\n` +
-    `• The entire 2-bedroom villa is yours: 2 AC bedrooms, private garden, parking\n` +
+    `• The entire 2-bedroom villa is yours: 2 AC bedrooms, private garden, parking, Wi-Fi\n` +
     `• Pets welcome\n` +
-    `• Booking direct costs less than the booking apps\n\n` +
-    `Photos and availability: https://rajkuthirhomestays.casa${sign}`
+    `• Booking direct costs less than the booking apps\n` +
+    `• Food: Cafe Soi in the villa grounds serves breakfast, Bengali home cooking, tea and snacks (menu: https://rajkuthirhomestays.casa/cafe-soi-shantiniketan). Home-cooked meals can also be arranged with the caretaker.\n` +
+    `• Photos: https://rajkuthirhomestays.casa/gallery\n` +
+    `• Rates: https://rajkuthirhomestays.casa/rates\n` +
+    `• Live availability: https://rajkuthirhomestays.casa/#availability${sign}`
   );
 }
 
