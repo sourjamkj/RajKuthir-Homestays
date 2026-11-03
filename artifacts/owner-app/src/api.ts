@@ -69,10 +69,18 @@ export const markActivitySeen = (upTo: string) => adminFetch<void>('/api/admin/a
 
 export type EnquiryStatus = 'new' | 'contacted' | 'converted' | 'closed';
 
+/** Whether the quoted dates are still held; worked out by the server. */
+export type HoldState =
+  | { state: 'none' }
+  | { state: 'held'; expiresAt: string; hoursLeft: number }
+  | { state: 'released'; expiresAt: string }
+  | { state: 'paid'; paidAt: string };
+
 export type Enquiry = {
   id: string;
   name: string;
   phone: string;
+  email?: string | null;
   checkIn: string | null;
   checkOut: string | null;
   adults: number | null;
@@ -82,8 +90,14 @@ export type Enquiry = {
   status: EnquiryStatus;
   createdAt: string;
   quoteSentAt: string | null;
+  quotedTotalPaise?: number | null;
+  quotedAdvancePaise?: number | null;
+  advancePaidAt?: string | null;
+  hold?: HoldState;
   convertedBookingId: string | null;
-  quote: { ok: true; totalPaise: number; advancePaise: number; nights: number } | { ok: false; reason: string };
+  quote:
+    | { ok: true; totalPaise: number; advancePaise: number; balancePaise?: number; nights: number; guests?: number }
+    | { ok: false; reason: string };
   datesTaken?: { startDate: string; endDate: string; label: string } | null;
   /** Has stayed before (a past booking, or tagged "Repeat guest"). */
   returningGuest?: boolean;
@@ -91,9 +105,165 @@ export type Enquiry = {
   followUpText?: string;
 };
 
-export const getEnquiries = () => adminFetch<{ enquiries: Enquiry[] }>('/api/enquiries');
+type DatesTaken = { startDate: string; endDate: string; label: string } | null;
+
+export const getEnquiries = () => adminFetch<{ enquiries: Enquiry[]; quotingReady?: boolean }>('/api/enquiries');
 export const setEnquiryStatus = (id: string, status: EnquiryStatus) =>
   adminFetch<unknown>(`/api/enquiries/${id}`, json('PATCH', { status }));
+/** A lead taken by phone or in person: name and phone are enough. */
+export const createEnquiry = (input: { name: string; phone: string; checkIn?: string; checkOut?: string }) =>
+  adminFetch<{ id: string; datesTaken?: DatesTaken }>('/api/admin/enquiries', json('POST', input));
+export const deleteEnquiry = (id: string) => adminFetch<void>(`/api/enquiries/${id}`, json('DELETE'));
+/** Records the quote and holds the dates; manual WhatsApp returns the link to open. */
+export const sendQuote = (id: string) =>
+  adminFetch<{ delivery: 'api' | 'manual_whatsapp'; whatsappUrl: string | null }>(`/api/enquiries/${id}/quote`, json('POST', {}));
+export const withdrawQuote = (id: string) => adminFetch<void>(`/api/enquiries/${id}/quote`, json('DELETE'));
+export const setAdvanceReceived = (id: string, paid: boolean) =>
+  adminFetch<unknown>(`/api/enquiries/${id}/advance-received`, json('POST', { paid }));
+export const convertEnquiry = (id: string) =>
+  adminFetch<{ booking: { reference: string | null; status: string } }>(`/api/enquiries/${id}/convert`, json('POST', {}));
+export type BookWithDetails = {
+  checkIn: string;
+  checkOut: string;
+  adults: number;
+  children: number;
+  pets: number;
+  totalRupees: number;
+  advanceRupees: number;
+  confirmWithoutAdvance: boolean;
+};
+export const bookEnquiry = (id: string, input: BookWithDetails) =>
+  adminFetch<{ booking: { reference: string | null } }>(`/api/enquiries/${id}/book`, json('POST', input));
+
+/* ------------------------------------------------- guests and bookings */
+
+export type BookingSource = 'direct' | 'manual' | 'bookingCom' | 'airbnb' | 'makeMyTrip' | (string & {});
+
+export const SOURCE_LABELS: Record<string, string> = {
+  manual: 'Offline / walk-in',
+  direct: 'Direct booking',
+  bookingCom: 'Booking.com',
+  airbnb: 'Airbnb',
+  makeMyTrip: 'MakeMyTrip',
+};
+
+export type GuestStay = {
+  bookingId: string;
+  reference: string | null;
+  source: BookingSource;
+  createdAt: string;
+  guestName: string | null;
+  guestPhone: string | null;
+  checkIn: string;
+  checkOut: string;
+  guests: number | null;
+  pets: number | null;
+  status: 'pending' | 'confirmed' | 'cancelled';
+  grossPaise: number | null;
+  receivedPaise: number | null;
+  onboardingStatus: 'pending' | 'submitted' | 'verified' | 'expired' | 'blocked' | null;
+  verificationDeadline: string | null;
+  documents: { pending: number; submitted: number; verified: number; rejected: number };
+};
+
+/** The management view of a stay: built by the server with no money in it. */
+export type ManagementGuestVerification = {
+  guestName: string | null;
+  guestPhone: string | null;
+  checkIn: string;
+  checkOut: string;
+  documents: { count: number; submitted: number; verified: number; rejected: number };
+  readiness: 'ready' | 'documents_submitted' | 'awaiting_documents' | 'deadline_passed' | 'blocked';
+  verificationDeadline: string | null;
+};
+
+export type GuestDocument = {
+  id: string;
+  documentType: string;
+  documentNumber: string | null;
+  originalFilename: string | null;
+  mimeType: string | null;
+  sizeBytes: number | null;
+  status: 'pending' | 'submitted' | 'verified' | 'rejected';
+  rejectionReason: string | null;
+  uploadedAt: string | null;
+  verifiedAt: string | null;
+  verifiedBy: string | null;
+};
+
+export type ArrivalInfo = {
+  wifiSsid: string;
+  wifiPassword: string;
+  arrival: string;
+  contacts: { label: string; name: string; phone: string }[];
+};
+
+export const getGuestStays = () => adminFetch<{ stays: GuestStay[] }>('/api/admin/guest-stays');
+/** Mints the guest's pre-arrival link (and moves a passed deadline). */
+export const createOnboarding = (bookingId: string) =>
+  adminFetch<{ url: string; verificationDeadline: string }>(`/api/admin/guest-stays/${bookingId}/onboarding`, json('POST', {}));
+export const getArrivalInfo = () => adminFetch<ArrivalInfo>('/api/admin/guest-info');
+export const getManagementAccess = (bookingId: string) =>
+  adminFetch<{ url: string; expiresAt: string; management: ManagementGuestVerification }>(
+    `/api/admin/guest-stays/${bookingId}/management-access`,
+    json('POST', {}),
+  );
+export const getStayDocuments = (bookingId: string) =>
+  adminFetch<{ documents: GuestDocument[] }>(`/api/admin/guest-stays/${bookingId}/documents`);
+export const rejectDocuments = (bookingId: string, reason: string) =>
+  adminFetch<{ rejected: number }>(`/api/admin/guest-stays/${bookingId}/reject`, json('POST', { reason }));
+export const verifyDocuments = (bookingId: string, verified: boolean) =>
+  adminFetch<unknown>(`/api/admin/guest-stays/${bookingId}/verify`, json('POST', { verified }));
+export const documentFilePath = (bookingId: string, documentId: string) =>
+  `/api/admin/guest-stays/${bookingId}/documents/${documentId}/file`;
+/** Guest details on a booking. An amount left out is left as it was. */
+export const updateBooking = (
+  bookingId: string,
+  details: { guestName: string; guestPhone: string; guests: string; pets: string; checkIn: string; checkOut: string; gross?: string; received?: string },
+) => adminFetch<unknown>(`/api/bookings/${bookingId}`, json('PATCH', details));
+
+export type Contact = {
+  phone: string;
+  name: string | null;
+  email: string | null;
+  stays: number;
+  enquiryCount: number;
+  lastStay: string | null;
+  lastEnquiry: string | null;
+  totalSpentPaise: number;
+  marketingOptOut: boolean;
+  note: string | null;
+  tags: string | null;
+};
+export const getContacts = () => adminFetch<{ contacts: Contact[] }>('/api/contacts');
+export const setMarketingOptOut = (phone: string, optOut: boolean) =>
+  adminFetch<unknown>(`/api/contacts/${phone}`, json('PATCH', { marketingOptOut: optOut }));
+
+/* ------------------------------------------------------------ invoices */
+
+export type InvoiceStatus = {
+  number: string | null;
+  emailedAt: string | null;
+  emailTo: string | null;
+  email: string | null;
+  autoStatus: string;
+  needsAction: boolean;
+  whatsappReady: boolean;
+  canInvoice: boolean;
+  problem: string | null;
+  otaDocuments: Array<{ id: string; kind: 'voucher' | 'cancellation' | 'statement' | 'other'; filename: string; createdAt: string }>;
+};
+export const getInvoiceStatuses = (bookingIds: string[]) =>
+  adminFetch<{ invoices: Record<string, InvoiceStatus> }>(`/api/admin/invoices?ids=${bookingIds.join(',')}`);
+export const emailInvoice = (bookingId: string, to?: string) =>
+  adminFetch<{ to: string }>(`/api/admin/bookings/${bookingId}/invoice/email`, json('POST', to ? { to } : {}));
+export const whatsappInvoice = (bookingId: string) =>
+  adminFetch<{ sent: boolean; to?: string; whatsappUrl?: string | null; text?: string }>(
+    `/api/admin/bookings/${bookingId}/invoice/whatsapp`,
+    json('POST', {}),
+  );
+export const markPaidInFull = (bookingId: string) =>
+  adminFetch<{ emailed: string | null; note?: string }>(`/api/admin/bookings/${bookingId}/paid-in-full`, json('POST', {}));
 
 /* ------------------------------------------------------------ calendar */
 

@@ -4,13 +4,13 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { AppState, Linking, Pressable, Text, View } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 
-import { getAlerts, setupApi, SITE } from './src/api';
+import { setupApi, SITE } from './src/api';
+import { ActivityBell } from './src/ActivityBell';
 import { confirmSignedOut, currentToken, forgetToken, loadToken, signOut, unlock } from './src/auth';
-import { destinationFor, registerForPush, setupChannels, unregisterPush } from './src/push';
-import Alerts from './src/screens/Alerts';
+import { destinationFor, registerForPush, setupChannels, unregisterPush, type GuestsSection } from './src/push';
 import Calendar from './src/screens/Calendar';
 import Caretaker from './src/screens/Caretaker';
-import Enquiries from './src/screens/Enquiries';
+import Guests from './src/screens/Guests';
 import Messages from './src/screens/Messages';
 import Settings from './src/screens/Settings';
 import SignIn from './src/screens/SignIn';
@@ -18,17 +18,17 @@ import Today from './src/screens/Today';
 import { color, space } from './src/theme';
 import { Body, Button } from './src/ui';
 
-type Tab = 'today' | 'enquiries' | 'calendar' | 'caretaker' | 'settings';
+type Tab = 'today' | 'guests' | 'calendar' | 'caretaker' | 'settings';
 const TABS: Array<{ key: Tab; label: string }> = [
   { key: 'today', label: 'Today' },
-  { key: 'enquiries', label: 'Enquiries' },
+  { key: 'guests', label: 'Guests' },
   { key: 'calendar', label: 'Calendar' },
   { key: 'caretaker', label: 'Caretaker' },
   { key: 'settings', label: 'Settings' },
 ];
 
 /** A screen shown over the tabs, with a Back button. */
-type Overlay = 'alerts' | 'messages' | null;
+type Overlay = 'messages' | null;
 
 /** Ask for the fingerprint again after this long in the background. */
 const RELOCK_MS = 5 * 60 * 1000;
@@ -39,7 +39,10 @@ export default function App() {
   const [phase, setPhase] = useState<Phase>('starting');
   const [tab, setTab] = useState<Tab>('today');
   const [overlay, setOverlay] = useState<Overlay>(null);
-  const [unread, setUnread] = useState(0);
+  const [guestsSection, setGuestsSection] = useState<GuestsSection>('enquiries');
+  const [guestsFocus, setGuestsFocus] = useState<string | null>(null);
+  // Bumped so the bell reloads when an alert arrives.
+  const [activityKey, setActivityKey] = useState(0);
   // Bumped to remount the tab screens so they reload after an alert is opened.
   const [generation, setGeneration] = useState(0);
   const backgroundAt = useRef<number | null>(null);
@@ -48,6 +51,10 @@ export default function App() {
   const go = useCallback((href: string | null | undefined) => {
     const where = destinationFor(href);
     if ('tab' in where) {
+      if (where.tab === 'guests') {
+        setGuestsSection(where.section);
+        setGuestsFocus(where.focus);
+      }
       setTab(where.tab);
       setOverlay(null);
       setGeneration((g) => g + 1);
@@ -58,21 +65,17 @@ export default function App() {
     }
   }, []);
 
-  const refreshUnread = useCallback(() => {
-    void getAlerts(1)
-      .then((r) => setUnread(r.unread))
-      .catch(() => undefined);
-  }, []);
+  const refreshActivity = useCallback(() => setActivityKey((k) => k + 1), []);
 
   const becameReady = useCallback(() => {
     setPhase('ready');
-    refreshUnread();
+    refreshActivity();
     void registerForPush(false);
     if (pendingHref.current !== null) {
       go(pendingHref.current);
       pendingHref.current = null;
     }
-  }, [go, refreshUnread]);
+  }, [go, refreshActivity]);
 
   const tryUnlock = useCallback(async () => {
     if (await unlock('Unlock Raj Kuthir Owner')) becameReady();
@@ -119,12 +122,12 @@ export default function App() {
         return p;
       });
     });
-    const received = Notifications.addNotificationReceivedListener(() => refreshUnread());
+    const received = Notifications.addNotificationReceivedListener(() => refreshActivity());
     return () => {
       sub.remove();
       received.remove();
     };
-  }, [go, refreshUnread]);
+  }, [go, refreshActivity]);
 
   useEffect(() => {
     const sub = AppState.addEventListener('change', (state) => {
@@ -138,18 +141,17 @@ export default function App() {
             return 'locked';
           });
         } else {
-          refreshUnread();
+          refreshActivity();
         }
       }
     });
     return () => sub.remove();
-  }, [tryUnlock, refreshUnread]);
+  }, [tryUnlock, refreshActivity]);
 
   const doSignOut = () => {
     void unregisterPush()
       .then(() => signOut())
       .then(() => {
-        setUnread(0);
         setPhase('signedOut');
       });
   };
@@ -194,41 +196,24 @@ export default function App() {
               ) : (
                 <Text style={{ fontSize: 16, fontWeight: '700', color: color.ink }}>Sobuj Potro</Text>
               )}
-              <Pressable
-                onPress={() => setOverlay(overlay === 'alerts' ? null : 'alerts')}
-                accessibilityRole="button"
-                accessibilityLabel={unread ? `Alerts, ${unread} unread` : 'Alerts'}
-                style={{ minWidth: 48, minHeight: 48, alignItems: 'center', justifyContent: 'center' }}
-              >
-                <Text style={{ fontSize: 22 }}>🔔</Text>
-                {unread > 0 && (
-                  <View
-                    style={{
-                      position: 'absolute',
-                      top: 4,
-                      right: 2,
-                      minWidth: 20,
-                      height: 20,
-                      borderRadius: 10,
-                      paddingHorizontal: 5,
-                      backgroundColor: color.terracotta,
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                    }}
-                  >
-                    <Text style={{ color: color.white, fontSize: 12, fontWeight: '700' }}>{unread > 99 ? '99+' : unread}</Text>
-                  </View>
-                )}
-              </Pressable>
+              <ActivityBell onOpen={go} refreshKey={activityKey} />
             </View>
 
             <View style={{ flex: 1 }}>
-              {overlay === 'alerts' && <Alerts onOpen={(alert) => go(alert.href)} onChanged={refreshUnread} />}
               {overlay === 'messages' && <Messages />}
               {overlay === null && (
                 <View style={{ flex: 1 }} key={generation}>
                   {tab === 'today' && <Today />}
-                  {tab === 'enquiries' && <Enquiries />}
+                  {tab === 'guests' && (
+                    <Guests
+                      section={guestsSection}
+                      focus={guestsFocus}
+                      onSection={(section) => {
+                        setGuestsSection(section);
+                        setGuestsFocus(null);
+                      }}
+                    />
+                  )}
                   {tab === 'calendar' && <Calendar />}
                   {tab === 'caretaker' && <Caretaker />}
                   {tab === 'settings' && <Settings onSignOut={doSignOut} />}
@@ -245,6 +230,7 @@ export default function App() {
                     onPress={() => {
                       setTab(t.key);
                       setOverlay(null);
+                      setGuestsFocus(null);
                     }}
                     accessibilityRole="tab"
                     accessibilityState={{ selected }}

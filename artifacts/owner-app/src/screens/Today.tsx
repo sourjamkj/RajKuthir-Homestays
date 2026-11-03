@@ -4,9 +4,7 @@ import { Alert, Image, Linking, RefreshControl, ScrollView, TextInput, View } fr
 import {
   AdminApiError,
   confirmPayment,
-  getActivity,
   getPayments,
-  markActivitySeen,
   rejectPayment,
   screenshotUrl,
   type PaymentRow,
@@ -17,13 +15,12 @@ import { Body, Button, Card, Heading, Notice, Row, Title } from '../ui';
 import { useLoad } from '../useLoad';
 
 /**
- * The first thing the owner sees: payments waiting for a decision, then
- * what happened since the last look. Confirm here does exactly what the
+ * The first thing the owner sees: payments waiting for a decision. What
+ * happened since the last look is behind the bell, as on the web. Confirm here does exactly what the
  * web console's Confirm does (creates the booking, sends the confirmation).
  */
 export default function Today() {
   const payments = useLoad(getPayments);
-  const activity = useLoad(getActivity);
   const [token, setToken] = useState<string | null>(null);
   const [message, setMessage] = useState<{ text: string; tone: 'ok' | 'error' } | null>(null);
 
@@ -33,7 +30,6 @@ export default function Today() {
 
   const refresh = () => {
     void payments.reload();
-    void activity.reload();
   };
 
   const open = (payments.data?.payments ?? []).filter(
@@ -41,12 +37,11 @@ export default function Today() {
   );
   const submitted = open.filter((p) => p.status === 'submitted');
   const holding = open.filter((p) => p.status === 'awaiting_payment');
-  const items = activity.data?.items ?? [];
 
   return (
     <ScrollView
       contentContainerStyle={{ padding: space(4), paddingBottom: space(10) }}
-      refreshControl={<RefreshControl refreshing={payments.loading || activity.loading} onRefresh={refresh} />}
+      refreshControl={<RefreshControl refreshing={payments.loading} onRefresh={refresh} />}
     >
       <Title>Today</Title>
       {message && <Notice tone={message.tone}>{message.text}</Notice>}
@@ -70,29 +65,6 @@ export default function Today() {
         </View>
       )}
 
-      <View style={{ marginTop: space(6) }}>
-        <Row style={{ justifyContent: 'space-between' }}>
-          <Heading>What happened</Heading>
-          {items.length > 0 && (
-            <Button
-              label="Mark all read"
-              kind="secondary"
-              onPress={() => {
-                void markActivitySeen(new Date().toISOString()).then(() => activity.reload());
-              }}
-            />
-          )}
-        </Row>
-        {activity.error && <Notice tone="error">{activity.error}</Notice>}
-        {items.length === 0 && !activity.loading && <Body muted>Nothing new since you last looked.</Body>}
-        {items.map((item) => (
-          <Card key={item.id}>
-            <Body style={{ fontWeight: '600' }}>{item.title}</Body>
-            {item.detail ? <Body muted>{item.detail}</Body> : null}
-            <Body muted>{when(item.at)}</Body>
-          </Card>
-        ))}
-      </View>
     </ScrollView>
   );
 }

@@ -93,17 +93,25 @@ export async function unregisterPush(): Promise<void> {
 }
 
 /** Where a tapped alert should land, from its console path. */
+export type GuestsSection = 'enquiries' | 'stays' | 'contacts';
+
 export type Destination =
-  | { tab: 'today' | 'enquiries' | 'calendar' | 'caretaker' }
+  | { tab: 'today' | 'calendar' | 'caretaker' }
+  | { tab: 'guests'; section: GuestsSection; focus: string | null }
   | { screen: 'messages' }
   | { web: string };
 
+/** The same places the web console's links land: Guests opens on the exact enquiry or stay. */
 export function destinationFor(href: string | undefined | null): Destination {
   const h = href ?? '/admin';
   if (/^\/admin\/guests#payments?(-|$)/.test(h)) return { tab: 'today' };
-  if (h.startsWith('/admin/guests#enquiry-')) return { tab: 'enquiries' };
-  if (h.startsWith('/admin/guests#stay-')) return { tab: 'calendar' };
+  const enquiry = /^\/admin\/guests#enquiry-(.+)$/.exec(h);
+  if (enquiry) return { tab: 'guests', section: 'enquiries', focus: enquiry[1]! };
+  const stay = /^\/admin\/guests#stay-(.+)$/.exec(h);
+  if (stay) return { tab: 'guests', section: 'stays', focus: stay[1]! };
+  if (h.startsWith('/admin/guests#stays')) return { tab: 'guests', section: 'stays', focus: null };
   if (h.startsWith('/admin/guests#messages')) return { screen: 'messages' };
+  if (h === '/admin/guests' || h.startsWith('/admin/guests#')) return { tab: 'guests', section: 'enquiries', focus: null };
   if (h.startsWith('/admin/caretaker')) return { tab: 'caretaker' };
   if (h.startsWith('/admin/reviews')) return { web: h };
   return { tab: 'calendar' };
