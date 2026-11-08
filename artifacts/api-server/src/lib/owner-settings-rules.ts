@@ -29,6 +29,7 @@ export const OWNER_EVENTS = [
   "documents_uploaded",
   "invoice_check_failed",
   "review_received",
+  "guest_feedback",
 ] as const;
 export type OwnerEvent = (typeof OWNER_EVENTS)[number];
 
@@ -45,6 +46,7 @@ export const OWNER_EVENT_INFO: Record<OwnerEvent, { label: string; description: 
   documents_uploaded: { label: "Guest ID uploaded", description: "A guest uploaded their ID before arrival.", push: true, email: false },
   invoice_check_failed: { label: "Invoices failing", description: "The hourly test of the invoice and confirmation PDFs failed, or recovered.", push: true, email: true },
   review_received: { label: "New Google review", description: "A new review, with a reply drafted for you.", push: true, email: true },
+  guest_feedback: { label: "Complaints & suggestions book", description: "A guest wrote in the online complaints & suggestions book.", push: true, email: true },
 };
 
 export type StoredOwnerSettings = {

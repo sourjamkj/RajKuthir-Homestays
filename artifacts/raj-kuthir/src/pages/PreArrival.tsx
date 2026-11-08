@@ -50,6 +50,10 @@ export default function PreArrival() {
   const [phone, setPhone] = useState('');
   const [email, setEmail] = useState('');
   const [address, setAddress] = useState('');
+  // Nationality decides whether a Form C is needed (foreign guests, within
+  // 24 hours of arrival), so it is asked for rather than guessed.
+  const [country, setCountry] = useState('India');
+  const foreignGuest = !/^\s*(india|indian|bharat|in)\s*$/i.test(country) && country.trim() !== '';
   const [documents, setDocuments] = useState<DocumentDraft[]>([]);
 
   useEffect(() => {
@@ -93,7 +97,7 @@ export default function PreArrival() {
     if (!lookup || saving) return;
     setSaving(true); setError(null);
     try {
-      const response = await fetch('/api/guest/onboarding/submit', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token, fullName: name, phone, email, address, documents }) });
+      const response = await fetch('/api/guest/onboarding/submit', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token, fullName: name, phone, email, address, country, documents }) });
       const body = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(body?.error ?? 'Could not save your verification.');
       setSaved(true);
@@ -123,6 +127,8 @@ export default function PreArrival() {
         <label className="block"><span className="eyebrow text-muted-foreground">Mobile number</span><input required type="tel" value={phone} onChange={e=>setPhone(e.target.value)} className="mt-2 w-full border-b border-border bg-transparent py-3 text-base focus:border-primary"/></label>
         <label className="block"><span className="eyebrow text-muted-foreground">Email (optional)</span><input type="email" value={email} onChange={e=>setEmail(e.target.value)} className="mt-2 w-full border-b border-border bg-transparent py-3 text-base focus:border-primary"/></label>
         <label className="block"><span className="eyebrow text-muted-foreground">Address (optional)</span><textarea value={address} onChange={e=>setAddress(e.target.value)} rows={3} className="mt-2 w-full rounded-xl border border-border bg-transparent p-3 text-sm focus:border-primary"/></label>
+        <label className="block"><span className="eyebrow text-muted-foreground">Nationality</span><input required value={country} onChange={e=>setCountry(e.target.value)} autoComplete="country-name" className="mt-2 w-full border-b border-border bg-transparent py-3 text-base focus:border-primary" data-testid="input-prearrival-country"/></label>
+        {foreignGuest && <p className="rounded-xl border border-border bg-card p-4 text-sm leading-6 text-muted-foreground" data-testid="text-prearrival-foreign">For guests who are not Indian nationals, please upload the photo page of your passport and your Indian visa. We file the Form C with the Foreigners Regional Registration Office within 24 hours of arrival, as the law requires.</p>}
         <div className="rounded-2xl border border-border bg-card p-5"><p className="eyebrow text-muted-foreground">Identity documents</p><p className="mt-2 text-sm leading-6 text-muted-foreground">You can upload an issued identity document here. DigiLocker integration can be enabled when Raj Kuthir's approved API credentials are configured.</p><label className="mt-4 flex cursor-pointer items-center justify-center gap-2 rounded-xl border border-dashed border-border px-4 py-5 text-[13px] font-medium text-primary hover:border-primary"><UploadIcon /> Add document<input type="file" accept={DOCUMENT_ACCEPT} className="hidden" onChange={addDocument}/></label>{documents.map((doc,i)=><div key={`${doc.originalFilename}-${i}`} className="mt-3 rounded-xl border border-border p-3"><div className="flex items-center gap-3"><div className="min-w-0"><p className="truncate text-sm font-medium">{doc.originalFilename}</p><input value={doc.documentType} onChange={e=>setDocuments(ds=>ds.map((d,j)=>j===i?{...d,documentType:e.target.value}:d))} className="mt-1 w-full border-b border-border bg-transparent py-1 text-xs" placeholder="Document type"/></div></div></div>)}</div>
         {error && <p className="text-sm text-terracotta" role="alert">{error}</p>}
         <button disabled={saving || !documents.length} className="flex items-center gap-3 rounded-full bg-primary px-6 py-4 text-sm font-semibold text-primary-foreground disabled:opacity-50">{saving ? <SpinnerIcon className="animate-spin" /> : <CheckCircleIcon />} Submit verification</button>

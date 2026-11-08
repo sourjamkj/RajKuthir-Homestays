@@ -50,6 +50,8 @@ import Offer from '@/pages/Offer';
 import Pay from '@/pages/Pay';
 import GuestInvoice from '@/pages/GuestInvoice';
 import ManagementDocuments from '@/pages/ManagementDocuments';
+import Feedback from '@/pages/Feedback';
+import AdminCompliance from '@/pages/AdminCompliance';
 import {
   useRatePlan,
   rateForNight,
@@ -62,6 +64,7 @@ import {
   petChargeText,
   securityDepositText,
   minimumStayFor,
+  type RatePlan,
 } from '@/lib/rates';
 import { Route, Switch, useLocation, Router as WouterRouter } from 'wouter';
 import { CONFIG, NEIGHBOURHOOD, asset, basePath, phoneHref, track } from '@/lib/site';
@@ -173,33 +176,76 @@ type BusyPeriod = {
 };
 
 
-const faqs = [
-  {
-    question: 'Is Raj Kuthir a private villa?',
-    answer: 'Yes. Sobuj Potro is an entire two-bedroom villa with a private garden, so your group can settle in at its own pace.',
-  },
-  {
-    question: 'Can we bring our pet?',
-    answer: 'Yes, the stay is genuinely pet-welcoming. Please add your pets and anything we should know in the booking form so the caretaker can prepare.',
-  },
-  {
-    question: 'Can we cook at the homestay?',
-    answer: 'Basic cooking utensils and an induction setup are available, along with a microwave, refrigerator and water filter. A home-cooked meal option can also be arranged through the caretaker.',
-  },
-  {
-    question: 'Is food available nearby?',
-    answer: 'Cafe Soi is inside the premises, and Zomato availability makes it easy to order in when you prefer a slower evening at home.',
-  },
-  {
-    // Guests spell the name every way: say so in plain words, once.
-    question: 'Is it Raj Kuthir, Raj Kutir or Rajkuthir?',
-    answer: 'All three. You will see the name written each way. It is the same place: Raj Kuthir Homestays, Sobuj Potro, a private two-bedroom villa in Bolpur, Shantiniketan.',
-  },
-  {
-    question: 'How do I confirm a booking?',
-    answer: 'Pick your dates on the calendar, hold them and pay the advance by UPI. We confirm as soon as we see the payment, and the balance is paid at check-in. For six or more guests, or stays over 30 nights, message us on WhatsApp.',
-  },
-];
+/**
+ * The homepage answers. Every figure comes from the live rate plan
+ * (/api/rates) — none is typed here — and each priced answer has a version
+ * without figures for the prerendered page and for the moment before the
+ * plan loads, so a stale price can never be baked into the HTML.
+ */
+type Faq = { question: string; answer: string };
+
+function homeFaqs(plan: RatePlan | undefined): Faq[] {
+  const ladder = plan?.ladder;
+  const extras = plan?.extras;
+  const maxGuests = plan?.maxGuests ?? 5;
+  const peakNames = [...new Set((plan?.peaks ?? []).map((p) => p.label))].slice(0, 3);
+  const deposit = securityDepositText(extras, formatRupees);
+
+  const rates = ladder
+    ? [
+        `You book the whole villa, priced by the night for your party: ${formatRupees(ladder.weekdayBasePaise)} Sunday–Thursday and ${formatRupees(ladder.weekendBasePaise)} Friday–Saturday for up to ${ladder.includedGuests} guests, plus ${formatRupees(ladder.extraGuestPaise)} a night for each guest after that, up to ${maxGuests}.`,
+        ladder.weeklyDiscountPercent > 0 ? `Stays of ${ladder.weeklyMinNights} nights or more are ${ladder.weeklyDiscountPercent}% off.` : '',
+        peakNames.length ? `Festival dates (${peakNames.join(', ')}) have their own rates and a minimum stay.` : '',
+        'The calendar shows the exact total for your dates before you pay anything.',
+        deposit ?? '',
+      ]
+    : [
+        'You book the whole villa, priced by the night for your party, a little more on Friday and Saturday nights. Festival dates have their own rates and a minimum stay.',
+        'The calendar shows the exact total for your dates before you pay anything, and the full rate card is on the Rates page.',
+      ];
+
+  const bedding = extras
+    ? `The rate card covers up to ${maxGuests} guests, and children count as guests: two adults and two little ones are a party of four. Beyond ${maxGuests}, each extra person is ${formatRupees(extras.extraAdultPaise)} a night, or ${formatRupees(extras.extraChildPaise)} for a child under ${extras.childUnderAge}, with an extra bed made up for them. For ${maxGuests + 1} or more guests, message us on WhatsApp so we can set the house up before you arrive.`
+    : `The rate card covers up to ${maxGuests} guests, and children count as guests. Larger groups can stay, with extra bedding at a per-person charge a night. For ${maxGuests + 1} or more guests, message us on WhatsApp so we can set the house up before you arrive.`;
+
+  const pets = [
+    'Yes, pets are welcome.',
+    extras ? petChargeText(extras, formatRupees) : 'There is a small pet charge, shown with your total before you pay.',
+    'Please keep them off beds, sofas and linen, and add your pets in the booking form so the caretaker can prepare. Damage or soiling is charged as set out in the house rules.',
+  ];
+
+  return [
+    {
+      question: 'Is Raj Kuthir a private villa?',
+      answer: 'Yes. Sobuj Potro is an entire two-bedroom villa with a private garden, so your group can settle in at its own pace.',
+    },
+    { question: 'How are the room rates worked out?', answer: rates.filter(Boolean).join(' ') },
+    { question: 'We are more than five. Is extra bedding available?', answer: bedding },
+    { question: 'Can we bring our pet?', answer: pets.join(' ') },
+    {
+      question: 'What ID do we need, and how does verification work?',
+      answer:
+        'Every adult staying needs a valid government photo ID, such as Aadhaar, passport, driving licence or voter ID. It is a legal requirement for homestays, not a formality. After you book we send you a private link: upload the IDs there at least 48 hours before check-in, that is by 12 noon two days before you arrive. Guests who are not Indian nationals need their passport and Indian visa, and we file the Form C with the FRRO within 24 hours of arrival, as the law requires. Your documents are stored securely and used only for the guest register the law asks us to keep.',
+    },
+    {
+      question: 'Can we cook at the homestay?',
+      answer: 'Basic cooking utensils and an induction setup are available, along with a microwave, refrigerator and water filter. A home-cooked meal option can also be arranged through the caretaker.',
+    },
+    {
+      question: 'Is food available nearby?',
+      answer: 'Cafe Soi is inside the premises, and Zomato availability makes it easy to order in when you prefer a slower evening at home.',
+    },
+    {
+      // Guests spell the name every way: say so in plain words, once.
+      question: 'Is it Raj Kuthir, Raj Kutir or Rajkuthir?',
+      answer: 'All three. You will see the name written each way. It is the same place: Raj Kuthir Homestays, Sobuj Potro, a private two-bedroom villa in Bolpur, Shantiniketan.',
+    },
+    {
+      question: 'How do I confirm a booking?',
+      answer: 'Pick your dates on the calendar, hold them and pay the advance by UPI. We confirm as soon as we see the payment, and the balance is paid at check-in. For six or more guests, or stays over 30 nights, message us on WhatsApp.',
+    },
+  ];
+}
 
 const currency = (amount: number) =>
   new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(amount);
@@ -298,6 +344,7 @@ function Home() {
   });
 
   const ratePlan = useRatePlan();
+  const faqs = useMemo(() => homeFaqs(ratePlan.data), [ratePlan.data]);
   // Occupancy the calendar prices are shown for. Prices vary by guest count,
   // so the grid has to be told which one to display.
   const [calendarGuests, setCalendarGuests] = useState(2);
@@ -1492,6 +1539,7 @@ function Home() {
 
           <div className="mt-4 flex flex-col justify-between gap-1.5 border-t border-footer-ink/15 pt-3 text-[13px] text-footer-ink/40 sm:flex-row">
             <p>© {new Date().getFullYear()} Raj Kuthir Homestays · Made for slower days</p>
+            <p className="normal-case tracking-[.04em]" data-testid="text-footer-udyam">MSME Udyam: UDYAM-WB-04-0087351</p>
             <p className="normal-case tracking-[.04em] text-footer-ink/30" data-testid="text-footer-credit">Developed by Sourja Mukherjee</p>
           </div>
         </div>
@@ -1731,6 +1779,8 @@ function Router() {
         <Route path="/offer" component={Offer} />
         <Route path="/invoice" component={GuestInvoice} />
         <Route path="/management-documents" component={ManagementDocuments} />
+        {/* The complaints & suggestions book (notice-board QR). Not indexed. */}
+        <Route path="/feedback" component={Feedback} />
         <Route path="/admin" component={AdminDashboard} />
         <Route path="/admin/login" component={AdminLogin} />
         <Route path="/admin/earnings" component={AdminEarnings} />
@@ -1739,6 +1789,7 @@ function Router() {
         <Route path="/admin/reviews" component={AdminReviews} />
         <Route path="/admin/guest-info" component={AdminGuestInfo} />
         <Route path="/admin/caretaker" component={AdminCaretakerConsole} />
+        <Route path="/admin/compliance" component={AdminCompliance} />
         {/* Legacy sign-in path, kept so existing bookmarks still land somewhere useful. */}
         <Route path="/sign-in/*?" component={AdminLogin} />
         <Route component={NotFound} />

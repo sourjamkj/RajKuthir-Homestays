@@ -33,6 +33,7 @@ test("which activity becomes which alert; the owner's own website bookings are n
   assert.equal(eventForActivity({ kind: "ota_block", source: "bookingCom" }), "ota_booking");
   assert.equal(eventForActivity({ kind: "booking_cancelled", source: "direct" }), "ota_cancellation");
   assert.equal(eventForActivity({ kind: "documents_uploaded" }), "documents_uploaded");
+  assert.equal(eventForActivity({ kind: "feedback" }), "guest_feedback");
   assert.equal(eventForActivity({ kind: "payment" }), null, "Book & Pay alerts where it happens");
 });
 

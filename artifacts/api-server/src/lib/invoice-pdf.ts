@@ -136,7 +136,7 @@ export async function renderInvoicePdf(
   }
   page.drawText(pdfSafe(BUSINESS.name), { x: textX, y: y - 4, size: 15, font: bold, color: GREEN });
   let headerY = y - 22;
-  for (const line of [...BUSINESS.address, `${BUSINESS.phone}  ·  ${BUSINESS.website}`]) {
+  for (const line of [...BUSINESS.address, `${BUSINESS.phone}  ·  ${BUSINESS.website}`, `Udyam: ${BUSINESS.udyam}`]) {
     page.drawText(pdfSafe(line), { x: textX, y: headerY, size: 9, font: regular, color: MUTED });
     headerY -= 12;
   }

@@ -13,6 +13,8 @@ export const BUSINESS = {
   address: ["Sobuj, Dopati 148, Potro Bunglow, Bandh Nabagram", "Bolpur, West Bengal 731204, India"],
   phone: "+91 62903 99165",
   website: "rajkuthirhomestays.casa",
+  /** MSME Udyam registration (Micro, services, NIC 55109), issued 8 Nov 2026. */
+  udyam: "UDYAM-WB-04-0087351",
 } as const;
 
 /** Bookings that came through a channel (and were paid to the channel by the guest). */
