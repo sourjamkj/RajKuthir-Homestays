@@ -39,9 +39,12 @@ test("follow-up · a returning guest with dates and party gets the price, not qu
   assert.match(text, /^Hi Sourav, welcome back/);
   assert.match(text, /• Check-in: Fri, 6 Nov, from 12 noon/);
   assert.match(text, /• Check-out: Wed, 11 Nov, by 11 am/);
-  assert.match(text, /• Stay: 5 nights for 3 guests: ₹19,150/);
-  assert.match(text, /• 2 pets: ₹3,750/);
+  assert.match(text, /• Stay: 5 nights for 3 guests and 2 pets\n/);
+  assert.match(text, /• 5 nights for 3 guests: ₹19,150/);
+  assert.match(text, /• 2 pets: ₹375 each a night/);
   assert.match(text, /• Total: ₹22,900/);
+  assert.match(text, /• Advance to confirm: ₹11,450, the balance at check-in/);
+  assert.match(text, /• Refundable security deposit: ₹2,500, paid at check-in and returned at check-out/);
   assert.doesNotMatch(text, /website!|how many of you/i);
 });
 
@@ -75,4 +78,20 @@ test("returning guest · a past stay or the owner's tag", () => {
   assert.equal(isReturningGuest({ stays: 1, lastStay: "2025-10-18", tags: null }, "2026-11-03"), true);
   assert.equal(isReturningGuest({ stays: 1, lastStay: "2026-12-01", tags: null }, "2026-11-03"), false);
   assert.equal(isReturningGuest(undefined, "2026-11-03"), false);
+});
+
+test("follow-up · every reply states the refundable security deposit (owner's rule)", () => {
+  const rows = [
+    sourav,
+    { ...sourav, adults: null, children: null, pets: null },
+    { ...sourav, checkIn: null, checkOut: null },
+    { ...sourav, status: "contacted" as const },
+    { ...sourav, status: "contacted" as const, quoteSentAt: "2026-11-04T10:00:00Z" },
+  ];
+  for (const row of rows) {
+    for (const datesTaken of [null, { startDate: "2026-11-06", endDate: "2026-11-07" }]) {
+      const text = buildEnquiryFollowUp(row, { quote, datesTaken, returning: false, now: NOW });
+      assert.equal((text.match(/Refundable security deposit: ₹2,500/g) ?? []).length, 1, text);
+    }
+  }
 });

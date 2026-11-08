@@ -60,6 +60,7 @@ import {
   surchargePerNight,
   petCharge,
   petChargeText,
+  securityDepositText,
   minimumStayFor,
 } from '@/lib/rates';
 import { Route, Switch, useLocation, Router as WouterRouter } from 'wouter';
@@ -967,6 +968,9 @@ function Home() {
                     <li>
                       {petChargeText(ratePlan.data.extras, formatRupees)}
                     </li>
+                    {securityDepositText(ratePlan.data.extras, formatRupees) && (
+                      <li data-testid="text-booking-deposit">{securityDepositText(ratePlan.data.extras, formatRupees)}</li>
+                    )}
                   </ul>
                 )}
                 <p className="mt-5 flex flex-wrap gap-x-5 gap-y-2 text-[12px] font-medium text-primary">

@@ -8,6 +8,7 @@ import {
   PET_NIGHTLY_PAISE,
   PET_SHORT_STAY_MULTI_PAISE,
   PET_SHORT_STAY_PAISE,
+  SECURITY_DEPOSIT_PAISE,
 } from "../lib/party";
 import { requireAdmin } from "../lib/admin-auth";
 import {
@@ -104,6 +105,7 @@ router.get("/rates", async (_req, res) => {
       petMultiPaise: PET_SHORT_STAY_MULTI_PAISE,
       petNightlyPaise: PET_NIGHTLY_PAISE,
       petNightlyFromNights: PET_NIGHTLY_FROM_NIGHTS,
+      securityDepositPaise: SECURITY_DEPOSIT_PAISE,
     },
   });
 });

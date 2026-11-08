@@ -52,6 +52,8 @@ export type RateExtras = {
   /** Per pet per night once the stay reaches petNightlyFromNights. */
   petNightlyPaise?: number;
   petNightlyFromNights?: number;
+  /** Refundable security deposit, paid at check-in and returned at check-out. */
+  securityDepositPaise?: number;
 };
 
 /** Mirrors the server's pricing.ts Ladder. */
@@ -148,6 +150,11 @@ export function petCharge(
   const shortStay = (breakdown.pets > 1 || nights > 1) && extras.petMultiPaise ? extras.petMultiPaise : extras.petPaise;
   const perPet = nights >= from && extras.petNightlyPaise ? extras.petNightlyPaise * nights : shortStay;
   return breakdown.pets * perPet;
+}
+
+/** The security deposit in words — the same sentence as the server's securityDepositNote. */
+export function securityDepositText(extras: RateExtras | undefined, format: (paise: number) => string): string | null {
+  return extras?.securityDepositPaise ? `Refundable security deposit: ${format(extras.securityDepositPaise)}, paid at check-in and returned at check-out.` : null;
 }
 
 /** The pet charge in words, from the plan — the same sentence as the server's chargesNote. */

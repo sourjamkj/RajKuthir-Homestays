@@ -62,6 +62,8 @@ export type Quote = {
   advancePercent: number;
   /** The peak period this stay touches (full payment at booking), or null. */
   peak: string | null;
+  /** Each night's room price for the party (before extra heads and pets), for the night-by-night lines. */
+  nightly?: { date: string; paise: number }[];
 };
 
 export type QuoteResult =
@@ -192,5 +194,6 @@ export function quoteForEnquiry(
     balancePaise: totalPaise - advancePaise,
     advancePercent,
     peak: minimum?.label ?? null,
+    nightly: nights.map((date, i) => ({ date, paise: perNight[i]! })),
   };
 }

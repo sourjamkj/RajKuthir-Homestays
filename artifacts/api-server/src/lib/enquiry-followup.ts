@@ -1,4 +1,5 @@
 import type { QuoteResult } from "./enquiry-quote.ts";
+import { PET_NIGHTLY_FROM_NIGHTS, RATE_CARD_MAX_GUESTS, securityDepositNote, surchargePerNight } from "./party.ts";
 
 /**
  * The WhatsApp reply behind "Reply on WhatsApp" / "Follow up" on an enquiry,
@@ -67,7 +68,7 @@ function plural(n: number, one: string, many = `${one}s`): string {
   return `${n} ${n === 1 ? one : many}`;
 }
 
-export function buildEnquiryFollowUp(
+function followUpBody(
   row: FollowUpEnquiry,
   input: {
     /** The rate-card quote, or the owner's agreed price (withAgreedPrice). */
@@ -78,6 +79,8 @@ export function buildEnquiryFollowUp(
     now: Date;
     /** The guest's ready-to-pay link (dates and price filled in), when there is one. */
     offerUrl?: string | null;
+    /** When the quote is being sent: how long the dates are held, and UPI as the fallback. */
+    sending?: { holdUntil: string; upi: string };
   },
 ): string {
   const first = row.name.trim().split(/\s+/)[0] || "there";
@@ -125,26 +128,32 @@ export function buildEnquiryFollowUp(
     const q = input.quote;
     const pets = row.pets ?? 0;
     const agreed = input.quote.agreed === true;
+    // One format for every priced reply (the owner's, Nov 2026): the stay, the
+    // price night by night, pets, total and advance. The owner's own breakdown
+    // when he agreed a price; the rate card's otherwise.
     const lines = [
       `• Check-in: ${weekdayDay(q.checkIn)}, from 12 noon`,
       `• Check-out: ${weekdayDay(q.checkOut)}, by 11 am`,
-      agreed
-        ? `• Stay: ${plural(q.nights, "night")} for ${plural(q.guests, "guest")}${pets > 0 ? ` and ${plural(pets, "pet")}` : ""}`
-        : `• Stay: ${plural(q.nights, "night")} for ${plural(q.guests, "guest")}: ${rupees(q.roomPaise + q.extraGuestPaise)}`,
-      !agreed && pets > 0 ? `• ${plural(pets, "pet")}: ${rupees(q.petPaise)}` : null,
-      // The owner's breakdown, one bullet per line he typed (night by night, extra guests…).
-      ...(agreed ? breakdownLines(input.quote.priceNote) : []),
+      `• Stay: ${plural(q.nights, "night")} for ${plural(q.guests, "guest")}${pets > 0 ? ` and ${plural(pets, "pet")}` : ""}`,
+      ...(agreed ? breakdownLines(input.quote.priceNote) : rateCardLines(q, pets)),
       `• Total: ${rupees(q.totalPaise)}`,
-      agreed ? `• Advance to confirm: ${rupees(q.advancePaise)}${q.balancePaise > 0 ? ", the balance at check-in" : ""}` : null,
-      q.peak ? `• ${q.peak}: paid in full when you book` : null,
+      q.balancePaise > 0
+        ? `• Advance to confirm: ${rupees(q.advancePaise)}, the balance at check-in`
+        : `• To confirm: ${rupees(q.advancePaise)}, the full amount${q.peak ? ` (${q.peak} stays are paid in full at booking)` : ""}`,
+      `• ${securityDepositNote()}`,
+      input.sending ? `• We hold these dates for you until ${input.sending.holdUntil}` : null,
     ].filter((line): line is string => line !== null);
     return (
       `${hello}\n\n${sorry}` +
       `Yes, the villa is free for your dates.\n${lines.join("\n")}\n\n` +
       `${VILLA}\n${DETAILS}\n\n` +
       (offer
-        ? `To book, open your link below: your dates, guests and price are already filled in. Check your name and pay the advance to confirm.\n${offer}\n\nAny questions, just reply here.${SIGN}`
-        : `Shall I hold these dates for you? Reply here and I will send the payment details, or book directly at ${SITE}${SIGN}`)
+        ? `To book, open your link below: your dates, guests and price are already filled in. Check your name and pay the advance to confirm.\n${offer}\n\n` +
+          (input.sending ? `Or pay by UPI: ${input.sending.upi}, and send us the screenshot here.\n\n` : "") +
+          `Any questions, just reply here.${SIGN}`
+        : input.sending
+          ? `To confirm, pay by UPI: ${input.sending.upi}, and send us the screenshot here.\n\nAny questions, just reply here.${SIGN}`
+          : `Shall I hold these dates for you? Reply here and I will send the payment details, or book directly at ${SITE}${SIGN}`)
     );
   }
 
@@ -154,6 +163,60 @@ export function buildEnquiryFollowUp(
       : `You asked about ${dates}. How many of you are coming, and will you bring any pets? I will send you the best direct rate.`
     : `Are you still planning a trip? Share your dates and number of guests, and I will check availability and send you the best direct rate.`;
   return `${hello}\n\n${sorry}${ask}\n\n${VILLA}\n${DETAILS}${SIGN}`;
+}
+
+type FollowUpInput = Parameters<typeof followUpBody>[1];
+
+/**
+ * Every reply states the refundable security deposit (the owner's rule):
+ * priced replies carry it as a bullet; every other reply gets it as a line
+ * just above the signature.
+ */
+export function buildEnquiryFollowUp(row: FollowUpEnquiry, input: FollowUpInput): string {
+  const text = followUpBody(row, input);
+  if (text.includes("security deposit")) return text;
+  return text.replace(SIGN, `\n\n${securityDepositNote()}.${SIGN}`);
+}
+
+/** "14 Nov", "14 and 15 Nov", "14, 15 and 16 Nov", "31 Dec and 1 Jan". */
+function dayList(dates: string[]): string {
+  const parts = dates.map((iso) => {
+    const [, m, d] = iso.split("-").map(Number);
+    return { d, m: MONTHS[m! - 1]! };
+  });
+  const sameMonth = parts.every((p) => p.m === parts[0]!.m);
+  const words = parts.map((p, i) => (sameMonth && i < parts.length - 1 ? String(p.d) : `${p.d} ${p.m}`));
+  return words.length === 1 ? words[0]! : `${words.slice(0, -1).join(", ")} and ${words.at(-1)}`;
+}
+
+/**
+ * The rate card's price in the owner's format: nights grouped by price
+ * ("14 and 15 Nov: ₹3,500 a night for 5 guests"), extra guests, then pets.
+ */
+function rateCardLines(q: Extract<QuoteResult, { ok: true }>, pets: number): string[] {
+  const rated = Math.min(q.guests, RATE_CARD_MAX_GUESTS);
+  const groups = new Map<number, string[]>();
+  for (const night of q.nightly ?? []) groups.set(night.paise, [...(groups.get(night.paise) ?? []), night.date]);
+  const lines = [...groups].map(([paise, dates]) =>
+    dates.length === 1
+      ? `• ${dayList(dates)}: ${rupees(paise)} for ${plural(rated, "guest")}`
+      : `• ${dayList(dates)}: ${rupees(paise)} a night for ${plural(rated, "guest")}`,
+  );
+  if (lines.length === 0) lines.push(`• ${plural(q.nights, "night")} for ${plural(rated, "guest")}: ${rupees(q.roomPaise)}`);
+  const extra = q.guests - rated;
+  if (extra > 0 && q.extraGuestPaise > 0) {
+    lines.push(`• ${extra} more guest${extra === 1 ? "" : "s"} with extra bedding: ${rupees(surchargePerNight(q.breakdown))} a night`);
+  }
+  if (pets > 0 && q.petPaise > 0) {
+    lines.push(
+      q.nights >= PET_NIGHTLY_FROM_NIGHTS
+        ? `• ${plural(pets, "pet")}: ${rupees(q.petPaise / pets / q.nights)} each a night`
+        : pets === 1
+          ? `• 1 pet: ${rupees(q.petPaise)} for the stay`
+          : `• ${plural(pets, "pet")}: ${rupees(q.petPaise / pets)} each for the stay`,
+    );
+  }
+  return lines;
 }
 
 /** The agreed price's breakdown as bullets: one per line, any bullet the owner typed removed. */

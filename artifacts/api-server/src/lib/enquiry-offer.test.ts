@@ -74,6 +74,10 @@ test("offer link · the quote message offers it first, UPI as the fallback", () 
     holdExpiresAt: new Date("2026-11-05T10:00:00Z"),
     offerUrl: url,
   });
-  assert.ok(spec.preview.includes(`dates and amount already filled in):\n${url}\n\nOr pay by UPI: rk@ybl (Raj Kuthir)`), spec.preview);
+  assert.ok(spec.preview.includes(`already filled in. Check your name and pay the advance to confirm.\n${url}\n\nOr pay by UPI: rk@ybl (Raj Kuthir), and send us the screenshot here.`), spec.preview);
+  assert.match(spec.preview, /• 20 and 21 Dec: ₹3,500 a night for 5/);
+  assert.match(spec.preview, /• Advance to confirm: ₹10,500, the balance at check-in/);
+  assert.match(spec.preview, /• Refundable security deposit: ₹2,500/);
+  assert.match(spec.preview, /• We hold these dates for you until /);
   assert.equal(spec.params.length, 9);
 });
