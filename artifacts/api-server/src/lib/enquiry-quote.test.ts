@@ -68,8 +68,14 @@ test("quote · a pet on a three-night stay is ₹375 a night", () => {
   assert.equal(withPet.totalPaise - without.totalPaise, 3 * PET_NIGHTLY_PAISE);
 });
 
-test("quote · a pet on a two-night stay is ₹1,000 for the stay", () => {
+test("quote · a pet on a two-night stay is ₹375 a night", () => {
   const withPet = quoteForEnquiry({ ...base, checkOut: "2026-10-04", pets: 1 }, nightlyRate);
+  assert.ok(withPet.ok);
+  assert.equal(withPet.petPaise, 2 * PET_NIGHTLY_PAISE);
+});
+
+test("quote · a pet on a one-night stay is ₹1,000 for the stay", () => {
+  const withPet = quoteForEnquiry({ ...base, checkOut: "2026-10-03", pets: 1 }, nightlyRate);
   assert.ok(withPet.ok);
   assert.equal(withPet.petPaise, PET_SHORT_STAY_PAISE);
 });

@@ -19,11 +19,10 @@
  * surcharge — the guest gets the better of the two readings, which is also
  * the reading nobody argues with at check-in.
  *
- * Pets are charged by the length of the stay: a short stay (one or two
- * nights) is one flat charge per pet, because what a pet costs then is the
- * extra clean afterwards; from three nights it is a per-night charge per pet.
- * Two nights at the flat ₹1,000 and three nights at ₹375 a night (₹1,125)
- * keep the price rising with the stay, never dropping.
+ * Pets are charged by the length of the stay (owner's policy, Nov 2026): a
+ * one-night stay is one flat charge per pet (₹1,000, or ₹750 each when two
+ * or more pets come), because what a pet costs then is the extra clean
+ * afterwards; from two nights it is ₹375 per pet per night.
  */
 
 /** Occupancies the rate card itself covers. Beyond this, surcharges apply. */
@@ -36,11 +35,13 @@ export const CHILD_UNDER_AGE = 8;
 export const EXTRA_ADULT_PAISE = 55_000; // ₹550
 export const EXTRA_CHILD_PAISE = 50_000; // ₹500
 
-/** Per pet for a stay of one or two nights — once for the whole stay, in paise. */
+/** Per pet for a one-night stay — once for the whole stay, in paise. */
 export const PET_SHORT_STAY_PAISE = 100_000; // ₹1,000
+/** Per pet for a one-night stay when two or more pets come, in paise. */
+export const PET_SHORT_STAY_MULTI_PAISE = 75_000; // ₹750
 /** Per pet per night once the stay is this many nights or longer. */
-export const PET_NIGHTLY_FROM_NIGHTS = 3;
-/** Per pet per night for stays of three nights or more, in paise. */
+export const PET_NIGHTLY_FROM_NIGHTS = 2;
+/** Per pet per night for stays of two nights or more, in paise. */
 export const PET_NIGHTLY_PAISE = 37_500; // ₹375
 
 export type Party = {
@@ -96,12 +97,14 @@ export function surchargePerNight(breakdown: PartyBreakdown): number {
 }
 
 /**
- * What the pets add to the stay as a whole, in paise: ₹1,000 per pet for one
- * or two nights; ₹375 per pet per night from three nights.
+ * What the pets add to the stay as a whole, in paise: for one night, ₹1,000
+ * per pet (₹750 each for two or more pets); from two nights, ₹375 per pet
+ * per night.
  */
 export function petCharge(breakdown: PartyBreakdown, nights: number): number {
   if (breakdown.pets <= 0 || nights <= 0) return 0;
-  const perPet = nights >= PET_NIGHTLY_FROM_NIGHTS ? PET_NIGHTLY_PAISE * nights : PET_SHORT_STAY_PAISE;
+  const shortStay = breakdown.pets > 1 ? PET_SHORT_STAY_MULTI_PAISE : PET_SHORT_STAY_PAISE;
+  const perPet = nights >= PET_NIGHTLY_FROM_NIGHTS ? PET_NIGHTLY_PAISE * nights : shortStay;
   return breakdown.pets * perPet;
 }
 
@@ -146,5 +149,5 @@ export function chargesNote(): string[] {
 
 /** The pet charge in words — the same sentence on every page that states it. */
 export function petChargeNote(): string {
-  return `Pets are ₹${(PET_SHORT_STAY_PAISE / 100).toLocaleString("en-IN")} each for a stay of one or two nights; from ${PET_NIGHTLY_FROM_NIGHTS} nights, ₹${PET_NIGHTLY_PAISE / 100} each per night.`;
+  return `Pets are ₹${(PET_SHORT_STAY_PAISE / 100).toLocaleString("en-IN")} each for a one-night stay (₹${PET_SHORT_STAY_MULTI_PAISE / 100} each for two or more pets); from ${PET_NIGHTLY_FROM_NIGHTS} nights, ₹${PET_NIGHTLY_PAISE / 100} each per night.`;
 }
