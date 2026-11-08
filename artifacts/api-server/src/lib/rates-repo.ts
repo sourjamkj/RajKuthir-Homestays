@@ -406,3 +406,15 @@ export function totalForStay(
   const prices = stayNightPrices(plan, nights, guests);
   return { nights: nights.length, totalPaise: prices.reduce((a, b) => a + b, 0) };
 }
+
+/** One-off rate plans already applied at boot (see rate-plan-sale-nov-2026.ts), by id. */
+const APPLIED_PLANS_KEY = "pricing.applied_plans";
+
+export async function appliedRatePlans(): Promise<string[]> {
+  const saved = await readJsonSetting<string[]>(APPLIED_PLANS_KEY);
+  return Array.isArray(saved) ? saved : [];
+}
+
+export async function markRatePlanApplied(id: string): Promise<void> {
+  await writeJsonSetting(APPLIED_PLANS_KEY, [...new Set([...(await appliedRatePlans()), id])]);
+}
