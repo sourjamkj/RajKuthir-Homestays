@@ -100,11 +100,11 @@ test("party · the surcharge lands on every night, not once", () => {
   );
 });
 
-test("party · a pet is ₹1,000 for one night, ₹375 a night from two", () => {
+test("party · one pet: ₹1,000 for one night, ₹750 for two, ₹375 a night from three", () => {
   const breakdown = breakdownOf({ adults: 2, children: 0, pets: 1 });
 
   assert.equal(petCharge(breakdown, 1), PET_SHORT_STAY_PAISE);
-  assert.equal(petCharge(breakdown, 2), 2 * PET_NIGHTLY_PAISE);
+  assert.equal(petCharge(breakdown, 2), PET_SHORT_STAY_MULTI_PAISE);
   assert.equal(petCharge(breakdown, 3), 3 * PET_NIGHTLY_PAISE);
   assert.equal(petCharge(breakdown, 7), 7 * PET_NIGHTLY_PAISE);
   assert.equal(PET_SHORT_STAY_PAISE, 100_000);
@@ -117,6 +117,7 @@ test("party · a pet is ₹1,000 for one night, ₹375 a night from two", () => 
 
 test("party · from two nights the pet charge only rises with the stay", () => {
   // One night (₹1,000) to two nights (₹750) is the owner's choice (Nov 2026): longer stays are encouraged.
+  // Two nights ₹750, three nights ₹1,125.
   const breakdown = breakdownOf({ adults: 2, children: 0, pets: 1 });
   for (let nights = 2; nights < 14; nights += 1) {
     assert.ok(petCharge(breakdown, nights + 1) >= petCharge(breakdown, nights), `${nights} → ${nights + 1}`);
@@ -128,7 +129,8 @@ test("party · two or more pets on one night are ₹750 each", () => {
   const three = breakdownOf({ adults: 2, children: 0, pets: 3 });
   assert.equal(petCharge(two, 1), 2 * PET_SHORT_STAY_MULTI_PAISE);
   assert.equal(petCharge(three, 1), 3 * 75_000);
-  assert.equal(petCharge(two, 2), 2 * 2 * PET_NIGHTLY_PAISE);
+  assert.equal(petCharge(two, 2), 2 * PET_SHORT_STAY_MULTI_PAISE);
+  assert.equal(petCharge(two, 3), 2 * 3 * PET_NIGHTLY_PAISE);
   assert.equal(petCharge(two, 4), 2 * 4 * PET_NIGHTLY_PAISE);
 });
 
@@ -139,7 +141,7 @@ test("party · no pets or no nights, no pet charge", () => {
 
 test("party · the words say both tiers", () => {
   const note = chargesNote().join(" ");
-  assert.match(note, /₹1,000 each for a one-night stay \(₹750 each for two or more pets\); from 2 nights/);
+  assert.match(note, /₹1,000 for one pet for one night; ₹750 each for the stay with two or more pets or a two-night stay; from 3 nights/);
   assert.match(note, /₹375 each per night/);
 });
 

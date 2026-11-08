@@ -53,7 +53,7 @@ export type Quote = {
   roomPaise: number;
   /** Extra heads, across the whole stay. */
   extraGuestPaise: number;
-  /** Pets: one night ₹1,000 each (₹750 each for 2+ pets); from two nights ₹375 each per night. */
+  /** Pets: 1 pet 1 night ₹1,000; 2+ pets or 2 nights ₹750 each for the stay; from three nights ₹375 each per night. */
   petPaise: number;
   totalPaise: number;
   advancePaise: number;
