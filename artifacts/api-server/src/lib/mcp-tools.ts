@@ -15,7 +15,10 @@ import { todayInIndia } from "./guest-lookup";
 import { logger } from "./logger";
 import { audit } from "./owner-devices";
 import { normaliseMobile } from "./phone";
-import { getRatePlan } from "./rates-repo";
+import { randomUUID } from "node:crypto";
+
+import { deleteOverride, getLadder, getPeaks, getRatePlan, saveLadder, savePeaks } from "./rates-repo";
+import { ladderTable, nextLadder, nextPeak, peakTable } from "./rate-edit-rules";
 import {
   CHILD_UNDER_AGE,
   EXTRA_ADULT_PAISE,
@@ -28,10 +31,12 @@ import {
 import { manualWhatsappLinkFor } from "./mcp-whatsapp";
 
 /**
- * The Claude connector's tools: enquiries and bookings, and nothing else.
- * No settings, rates, money records, phones or deletions. Every tool calls
- * the same code as the web console and the phone app, and every change is
- * written to the console's audit log as "claude".
+ * The Claude connector's tools: enquiries, bookings and (since Nov 2026, at
+ * the owner's request) the rate card. No settings, money records or phones.
+ * Rate tools only preview unless called with apply: true, so the owner sees
+ * the old and new prices before anything is saved. Every tool calls the same
+ * code and validators as the web console, and every change is written to
+ * the console's audit log as "claude".
  */
 
 const ISO = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "YYYY-MM-DD");
@@ -331,6 +336,107 @@ export function buildMcpServer(): McpServer {
         .sort((a, b) => a.checkIn.localeCompare(b.checkIn))
         .map(({ onboardingId: _id, ...s }) => s);
       return json(stays);
+    },
+  );
+
+  const APPLY = z.boolean().optional().describe("false or left out: preview only (old and new prices). true: save it. Show the owner the preview first.");
+  const preview = (before: unknown, after: unknown, extra: Record<string, unknown> = {}) =>
+    json({ saved: false, note: "Preview only. Nothing has changed. Call again with apply: true to save.", before, after, ...extra });
+
+  server.registerTool(
+    "set_rate_ladder",
+    {
+      title: "Set the normal-night rates",
+      description:
+        "Changes the website's normal-night rate ladder: weekday (Sun–Thu) and Fri–Sat price for 1–2 guests, the charge per extra guest for the 3rd–5th, the floor, and the weekly discount. Rupees. Only the fields given change. Returns old and new prices by party size; saves only with apply: true.",
+      inputSchema: {
+        weekdayBaseRupees: z.number().int().positive().optional(),
+        weekendBaseRupees: z.number().int().positive().optional(),
+        extraGuestRupees: z.number().int().min(0).optional(),
+        floorRupees: z.number().int().positive().optional(),
+        weeklyDiscountPercent: z.number().int().min(0).max(50).optional(),
+        apply: APPLY,
+      },
+    },
+    async ({ apply, ...args }) => {
+      const current = await getLadder();
+      const next = nextLadder(current, args);
+      if (!next.ok) return fail(next.error);
+      if (!apply) return preview(ladderTable(current), ladderTable(next.ladder));
+      await saveLadder(next.ladder);
+      await logChange("rates.ladder", { before: current, after: next.ladder });
+      return json({ saved: true, now: ladderTable(next.ladder) });
+    },
+  );
+
+  server.registerTool(
+    "set_peak_period",
+    {
+      title: "Add or change a peak period",
+      description:
+        "Adds a peak period (give label, firstNight, lastNight) or changes one (give its id from get_rates). Nights are inclusive. Price it with priceFor5GuestsRupees (the direct price for 5 guests; smaller parties step down by the usual extra-guest charge) or with bookingComRupees and discountPercent. minNights is the minimum stay. Returns old and new prices; saves only with apply: true.",
+      inputSchema: {
+        id: z.string().max(80).optional(),
+        label: z.string().max(120).optional(),
+        firstNight: ISO.optional(),
+        lastNight: ISO.optional(),
+        priceFor5GuestsRupees: z.number().int().positive().optional(),
+        bookingComRupees: z.number().int().positive().optional(),
+        discountPercent: z.number().int().min(0).max(90).optional(),
+        minNights: z.number().int().min(1).max(14).optional(),
+        apply: APPLY,
+      },
+    },
+    async ({ id, apply, ...args }) => {
+      const [peaks, ladder] = await Promise.all([getPeaks(), getLadder()]);
+      const existing = id ? peaks.find((p) => p.id === id) ?? null : null;
+      if (id && !existing) return fail("No peak period has that id. get_rates lists them.");
+      const next = nextPeak(existing, args, ladder, existing?.id ?? randomUUID());
+      if (!next.ok) return fail(next.error);
+      const after = peakTable(next.peak, ladder);
+      const before = existing ? peakTable(existing, ladder) : "new peak period";
+      if (!apply) return preview(before, after);
+      await savePeaks(existing ? peaks.map((p) => (p.id === existing.id ? next.peak : p)) : [...peaks, next.peak]);
+      await logChange(existing ? "rates.peak.changed" : "rates.peak.added", { before: existing, after: next.peak });
+      return json({ saved: true, now: after });
+    },
+  );
+
+  server.registerTool(
+    "remove_peak_period",
+    {
+      title: "Remove a peak period",
+      description: "Removes a peak period by id (from get_rates); its nights go back to normal-night rates. Previews unless apply: true.",
+      inputSchema: { id: z.string().max(80), apply: APPLY },
+    },
+    async ({ id, apply }) => {
+      const [peaks, ladder] = await Promise.all([getPeaks(), getLadder()]);
+      const existing = peaks.find((p) => p.id === id);
+      if (!existing) return fail("No peak period has that id. get_rates lists them.");
+      if (!apply) return preview(peakTable(existing, ladder), "removed: these nights use normal-night rates");
+      await savePeaks(peaks.filter((p) => p.id !== id));
+      await logChange("rates.peak.removed", { before: existing });
+      return json({ saved: true, removed: existing.label });
+    },
+  );
+
+  server.registerTool(
+    "remove_rate_rule",
+    {
+      title: "Remove a date rule",
+      description:
+        "Removes one of the older date rules (the overrides in get_rates, e.g. a +40% New Year rule) by id. Previews unless apply: true.",
+      inputSchema: { id: z.string().uuid(), apply: APPLY },
+    },
+    async ({ id, apply }) => {
+      const plan = await getRatePlan();
+      const rule = plan.overrides.find((o) => o.id === id);
+      if (!rule) return fail("No date rule has that id. get_rates lists them.");
+      const shown = { label: rule.label, from: rule.startDate, until: rule.endDate, mode: rule.mode, percent: rule.effectivePercent ?? null };
+      if (!apply) return preview(shown, "removed");
+      if (!(await deleteOverride(id))) return fail("That rule was already removed.");
+      await logChange("rates.rule.removed", { rule: shown, id });
+      return json({ saved: true, removed: shown });
     },
   );
 
