@@ -489,6 +489,13 @@ export const PAGES: Record<string, PageMeta> = {
     noindex: true,
   },
 
+  /** A guest's ready-to-pay offer from an enquiry reply. Token in the fragment, as on /pay. */
+  "/offer": {
+    title: "Your stay, ready to book | Raj Kuthir Homestays",
+    description: "Your dates and price, ready to hold and pay.",
+    noindex: true,
+  },
+
   /** A guest's invoice. The token is in the URL fragment, as on /pay. */
   "/invoice": {
     title: "Your invoice | Raj Kuthir Homestays",
@@ -519,6 +526,7 @@ const PRIVATE_PREFIXES = [
   "/pre-arrival",
   "/management-documents",
   "/pay",
+  "/offer",
   "/invoice",
 ];
 
@@ -560,6 +568,7 @@ const CLIENT_ROUTES = new Set([
   "/pre-arrival",
   "/management-documents",
   "/pay",
+  "/offer",
   "/invoice",
 ]);
 
