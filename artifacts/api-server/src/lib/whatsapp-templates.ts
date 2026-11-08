@@ -193,6 +193,8 @@ export function buildEnquiryQuoteTemplate(input: {
   upi: { id: string; name: string };
   /** When the dates stop being held. Derived, never stored — see enquiry-hold. */
   holdExpiresAt: Date;
+  /** The guest's ready-to-pay link (dates and price filled in), when there is one. */
+  offerUrl?: string | null;
 }): TemplateSpec {
   const guest = firstName(input.guestName);
   const arrive = prettyDate(input.quote.checkIn);
@@ -233,7 +235,7 @@ export function buildEnquiryQuoteTemplate(input: {
       (input.quote.advancePaise >= input.quote.totalPaise
         ? `To confirm, please send the full ₹${advance} by ${deadline}${input.quote.peak ? ` (${input.quote.peak} stays are paid in full at booking)` : ""}.\n\n`
         : `To confirm, please send ₹${advance} by ${deadline}. The balance of ₹${rupees(input.quote.balancePaise)} is payable at check-in.\n\n`) +
-      `UPI: ${payee}\n\n` +
+      (input.offerUrl ? `Pay online in one step (dates and amount already filled in):\n${input.offerUrl}\n\nOr pay by UPI: ${payee}\n\n` : `UPI: ${payee}\n\n`) +
       `Reply here with the payment screenshot and we will confirm your booking straight away. ` +
       `If the advance does not reach us by then, these dates are released automatically ` +
       `and offered to other guests.\n\n` +

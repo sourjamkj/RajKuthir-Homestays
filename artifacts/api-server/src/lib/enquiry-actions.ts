@@ -1,6 +1,9 @@
 import { findByEnquiryId } from "./book-pay-repo";
 import { convertEnquiry } from "./enquiry-convert-service";
 import { holdExpiryOf } from "./enquiry-hold";
+import { SITE } from "./enquiry-followup";
+import { offerUrl } from "./enquiry-offer-rules";
+import { offerTokenFor } from "./enquiry-offers";
 import { termsOf } from "./enquiry-terms";
 import { loadPricer } from "./enquiry-view";
 import { getEnquiry, markQuoteSent, setBookingDetails } from "./enquiries-repo";
@@ -47,7 +50,14 @@ export async function sendEnquiryQuote(id: string) {
 
   // The deadline the guest is told and the hold on the screen share this instant.
   const sentAt = new Date();
-  const template = buildEnquiryQuoteTemplate({ guestName: enquiry.name, quote, upi, holdExpiresAt: holdExpiryOf(sentAt) });
+  const token = await offerTokenFor(id);
+  const template = buildEnquiryQuoteTemplate({
+    guestName: enquiry.name,
+    quote,
+    upi,
+    holdExpiresAt: holdExpiryOf(sentAt),
+    offerUrl: token ? offerUrl(SITE, token) : null,
+  });
 
   // With the Business API on, Meta delivers it; otherwise the owner sends the
   // wa.me link from his own WhatsApp. `delivery` says which, honestly.

@@ -9,7 +9,12 @@ import { quoteForEnquiry, nightsOf, type QuoteResult } from "../lib/enquiry-quot
 import { getRatePlan, minimumStay, rateForNight, stayNightPrices, type RatePlan } from "../lib/rates-repo";
 import { isWeekendNight, peakFor } from "../lib/pricing";
 import { upiDetails } from "../lib/whatsapp-templates";
-import { setEnquiryStatus } from "../lib/enquiries-repo";
+import { getEnquiry, setEnquiryStatus } from "../lib/enquiries-repo";
+import { breakdownLines } from "../lib/enquiry-followup";
+import { looksLikeOfferToken, maskPhone, offerProblem } from "../lib/enquiry-offer-rules";
+import { enquiryIdForOffer } from "../lib/enquiry-offers";
+import { termsOf } from "../lib/enquiry-terms";
+import { loadPricer } from "../lib/enquiry-view";
 import { SITE_ORIGIN } from "../lib/seo";
 import {
   checkScreenshot,
@@ -28,6 +33,7 @@ import {
 import { startHold, type StartInput } from "../lib/book-pay-start";
 import {
   findById,
+  findByEnquiryId,
   findByToken,
   getBookPaySettings,
   getScreenshot,
@@ -35,6 +41,7 @@ import {
   listForAdmin,
   logPaymentEvent,
   markExpiryNotified,
+  offerStartStore,
   pgStartStore,
   readTakenRanges,
   saveBookPaySettings,
@@ -321,6 +328,166 @@ router.post("/book/start", async (req, res) => {
       return;
     }
     logger.error({ err: error }, "Book & Pay start failed");
+    res.status(500).json({ error: "Could not hold those dates just now. Please try again." });
+  }
+});
+
+/**
+ * The ready-to-pay link from an enquiry reply (/offer#token): the guest's
+ * dates, party and price (the owner's agreed price when set) already filled
+ * in. Both calls take the token in the body, never the URL, so it stays out
+ * of logs. Prices are recomputed here every time.
+ */
+type OfferContext =
+  | { ok: false; status: number; error: string }
+  | {
+      ok: true;
+      enquiry: NonNullable<Awaited<ReturnType<typeof getEnquiry>>>;
+      quote: Awaited<ReturnType<Awaited<ReturnType<typeof loadPricer>>>>;
+      ownLiveHold: boolean;
+    };
+
+async function offerContext(token: unknown, now: Date): Promise<OfferContext> {
+  if (!looksLikeOfferToken(token)) return { ok: false, status: 404, error: "This link is not complete. Please open it again from our WhatsApp message." };
+  const id = await enquiryIdForOffer(token);
+  const enquiry = id ? await getEnquiry(id) : null;
+  if (!enquiry) return { ok: false, status: 404, error: "This offer is no longer available. Message us on WhatsApp and we will send a fresh one." };
+  const problem = offerProblem(enquiry, todayInIndia(now));
+  if (problem) return { ok: false, status: 410, error: problem };
+  const quote = (await loadPricer())(enquiry, await termsOf(enquiry.id));
+  if (!quote.ok) return { ok: false, status: 422, error: "We need to check the price for these dates. Message us on WhatsApp and we will confirm it." };
+  const own = await findByEnquiryId(enquiry.id);
+  const ownLiveHold = !!own && (own.status === "awaiting_payment" || own.status === "submitted") && own.holdExpiresAt > now;
+  if (own?.status === "confirmed") return { ok: false, status: 410, error: "This stay is already booked. See you soon!" };
+  return { ok: true, enquiry, quote, ownLiveHold };
+}
+
+router.post("/book/offer", async (req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  if (quoteLimiter(ipOf(req))) {
+    res.status(429).json({ error: "Too many requests from this connection. Please try again in a few minutes." });
+    return;
+  }
+  try {
+    const now = new Date();
+    const ctx = await offerContext(req.body?.token, now);
+    if (!ctx.ok) {
+      res.status(ctx.status).json({ error: ctx.error });
+      return;
+    }
+    const { enquiry, quote } = ctx;
+    if (!quote.ok) return;
+    const stay = { startDate: quote.checkIn, endDate: quote.checkOut };
+    const taken = ctx.ownLiveHold ? [] : await readTakenRanges(now);
+    const free = !clashesWith(stay, taken);
+    const pets = enquiry.pets ?? 0;
+    const breakdown = quote.agreed
+      ? breakdownLines(quote.priceNote).map((line) => line.replace(/^•\s*/, ""))
+      : [
+          `${quote.nights} night${quote.nights === 1 ? "" : "s"} for ${quote.guests} guest${quote.guests === 1 ? "" : "s"}: ₹${Math.round((quote.roomPaise + quote.extraGuestPaise) / 100).toLocaleString("en-IN")}`,
+          ...(pets > 0 ? [`${pets} pet${pets === 1 ? "" : "s"}: ₹${Math.round(quote.petPaise / 100).toLocaleString("en-IN")}`] : []),
+        ];
+    res.json({
+      name: enquiry.name,
+      phoneMasked: maskPhone(enquiry.phone),
+      email: enquiry.email,
+      requests: enquiry.requests,
+      checkIn: quote.checkIn,
+      checkOut: quote.checkOut,
+      nights: quote.nights,
+      adults: enquiry.adults ?? 0,
+      children: enquiry.children ?? 0,
+      pets,
+      guests: quote.guests,
+      totalPaise: quote.totalPaise,
+      advancePaise: quote.advancePaise,
+      balancePaise: quote.balancePaise,
+      peak: quote.peak,
+      breakdown,
+      available: free,
+      nextFree: free ? [] : nextFreeWindows(stay, taken, { today: todayInIndia(now) }),
+      ready: !!(upiDetails() || onlinePaymentMode()),
+    });
+  } catch (error) {
+    logger.error({ err: error }, "Offer lookup failed");
+    res.status(500).json({ error: "Could not open this offer just now. Please try again." });
+  }
+});
+
+router.post("/book/offer/start", async (req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  if (startLimiter(ipOf(req))) {
+    res.status(429).json({ error: "Too many booking attempts from this connection. Please try again in an hour." });
+    return;
+  }
+  if (!upiDetails() && !onlinePaymentMode()) {
+    notReady(res);
+    return;
+  }
+  try {
+    const now = new Date();
+    const ctx = await offerContext(req.body?.token, now);
+    if (!ctx.ok) {
+      res.status(ctx.status).json({ error: ctx.error });
+      return;
+    }
+    const { enquiry, quote } = ctx;
+    if (!quote.ok) return;
+
+    const name = text(req.body?.name, 120) ?? enquiry.name;
+    const email = text(req.body?.email, 200);
+    if (name.length < 2) {
+      res.status(400).json({ error: "Please enter your name." });
+      return;
+    }
+    if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      res.status(400).json({ error: "That email address does not look right." });
+      return;
+    }
+    const phone = normaliseMobile(enquiry.phone);
+    if (!phone) {
+      res.status(422).json({ error: "We could not read the phone number on this offer. Message us on WhatsApp and we will fix it." });
+      return;
+    }
+
+    // Dates, party and price come from the enquiry, never from the browser.
+    const input: StartInput = {
+      name,
+      phone,
+      email: email ?? enquiry.email,
+      requests: text(req.body?.requests, 1000) ?? enquiry.requests,
+      checkIn: quote.checkIn,
+      checkOut: quote.checkOut,
+      adults: enquiry.adults ?? 0,
+      children: enquiry.children ?? 0,
+      pets: enquiry.pets ?? 0,
+    };
+
+    const settings = await getBookPaySettings();
+    const result = await startHold(offerStartStore(enquiry.id), input, quote, settings, now, todayInIndia(now));
+    if (!result.ok) {
+      res.status(result.status).json(result.status === 409 ? { error: result.error, nextFree: result.nextFree } : { error: result.error });
+      return;
+    }
+
+    logger.info(
+      { paymentRequestId: result.paymentRequestId, enquiryId: result.enquiryId },
+      result.resumed ? "Offer hold resumed" : "Hold started from the offer link",
+    );
+    if (!result.resumed) void sendSummaryEmails(result.paymentRequestId);
+
+    res.status(201).json({
+      payUrl: `/pay#${result.token}`,
+      reference: result.reference,
+      holdExpiresAt: result.holdExpiresAt.toISOString(),
+      resumed: result.resumed ?? false,
+    });
+  } catch (error) {
+    if (isNotMigrated(error)) {
+      notReady(res);
+      return;
+    }
+    logger.error({ err: error }, "Offer start failed");
     res.status(500).json({ error: "Could not hold those dates just now. Please try again." });
   }
 });

@@ -76,9 +76,13 @@ export function buildEnquiryFollowUp(
     /** Has stayed with us before. */
     returning: boolean;
     now: Date;
+    /** The guest's ready-to-pay link (dates and price filled in), when there is one. */
+    offerUrl?: string | null;
   },
 ): string {
   const first = row.name.trim().split(/\s+/)[0] || "there";
+  const offer = input.quote.ok && input.offerUrl ? input.offerUrl : null;
+  const bookLine = offer ? `\n\nBook in one step (your dates and price are already filled in):\n${offer}` : "";
   const dates = row.checkIn && row.checkOut ? `${shortDay(row.checkIn)} – ${shortDay(row.checkOut)}` : null;
   const hello = input.returning
     ? `Hi ${first}, welcome back to Raj Kuthir Homestays – Sobuj Potro! Lovely to hear from you again.`
@@ -97,13 +101,13 @@ export function buildEnquiryFollowUp(
     if (row.quoteSentAt) {
       return (
         `Hi ${first}, just following up on the quote we sent${dates ? ` for ${dates}` : ""}. ` +
-        `Happy to answer any questions or adjust the dates. Shall I confirm it for you?${SIGN}`
+        `Happy to answer any questions or adjust the dates. Shall I confirm it for you?${bookLine}${SIGN}`
       );
     }
     if (input.quote.ok) {
       return (
         `Hi ${first}, just checking in about ${dates ?? "your stay"}: the villa is still free and the total is ${rupees(input.quote.totalPaise)}. ` +
-        `Shall I hold the dates for you?${SIGN}`
+        `Shall I hold the dates for you?${bookLine}${SIGN}`
       );
     }
     return (
@@ -138,7 +142,9 @@ export function buildEnquiryFollowUp(
       `${hello}\n\n${sorry}` +
       `Yes, the villa is free for your dates.\n${lines.join("\n")}\n\n` +
       `${VILLA}\n${DETAILS}\n\n` +
-      `Shall I hold these dates for you? Reply here and I will send the payment details, or book directly at ${SITE}${SIGN}`
+      (offer
+        ? `To book, open your link below: your dates, guests and price are already filled in. Check your name and pay the advance to confirm.\n${offer}\n\nAny questions, just reply here.${SIGN}`
+        : `Shall I hold these dates for you? Reply here and I will send the payment details, or book directly at ${SITE}${SIGN}`)
     );
   }
 

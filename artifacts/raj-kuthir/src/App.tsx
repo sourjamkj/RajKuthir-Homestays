@@ -46,6 +46,7 @@ import Welcome from '@/pages/Welcome';
 import AdminGuestInfo from '@/pages/AdminGuestInfo';
 import AdminCaretakerConsole from '@/pages/AdminCaretakerConsole';
 import PreArrival from '@/pages/PreArrival';
+import Offer from '@/pages/Offer';
 import Pay from '@/pages/Pay';
 import GuestInvoice from '@/pages/GuestInvoice';
 import ManagementDocuments from '@/pages/ManagementDocuments';
@@ -1723,6 +1724,7 @@ function Router() {
             carries no parameter and is safe to serve to anyone. */}
         <Route path="/pre-arrival" component={PreArrival} />
         <Route path="/pay" component={Pay} />
+        <Route path="/offer" component={Offer} />
         <Route path="/invoice" component={GuestInvoice} />
         <Route path="/management-documents" component={ManagementDocuments} />
         <Route path="/admin" component={AdminDashboard} />

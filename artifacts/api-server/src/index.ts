@@ -18,6 +18,7 @@ import { ensureOwnerAppTables } from "./lib/owner-devices";
 import { ensureCaretakerMessagesTable } from "./lib/caretaker-messages";
 import { ensureOwnerAlertsTable } from "./lib/owner-alerts";
 import { ensureEnquiryTermsTable } from "./lib/enquiry-terms";
+import { ensureEnquiryOffersTable } from "./lib/enquiry-offers";
 import { ensureMcpTables } from "./lib/mcp-oauth";
 import { startOwnerAlertWatch } from "./lib/owner-alerts-watch";
 import { startOwnerSettingsRefresh } from "./lib/owner-settings";
@@ -98,6 +99,7 @@ app.listen(port, (err) => {
   void ensureOwnerAlertsTable();
   // The owner's extra enquiry details (ages, note, agreed price): additive.
   void ensureEnquiryTermsTable();
+  void ensureEnquiryOffersTable();
   // The Claude connector's OAuth clients and tokens: additive.
   void ensureMcpTables();
   startOwnerAlertWatch();

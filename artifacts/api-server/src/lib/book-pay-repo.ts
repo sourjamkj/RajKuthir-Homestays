@@ -235,6 +235,90 @@ export const pgStartStore: StartStore<Tx> = {
   },
 };
 
+/**
+ * The same hold, started from an enquiry's ready-to-pay link: the hold is
+ * attached to THAT enquiry (dates, party and the owner's agreed price
+ * already on it) instead of creating a second enquiry. Same lock, same
+ * clash check, same resume/release rules as /book/start.
+ */
+export function offerStartStore(enquiryId: string): StartStore<Tx> {
+  return {
+    ...pgStartStore,
+    async createHold(tx, record: HoldRecord) {
+      const { input } = record;
+      const now = new Date();
+
+      await tx
+        .update(enquiries)
+        .set({
+          name: input.name,
+          email: input.email,
+          requests: input.requests,
+          checkIn: input.checkIn,
+          checkOut: input.checkOut,
+          adults: input.adults,
+          children: input.children,
+          pets: input.pets,
+          status: "contacted",
+          quotedTotalPaise: record.totalPaise,
+          quotedAdvancePaise: record.advancePaise,
+          quoteSentAt: record.quoteSentAt,
+        })
+        .where(eq(enquiries.id, enquiryId));
+
+      // One payment request per enquiry (unique index). A live one was resumed
+      // before we got here; an expired or rejected one starts over in place.
+      const [existing] = await tx
+        .select({ id: paymentRequests.id })
+        .from(paymentRequests)
+        .where(eq(paymentRequests.enquiryId, enquiryId));
+
+      const fields = {
+        tokenHash: record.tokenHash,
+        reference: record.reference,
+        totalPaise: record.totalPaise,
+        advancePaise: record.advancePaise,
+        advancePercent: record.advancePercent,
+        holdExpiresAt: record.holdExpiresAt,
+      };
+      let paymentRequestId: string;
+      if (existing) {
+        await tx
+          .update(paymentRequests)
+          .set({
+            ...fields,
+            status: "awaiting_payment",
+            utr: null,
+            utrSubmittedAt: null,
+            screenshot: null,
+            screenshotMime: null,
+            screenshotBytes: null,
+            decidedAt: null,
+            rejectReason: null,
+            expiryNotifiedAt: null,
+            updatedAt: now,
+          })
+          .where(eq(paymentRequests.id, existing.id));
+        paymentRequestId = existing.id;
+      } else {
+        const [request] = await tx
+          .insert(paymentRequests)
+          .values({ enquiryId, ...fields })
+          .returning({ id: paymentRequests.id });
+        paymentRequestId = request!.id;
+      }
+
+      await tx.insert(paymentEvents).values({
+        paymentRequestId,
+        kind: "held",
+        detail: `${input.checkIn} → ${input.checkOut}, advance ₹${record.advancePaise / 100}, from the guest's offer link`,
+      });
+
+      return { enquiryId, paymentRequestId };
+    },
+  };
+}
+
 /** For the public availability checks outside the lock (quote, enquiry form). */
 export async function readTakenRanges(now = new Date()): Promise<DateRange[]> {
   // Holds via readLiveHolds, which never throws: a price check must keep
