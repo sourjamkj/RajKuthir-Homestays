@@ -1,7 +1,7 @@
 import { useEffect, useMemo } from 'react';
 import { BackIcon, CalendarIcon, LeafIcon, MapPinIcon, PhoneIcon, WhatsappIcon } from '@/components/icons';
 
-import { formatRupees, petChargeText, useRatePlan } from '@/lib/rates';
+import { formatRupees, petChargeText, securityDepositText, useRatePlan } from '@/lib/rates';
 import { BookAndPay } from '@/components/BookAndPay';
 import { CONFIG, basePath, phoneHref, track } from '@/lib/site';
 
@@ -236,7 +236,7 @@ export default function Rates() {
                 {extras.childUnderAge}.
               </li>
               <li className="rounded-[1.4rem] border border-border bg-card p-7 text-sm leading-6 text-muted-foreground">
-                {petChargeText(extras, formatRupees)} Everything else about bringing one is on the page for
+                {petChargeText(extras, formatRupees)} {securityDepositText(extras, formatRupees)} Everything else about bringing one is on the page for
                 guests who{' '}
                 <a href={`${basePath}/pet-friendly-homestay-shantiniketan`} className="text-primary underline decoration-accent decoration-2 underline-offset-4" data-testid="link-rates-pet">
                   stay with their pet in Shantiniketan

@@ -1,5 +1,5 @@
 import type { Booking } from "@workspace/db";
-import { breakdownLines } from "./enquiry-followup.ts";
+import { buildEnquiryFollowUp } from "./enquiry-followup.ts";
 
 import type { Quote } from "./enquiry-quote.ts";
 import { formatDeadline, HOLD_HOURS } from "./enquiry-hold.ts";
@@ -227,21 +227,30 @@ export function buildEnquiryQuoteTemplate(input: {
       the owner's breakdown, says "in full" when nothing is left to pay at
       check-in, and links the photos, the food and the live calendar.
     */
-    preview:
-      `Hello ${guest}, thank you for your enquiry about Raj Kuthir Homestays — Sobuj Potro.\n\n` +
-      `Your dates: ${arrive} to ${depart} — ${nights} night${input.quote.nights === 1 ? "" : "s"} for ${guests} guest${input.quote.guests === 1 ? "" : "s"}.\n` +
-      (input.quote.agreed ? breakdownLines(input.quote.priceNote).map((line) => `${line}\n`).join("") : "") +
-      `Total for the stay: ₹${total}\n` +
-      (input.quote.advancePaise >= input.quote.totalPaise
-        ? `To confirm, please send the full ₹${advance} by ${deadline}${input.quote.peak ? ` (${input.quote.peak} stays are paid in full at booking)` : ""}.\n\n`
-        : `To confirm, please send ₹${advance} by ${deadline}. The balance of ₹${rupees(input.quote.balancePaise)} is payable at check-in.\n\n`) +
-      (input.offerUrl ? `Pay online in one step (dates and amount already filled in):\n${input.offerUrl}\n\nOr pay by UPI: ${payee}\n\n` : `UPI: ${payee}\n\n`) +
-      `Reply here with the payment screenshot and we will confirm your booking straight away. ` +
-      `If the advance does not reach us by then, these dates are released automatically ` +
-      `and offered to other guests.\n\n` +
-      `Photos: https://rajkuthirhomestays.casa/gallery\n` +
-      `Food (Cafe Soi in the grounds): https://rajkuthirhomestays.casa/cafe-soi-shantiniketan\n\n` +
-      `Any questions, call ${CONTACT.hostPhone}.`,
+    // The owner's enquiry format (Nov 2026), the same text as the "Reply on
+    // WhatsApp" message, plus how long the dates are held and UPI as the
+    // fallback. The Business API template's parameters above are unchanged.
+    preview: buildEnquiryFollowUp(
+      {
+        name: input.guestName ?? "",
+        checkIn: input.quote.checkIn,
+        checkOut: input.quote.checkOut,
+        adults: input.quote.guests,
+        children: 0,
+        pets: input.quote.breakdown.pets,
+        status: "new",
+        createdAt: input.holdExpiresAt,
+        quoteSentAt: null,
+      },
+      {
+        quote: { ok: true, ...input.quote },
+        datesTaken: null,
+        returning: false,
+        now: input.holdExpiresAt,
+        offerUrl: input.offerUrl ?? null,
+        sending: { holdUntil: deadline, upi: payee },
+      },
+    ),
   };
 }
 

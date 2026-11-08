@@ -34,6 +34,7 @@ type Offer = {
   available: boolean;
   nextFree: { startDate: string; endDate: string }[];
   ready: boolean;
+  securityDepositPaise?: number;
 };
 
 function pretty(iso: string): string {
@@ -160,6 +161,11 @@ export default function Offer() {
                 )}
               </dl>
               {offer.peak && fullNow && <p className="mt-3 text-xs text-muted-foreground">{offer.peak} stays are paid in full at booking.</p>}
+              {offer.securityDepositPaise ? (
+                <p className="mt-3 text-xs text-muted-foreground" data-testid="text-offer-deposit">
+                  Refundable security deposit: {formatRupees(offer.securityDepositPaise)}, paid at check-in and returned at check-out.
+                </p>
+              ) : null}
             </section>
 
             {!offer.available ? (

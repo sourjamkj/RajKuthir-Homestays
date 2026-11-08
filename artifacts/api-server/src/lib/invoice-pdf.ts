@@ -1,3 +1,4 @@
+import { securityDepositNote } from "./party.ts";
 import { PDFDocument, StandardFonts, rgb, type PDFFont, type PDFPage } from "pdf-lib";
 
 import { BUSINESS, GST_NOTE, money, prettyDate, type InvoiceContent } from "./invoice-rules.ts";
@@ -222,6 +223,11 @@ export async function renderInvoicePdf(
   } else {
     row(confirmation ? "Advance received" : "Amount paid", money(invoice.paidPaise));
     row(confirmation ? "Balance (at check-in)" : "Balance due", money(invoice.balancePaise), invoice.balancePaise > 0);
+  }
+
+  if (summary || confirmation) {
+    y -= 16;
+    rightText(page, pdfSafe(`${securityDepositNote()}.`), right, y, 8.5, regular, MUTED);
   }
 
   if (options.receipt) {

@@ -28,6 +28,7 @@ type PayData = {
   totalPaise: number;
   advancePaise: number;
   balancePaise: number;
+  securityDepositPaise?: number;
   advancePercent: number;
   holdExpiresAt: string;
   secondsLeft: number;
@@ -436,6 +437,11 @@ export default function Pay() {
                 <dt className="text-muted-foreground">Total</dt><dd className="text-right text-primary">{formatRupees(data.totalPaise)}</dd>
                 <dt className="font-bold text-primary">{data.advancePercent >= 100 ? 'Peak dates, paid in full now' : `Advance now (${data.advancePercent}%)`}</dt><dd className="text-right text-lg font-bold text-primary" data-testid="text-pay-advance">{formatRupees(data.advancePaise)}</dd>
                 <dt className="text-muted-foreground">Balance at check-in</dt><dd className="text-right text-primary">{formatRupees(data.balancePaise)}</dd>
+                {data.securityDepositPaise ? (
+                  <>
+                    <dt className="text-muted-foreground">Security deposit (refundable)</dt><dd className="text-right text-primary">{formatRupees(data.securityDepositPaise)} at check-in</dd>
+                  </>
+                ) : null}
                 <dt className="text-muted-foreground">Reference</dt><dd className="text-right font-mono text-primary">{data.reference}</dd>
               </dl>
             </section>

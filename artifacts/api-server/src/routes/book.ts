@@ -10,6 +10,7 @@ import { getRatePlan, minimumStay, rateForNight, stayNightPrices, type RatePlan 
 import { isWeekendNight, peakFor } from "../lib/pricing";
 import { upiDetails } from "../lib/whatsapp-templates";
 import { getEnquiry, setEnquiryStatus } from "../lib/enquiries-repo";
+import { SECURITY_DEPOSIT_PAISE } from "../lib/party";
 import { breakdownLines } from "../lib/enquiry-followup";
 import { looksLikeOfferToken, maskPhone, offerProblem } from "../lib/enquiry-offer-rules";
 import { enquiryIdForOffer } from "../lib/enquiry-offers";
@@ -407,6 +408,7 @@ router.post("/book/offer", async (req, res) => {
       available: free,
       nextFree: free ? [] : nextFreeWindows(stay, taken, { today: todayInIndia(now) }),
       ready: !!(upiDetails() || onlinePaymentMode()),
+      securityDepositPaise: SECURITY_DEPOSIT_PAISE,
     });
   } catch (error) {
     logger.error({ err: error }, "Offer lookup failed");
@@ -586,6 +588,7 @@ router.post("/book/pay", async (req, res) => {
       totalPaise: request.totalPaise,
       advancePaise: request.advancePaise,
       balancePaise: request.totalPaise - request.advancePaise,
+      securityDepositPaise: SECURITY_DEPOSIT_PAISE,
       advancePercent: request.advancePercent,
       holdExpiresAt: request.holdExpiresAt.toISOString(),
       secondsLeft: request.status === "awaiting_payment" ? secondsLeft(request.holdExpiresAt, now) : 0,

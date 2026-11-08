@@ -32,6 +32,18 @@ export const RATE_CARD_MAX_GUESTS = 5;
 /** A "child" for pricing. Eight and over is a full guest at the normal rate. */
 export const CHILD_UNDER_AGE = 8;
 
+/**
+ * The refundable security deposit, in paise: paid at check-in, returned at
+ * check-out after a quick check. The owner's rule (Nov 2026): every
+ * follow-up and guest notice must state it.
+ */
+export const SECURITY_DEPOSIT_PAISE = 250_000; // ₹2,500
+
+/** The deposit in words — the same sentence everywhere it is stated. */
+export function securityDepositNote(): string {
+  return `Refundable security deposit: ₹${(SECURITY_DEPOSIT_PAISE / 100).toLocaleString("en-IN")}, paid at check-in and returned at check-out`;
+}
+
 /** Per extra head per night, in paise. */
 export const EXTRA_ADULT_PAISE = 55_000; // ₹550
 export const EXTRA_CHILD_PAISE = 50_000; // ₹500
@@ -145,6 +157,7 @@ export function chargesNote(): string[] {
     `Children under ${CHILD_UNDER_AGE} count as guests — a family of four with two little ones is a party of four, at the four-guest rate.`,
     `Above ${RATE_CARD_MAX_GUESTS} guests, each extra person is ₹${EXTRA_ADULT_PAISE / 100} a night, or ₹${EXTRA_CHILD_PAISE / 100} for a child under ${CHILD_UNDER_AGE}.`,
     petChargeNote(),
+    `${securityDepositNote()}.`,
   ];
 }
 

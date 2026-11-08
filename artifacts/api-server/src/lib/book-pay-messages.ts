@@ -1,3 +1,4 @@
+import { securityDepositNote } from "./party.ts";
 import { formatDeadline } from "./enquiry-hold.ts";
 import { rupees } from "./whatsapp-templates.ts";
 
@@ -42,6 +43,7 @@ export function confirmedMessage(input: {
     `Check-out: ${prettyDate(input.checkOut)} (by 11 am)`,
     `Advance received: ₹${rupees(input.advancePaise)}`,
     `Balance due at check-in: ₹${rupees(input.balancePaise)}`,
+    `${securityDepositNote()}.`,
   ];
   if (input.preArrivalUrl) {
     lines.push(
@@ -176,6 +178,7 @@ export function bookingSummaryMessages(input: {
         `Check-out: ${prettyDate(input.checkOut)} (by 11 am)`,
         `Total: ₹${rupees(input.totalPaise)}`,
         `Advance to pay now: ₹${rupees(input.advancePaise)}`,
+        `${securityDepositNote()}.`,
         "",
         `Your dates are held until ${deadline}. Pay the advance with the QR code in the attached booking summary (any UPI app), with ${input.reference} as the note.`,
         `Then send the payment screenshot on WhatsApp to ${HOST_PHONE}. We confirm the booking as soon as we see it.`,
