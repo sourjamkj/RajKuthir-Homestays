@@ -162,7 +162,7 @@ const PET_FRIENDLY_FAQ = [
   },
   {
     q: 'Is there an extra charge for bringing a pet?',
-    a: 'Yes, per pet, and it depends on how long you stay: for one night it is a single charge per pet (lower each when you bring two or more); from two nights it is charged per night. The amounts come from our current rate plan: it is shown on the rates page and in the booking section of the homepage, and the booking form adds it to your estimate when you enter your pets. Separately, pet damage or soiling is charged from ₹1,000, and that is on the house rules page along with everything else.',
+    a: 'Yes, per pet, and it depends on how long you stay: for one or two nights it is a single charge per pet for the whole stay (lower each for two nights or two or more pets); from three nights it is charged per night. The amounts come from our current rate plan: it is shown on the rates page and in the booking section of the homepage, and the booking form adds it to your estimate when you enter your pets. Separately, pet damage or soiling is charged from ₹1,000, and that is on the house rules page along with everything else.',
   },
   {
     q: 'Can we leave our dog in the villa while we go out?',

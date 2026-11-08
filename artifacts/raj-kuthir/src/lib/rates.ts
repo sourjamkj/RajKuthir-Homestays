@@ -45,9 +45,9 @@ export type RateExtras = {
   childUnderAge: number;
   extraAdultPaise: number;
   extraChildPaise: number;
-  /** Per pet for a one-night stay, once for the stay. */
+  /** One pet, one night, once for the stay. */
   petPaise: number;
-  /** Per pet for a one-night stay when two or more pets come. */
+  /** Per pet for the stay with two or more pets or a two-night stay. */
   petMultiPaise?: number;
   /** Per pet per night once the stay reaches petNightlyFromNights. */
   petNightlyPaise?: number;
@@ -136,7 +136,7 @@ export function surchargePerNight(
   );
 }
 
-/** Pets: a flat charge each for one night (less each for 2+ pets); per night each from two. Mirrors party.ts. */
+/** Pets: a flat charge each up to two nights (₹1,000 for one pet one night, else less each); per night from three. Mirrors party.ts. */
 export function petCharge(
   plan: RatePlan | undefined,
   breakdown: PartyBreakdown,
@@ -145,7 +145,7 @@ export function petCharge(
   const extras = plan?.extras;
   if (!extras || breakdown.pets <= 0 || nights <= 0) return 0;
   const from = extras.petNightlyFromNights ?? Infinity;
-  const shortStay = breakdown.pets > 1 && extras.petMultiPaise ? extras.petMultiPaise : extras.petPaise;
+  const shortStay = (breakdown.pets > 1 || nights > 1) && extras.petMultiPaise ? extras.petMultiPaise : extras.petPaise;
   const perPet = nights >= from && extras.petNightlyPaise ? extras.petNightlyPaise * nights : shortStay;
   return breakdown.pets * perPet;
 }
@@ -153,9 +153,8 @@ export function petCharge(
 /** The pet charge in words, from the plan — the same sentence as the server's chargesNote. */
 export function petChargeText(extras: RateExtras, format: (paise: number) => string): string {
   if (!extras.petNightlyPaise || !extras.petNightlyFromNights) return `Pets are ${format(extras.petPaise)} each for the stay.`;
-  const short = extras.petNightlyFromNights <= 2 ? 'a one-night stay' : `a stay of up to ${extras.petNightlyFromNights - 1} nights`;
-  const multi = extras.petMultiPaise ? ` (${format(extras.petMultiPaise)} each for two or more pets)` : '';
-  return `Pets are ${format(extras.petPaise)} each for ${short}${multi}; from ${extras.petNightlyFromNights} nights, ${format(extras.petNightlyPaise)} each per night.`;
+  if (!extras.petMultiPaise) return `Pets are ${format(extras.petPaise)} each for a stay of up to ${extras.petNightlyFromNights - 1} nights; from ${extras.petNightlyFromNights} nights, ${format(extras.petNightlyPaise)} each per night.`;
+  return `Pets: ${format(extras.petPaise)} for one pet for one night; ${format(extras.petMultiPaise)} each for the stay with two or more pets or a two-night stay; from ${extras.petNightlyFromNights} nights, ${format(extras.petNightlyPaise)} each per night.`;
 }
 
 /** What one night costs this party: the rate card plus any extra heads. */

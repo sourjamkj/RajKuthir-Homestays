@@ -98,9 +98,9 @@ router.get("/rates", async (_req, res) => {
       childUnderAge: CHILD_UNDER_AGE,
       extraAdultPaise: EXTRA_ADULT_PAISE,
       extraChildPaise: EXTRA_CHILD_PAISE,
-      /** Per pet for a one-night stay (kept under its old name for cached pages). */
+      /** One pet, one night (kept under its old name for cached pages). */
       petPaise: PET_SHORT_STAY_PAISE,
-      /** Per pet for a one-night stay when two or more pets come. */
+      /** Per pet for the stay: two or more pets, or a two-night stay. */
       petMultiPaise: PET_SHORT_STAY_MULTI_PAISE,
       petNightlyPaise: PET_NIGHTLY_PAISE,
       petNightlyFromNights: PET_NIGHTLY_FROM_NIGHTS,

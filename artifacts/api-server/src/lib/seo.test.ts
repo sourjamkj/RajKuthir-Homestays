@@ -1362,8 +1362,8 @@ test("pet faq · the pet charge is described from the rate plan, never priced on
   assert.ok(!/anything quoted here would be out of date/.test(answer));
   assert.match(answer, /current rate plan/);
   assert.match(answer, /rates page/);
-  assert.match(answer, /for one night it is a single charge per pet/);
-  assert.match(answer, /from two nights it is charged per night/);
+  assert.match(answer, /for one or two nights it is a single charge per pet/);
+  assert.match(answer, /from three nights it is charged per night/);
 
   // The only rupee figure is the published damage minimum, not a pet price.
   const rupees = [...answer.matchAll(/₹\s?\d(?:[\d,]*\d)?/g)].map((m) => m[0]);

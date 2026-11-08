@@ -155,7 +155,7 @@ export function buildMcpServer(): McpServer {
           extraAdultPaise: EXTRA_ADULT_PAISE,
           extraChildPaise: EXTRA_CHILD_PAISE,
           petShortStayPaise: PET_SHORT_STAY_PAISE,
-          petShortStayEachWhenTwoOrMorePaise: PET_SHORT_STAY_MULTI_PAISE,
+          petEachForStayWhenTwoPlusPetsOrTwoNightsPaise: PET_SHORT_STAY_MULTI_PAISE,
           petNightlyPaise: PET_NIGHTLY_PAISE,
           petNightlyFromNights: PET_NIGHTLY_FROM_NIGHTS,
         },
