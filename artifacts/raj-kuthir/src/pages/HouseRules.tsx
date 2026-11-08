@@ -190,6 +190,10 @@ export default function HouseRules() {
             <p className="max-w-[330px] text-sm leading-6 text-muted-foreground">
               The house is checked before check-out. These are the repair and replacement costs, published so a
               deduction is never a shock, not because we expect to use them.
+              <strong className="mt-3 block text-primary" data-testid="text-house-rules-deposit">
+                Refundable security deposit: ₹2,500, paid at check-in and returned at check-out after the check, less any
+                damage charges.
+              </strong>
             </p>
           </div>
 
