@@ -34,8 +34,9 @@ export function AdminClaudeConnector() {
             <Sparkles size={13} /> Claude connector
           </p>
           <p className="mt-1 text-sm leading-6 text-foreground">
-            Lets Claude add and edit enquiries (with your agreed price), send quotes, mark advances and create bookings for you. It cannot change
-            settings, rates, money records or signed-in phones.
+            Lets Claude add and edit enquiries (with your agreed price), send quotes, mark advances, create bookings and change the rate card
+            (it shows old and new prices before saving; every change is in the activity log). It cannot change settings, money records or
+            signed-in phones.
           </p>
           {status.data?.connected ? (
             <p className="mt-2 text-sm font-medium text-[#4b5340]" data-testid="text-claude-connected">
