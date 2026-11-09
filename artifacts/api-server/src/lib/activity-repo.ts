@@ -14,6 +14,7 @@ import {
   type ActivityItem,
 } from "./activity-rules";
 import { paymentEventsSince } from "./book-pay-repo";
+import { feedbackSince } from "./compliance-repo";
 
 /**
  * The owner's "last looked at the activity panel" marker.
@@ -61,7 +62,7 @@ export async function listActivity(now = new Date(), sinceOverride?: Date): Prom
   */
   const after = new Date(since.getTime() + 1);
 
-  const [newBookings, cancelledBookings, otaBlocks, newEnquiries, uploads, payments] = await Promise.all([
+  const [newBookings, cancelledBookings, otaBlocks, newEnquiries, uploads, payments, feedback] = await Promise.all([
     db
       .select({
         id: bookings.id,
@@ -140,6 +141,7 @@ export async function listActivity(now = new Date(), sinceOverride?: Date): Prom
       .limit(MAX_ITEMS),
 
     paymentEventsSince(after, MAX_ITEMS),
+    feedbackSince(after, MAX_ITEMS),
   ]);
 
   return {
@@ -151,6 +153,7 @@ export async function listActivity(now = new Date(), sinceOverride?: Date): Prom
       enquiries: newEnquiries,
       uploads: uploads.filter((u): u is typeof u & { completedAt: Date } => u.completedAt !== null),
       payments,
+      feedback,
     }),
   };
 }

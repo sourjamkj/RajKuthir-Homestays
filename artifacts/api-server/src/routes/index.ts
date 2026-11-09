@@ -16,6 +16,7 @@ import reviewsRouter from "./reviews";
 import invoicesRouter from "./invoices";
 import ownerAppRouter from "./owner-app";
 import caretakerConsoleRouter from "./caretaker-console";
+import complianceRouter from "./compliance";
 
 const router: IRouter = Router();
 
@@ -36,5 +37,6 @@ router.use(bookRouter);
 router.use(caretakerRouter);
 router.use(reviewsRouter);
 router.use(invoicesRouter);
+router.use(complianceRouter);
 
 export default router;

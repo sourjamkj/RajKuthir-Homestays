@@ -74,6 +74,8 @@ export function eventForActivity(item: Pick<ActivityItem, "kind" | "source">): O
       return "enquiry";
     case "documents_uploaded":
       return "documents_uploaded";
+    case "feedback":
+      return "guest_feedback";
     default:
       return null;
   }

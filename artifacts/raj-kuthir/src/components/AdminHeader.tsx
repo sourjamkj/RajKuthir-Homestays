@@ -30,6 +30,7 @@ const LINKS = [
   { href: '/admin/reviews', label: 'Reviews', testId: 'link-admin-reviews' },
   { href: '/admin/earnings', label: 'Earnings', testId: 'link-admin-earnings' },
   { href: '/admin/rates', label: 'Rates', testId: 'link-admin-rates' },
+  { href: '/admin/compliance', label: 'Registers', testId: 'link-admin-compliance' },
 ] as const;
 
 const PILL =

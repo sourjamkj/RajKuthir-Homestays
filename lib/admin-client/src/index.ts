@@ -103,6 +103,7 @@ export const OWNER_EVENTS = [
   'documents_uploaded',
   'invoice_check_failed',
   'review_received',
+  'guest_feedback',
 ] as const;
 export type OwnerEvent = (typeof OWNER_EVENTS)[number];
 export type SettingSource = 'console' | 'railway' | 'default';

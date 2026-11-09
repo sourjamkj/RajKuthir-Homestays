@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { formatDistanceToNowStrict, parseISO } from 'date-fns';
-import { Bell, CalendarDays, CalendarPlus, CalendarX, FileCheck, Inbox, Loader2, Wallet, X } from 'lucide-react';
+import { Bell, CalendarDays, CalendarPlus, CalendarX, FileCheck, Inbox, Loader2, MessageSquareText, Wallet, X } from 'lucide-react';
 
 import { adminFetch } from '@/lib/admin-api';
 
@@ -22,7 +22,8 @@ type ActivityKind =
   | 'ota_block'
   | 'enquiry_new'
   | 'documents_uploaded'
-  | 'payment';
+  | 'payment'
+  | 'feedback';
 
 type ActivityItem = {
   id: string;
@@ -43,6 +44,7 @@ const ICONS: Record<ActivityKind, typeof Bell> = {
   enquiry_new: Inbox,
   documents_uploaded: FileCheck,
   payment: Wallet,
+  feedback: MessageSquareText,
 };
 
 /** Cancellations are the one thing that may need undoing elsewhere. */
@@ -53,6 +55,7 @@ const TONE: Record<ActivityKind, string> = {
   enquiry_new: 'bg-primary/10 text-primary',
   documents_uploaded: 'bg-[#7A8065]/15 text-[#4b5340]',
   payment: 'bg-[#d8a24a]/15 text-[#8a6320]',
+  feedback: 'bg-[#A65E45]/10 text-[#A65E45]',
 };
 
 /** "5 minutes ago", or nothing for a timestamp that will not parse. */

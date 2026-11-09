@@ -503,6 +503,16 @@ export const PAGES: Record<string, PageMeta> = {
     noindex: true,
   },
 
+  /**
+   * The complaints & suggestions book, reached from the QR on the notice
+   * board in the house. For guests, not search: never indexed.
+   */
+  "/feedback": {
+    title: "Complaints & suggestions | Raj Kuthir Homestays",
+    description: "Write to the host: a complaint, a suggestion or a compliment.",
+    noindex: true,
+  },
+
   /** Management's view of a guest's uploaded identity documents. */
   "/management-documents": {
     title: "Guest document access | Raj Kuthir Homestays",
@@ -528,6 +538,7 @@ const PRIVATE_PREFIXES = [
   "/pay",
   "/offer",
   "/invoice",
+  "/feedback",
 ];
 
 /**
@@ -565,11 +576,13 @@ const CLIENT_ROUTES = new Set([
   "/admin/reviews",
   "/admin/guest-info",
   "/admin/caretaker",
+  "/admin/compliance",
   "/pre-arrival",
   "/management-documents",
   "/pay",
   "/offer",
   "/invoice",
+  "/feedback",
 ]);
 
 const CLIENT_ROUTE_PREFIXES = ["/sign-in"];

@@ -23,6 +23,7 @@ const ICON: Record<string, string> = {
   enquiry_new: '📥',
   documents_uploaded: '📄',
   payment: '₹',
+  feedback: '✎',
 };
 
 /** Cancellations are the one thing that may need undoing elsewhere. */
@@ -33,6 +34,7 @@ const TONE: Record<string, { bg: string; fg: string }> = {
   enquiry_new: { bg: '#dde8e4', fg: color.brand },
   documents_uploaded: { bg: '#e7e9df', fg: '#4b5340' },
   payment: { bg: '#f5ead3', fg: color.amber },
+  feedback: { bg: '#f3e3dd', fg: color.terracotta },
 };
 
 let autoOpenedThisSession = false;

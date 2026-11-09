@@ -12,7 +12,8 @@ export type ActivityKind =
   | "ota_block"
   | "enquiry_new"
   | "documents_uploaded"
-  | "payment";
+  | "payment"
+  | "feedback";
 
 export type ActivityItem = {
   /** Stable across requests, so the client can key and de-duplicate on it. */
@@ -97,6 +98,8 @@ export type ActivityRows = {
   otaBlocks: Array<{ id: string; source: string; startDate: string; endDate: string; createdAt: Date }>;
   enquiries: Array<{ id: string; name: string; checkIn: string | null; checkOut: string | null; createdAt: Date }>;
   uploads: Array<{ bookingId: string; guestName: string | null; checkIn: string; completedAt: Date }>;
+  /** The complaints & suggestions book. Optional: absent before the migration. */
+  feedback?: Array<{ id: string; kind: string; name: string; createdAt: Date }>;
   /** Book & Pay state changes, from payment_events. Optional: absent before the migration. */
   payments?: Array<{
     id: string;
@@ -180,6 +183,17 @@ export function buildActivity(rows: ActivityRows): ActivityItem[] {
       title: "Guest ID documents uploaded",
       detail: `${u.guestName ?? "Unnamed guest"} · arriving ${shortDate(u.checkIn)}`,
       href: `/admin/guests#stay-${u.bookingId}`,
+    });
+  }
+
+  for (const f of rows.feedback ?? []) {
+    items.push({
+      id: `feedback:${f.id}`,
+      kind: "feedback",
+      at: f.createdAt.toISOString(),
+      title: f.kind === "complaint" ? "New complaint in the guest book" : f.kind === "compliment" ? "New compliment in the guest book" : "New suggestion in the guest book",
+      detail: f.name,
+      href: `/admin/compliance#feedback-${f.id}`,
     });
   }
 
