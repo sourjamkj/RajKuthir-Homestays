@@ -556,6 +556,25 @@ export async function rejectGuestDocuments(
   return { rejected: live.length };
 }
 
+/** The reason on the documents currently rejected for a booking, or null. */
+export async function currentRejection(bookingId: string): Promise<{ reason: string | null } | null> {
+  const row = (
+    await db
+      .select({ reason: guestDocuments.rejectionReason })
+      .from(guestDocuments)
+      .where(
+        and(
+          eq(guestDocuments.bookingId, bookingId),
+          eq(guestDocuments.status, "rejected"),
+          isNull(guestDocuments.deletedAt),
+        ),
+      )
+      .orderBy(desc(guestDocuments.verifiedAt))
+      .limit(1)
+  )[0];
+  return row ? { reason: row.reason } : null;
+}
+
 export async function verifyGuestDocuments(bookingId: string, verified: boolean, admin: string) {
   await db.update(guestDocuments).set({
     status: verified ? "verified" : "rejected",

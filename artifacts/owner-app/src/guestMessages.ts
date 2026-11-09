@@ -76,6 +76,67 @@ export function buildGuestWhatsAppMessage(stay: GuestStay, verificationUrl: stri
   return `Greetings from Raj Kuthir Homestays – Sobuj Potro, Shantiniketan! 🌿\n\nDear ${stay.guestName ?? 'Guest'},\n\nThank you for choosing Raj Kuthir Homestays – Sobuj Potro. We are pleased to confirm your booking.\n\n🔴 IMPORTANT – ACTION REQUIRED BEFORE ARRIVAL\n\n📄 Document Verification / Pre-Arrival Check-in:\n${verificationUrl}\n\nPlease complete the mandatory guest information and ID document verification at least 48 hours before your scheduled check-in time.\n\n⚠️ Failure to complete the mandatory verification within this timeframe may result in check-in being denied without refund, in accordance with the booking terms.\n\n📅 Check-in: ${prettyGuestDate(stay.checkIn)} – ${CHECK_IN_TIME} onwards\n📅 Check-out: ${prettyGuestDate(stay.checkOut)} – ${CHECK_OUT_TIME}\n👥 Guests: ${stay.guests ?? 'As booked'}\n🏡 Accommodation: Entire Two-Bedroom Villa${nights ? ` (${nights} Nights)` : ''}${stay.pets ? `\n🐾 Pets: ${stay.pets}` : ''}\n\n💰 Booking Details\n\n${paymentLines}\n- Refundable security deposit: ₹2,500, paid at check-in and returned at check-out\n\n📍 Google Maps: ${MAPS_URL}\n\n📞 Contact Numbers\n- Host: +91 62903 99165\n- Designated Caretaker: +91 78726 85558\n\nAdditional Information\n\n- High-speed Wi-Fi is available and suitable for work/staycations.\n- Cafe Soi, located within the premises, serves snacks and beverages.\n- Home-cooked meals can also be arranged after discussing the menu and charges directly with the caretaker.\n- Zomato is available in the area with multiple restaurant options. Delivery availability and timings may vary depending on weather and local conditions.\n- Basic cooking utensils are available for simple meals. Additional utensils for elaborate cooking can be arranged subject to availability. Guests are also welcome to bring their own induction/microwave-compatible cookware if required.\n\nWe look forward to hosting you and wish you a wonderful stay at Raj Kuthir Homestays – Sobuj Potro.\n\nWarm regards,\nTeam Raj Kuthir Homestays – Sobuj Potro`;
 }
 
+/** Tap-to-fill reasons on the reject box. Mirrors api-server document-rejection-rules.ts. */
+export const COMMON_REJECTION_REASONS = [
+  'The photo is blurred or too dark to read',
+  'Part of the ID is cut off; all four corners must be visible',
+  'The back side of the ID is missing',
+  'The ID has expired',
+  'The name on the ID does not match the guest',
+  'This is not an accepted photo ID',
+  'IDs are missing for some adults in the group',
+];
+
+/** What the guest must do to upload again. Mirrors UPLOAD_INSTRUCTIONS on the server. */
+export const UPLOAD_INSTRUCTIONS = [
+  'One valid government photo ID for every adult staying: Aadhaar, passport, driving licence or voter ID',
+  'Front and back, where the ID has two sides',
+  'A clear, well-lit photo or scan with all four corners visible, no blur or glare',
+  'The name must match the guest, and the ID must not be expired',
+  'Foreign nationals: the passport photo page and the Indian visa',
+  'PDF, JPG, PNG or WebP, up to 8 MB each, up to 6 files at a time',
+  'In "Document type", write the ID and whose it is, e.g. "Aadhaar – Riya Sen"',
+];
+
+/** "11 November 2026, 12:00 PM" in India time, without relying on Intl time zones. */
+function prettyDeadline(iso: string | null | undefined): string | null {
+  if (!iso) return null;
+  const at = new Date(new Date(iso).getTime() + 330 * 60_000);
+  if (Number.isNaN(at.getTime())) return null;
+  const h = at.getUTCHours();
+  const mm = String(at.getUTCMinutes()).padStart(2, '0');
+  return `${at.getUTCDate()} ${MONTHS[at.getUTCMonth()]} ${at.getUTCFullYear()}, ${h % 12 || 12}:${mm} ${h < 12 ? 'AM' : 'PM'}`;
+}
+
+/**
+ * Sent when the owner rejects an ID upload, in place of the booking message:
+ * the reason, the fresh link, and exactly how to upload again.
+ */
+export function buildDocumentsRejectedMessage(stay: GuestStay, reason: string, verificationUrl: string, deadline?: string | null): string {
+  const first = (stay.guestName ?? '').trim().split(/\s+/)[0] || 'there';
+  const by = prettyDeadline(deadline);
+  return [
+    `Hello ${first} 🌿`,
+    '',
+    `Thank you for uploading your ID for your stay at Raj Kuthir Homestays – Sobuj Potro (${prettyGuestDate(stay.checkIn)} to ${prettyGuestDate(stay.checkOut)}). Unfortunately we could not accept it.`,
+    '',
+    `❌ Reason: ${reason.trim()}`,
+    '',
+    `📄 Please upload again here:`,
+    verificationUrl,
+    '',
+    `✅ How to upload`,
+    ...UPLOAD_INSTRUCTIONS.map((line) => `• ${line}`),
+    '',
+    `⏰ Please complete this${by ? ` by ${by}` : ''}, at least 48 hours before check-in. Without verified IDs, check-in may be denied as per the booking terms.`,
+    '',
+    `Need help? Call or WhatsApp ${HOST_PHONE}.`,
+    '',
+    `Warm regards,`,
+    `Team Raj Kuthir Homestays – Sobuj Potro`,
+  ].join('\n');
+}
+
 /** Sent once verification is complete, in place of the documents message. */
 export function buildCheckinWhatsAppMessage(stay: GuestStay, info: ArrivalInfo | null): string {
   const first = (stay.guestName ?? '').trim().split(/\s+/)[0] || 'there';

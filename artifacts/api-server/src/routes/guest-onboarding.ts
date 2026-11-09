@@ -11,10 +11,12 @@ import {
   listManagementDocuments,
   listAdminGuestStays,
   rejectGuestDocuments,
+  currentRejection,
   submitGuestOnboarding,
   verifyGuestDocuments,
 } from "../lib/guest-onboarding-repo";
 import { documentDownloadHeaders } from "../lib/document-security";
+import { rejectionReasonProblem } from "../lib/document-rejection-rules";
 
 const router: IRouter = Router();
 const MAX_TEXT = 500;
@@ -93,6 +95,9 @@ router.post("/guest/onboarding/lookup", async (req, res) => {
     verificationDeadline: found.onboarding.verificationDeadline,
     deadlinePassed,
     status: found.onboarding.status,
+    // Why the last upload was turned down, so the guest sees it on the page
+    // they re-upload from. Null once they upload again.
+    rejection: await currentRejection(found.booking.id),
   });
 });
 
@@ -243,7 +248,13 @@ router.post("/admin/guest-stays/:bookingId/reject", requireAdmin, async (req, re
     res.status(400).json({ error: "Invalid booking id." });
     return;
   }
-  const result = await rejectGuestDocuments(bookingId, clean(req.body?.reason, 300), "admin");
+  const reason = typeof req.body?.reason === "string" ? req.body.reason.trim() : "";
+  const problem = rejectionReasonProblem(reason);
+  if (problem) {
+    res.status(400).json({ error: problem });
+    return;
+  }
+  const result = await rejectGuestDocuments(bookingId, reason, "admin");
   if (result.rejected === 0) {
     res.status(409).json({ error: "There are no documents on this booking to reject." });
     return;
