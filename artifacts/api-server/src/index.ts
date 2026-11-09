@@ -4,7 +4,7 @@ import { startCalendarCron } from "./lib/calendar-cron";
 import { startNotificationsCron } from "./lib/notifications-cron";
 import { startMailCron } from "./lib/mail-cron";
 import { startCaretakerAlerts } from "./lib/caretaker-alerts";
-import { scheduleBookingComBackfill, scheduleOtaDocumentBackfill } from "./lib/mail-runner";
+import { scheduleAirbnbBackfill, scheduleBookingComBackfill, scheduleOtaDocumentBackfill } from "./lib/mail-runner";
 import { startBookPayCron } from "./lib/book-pay-cron";
 import { ensureCashfreeTables } from "./lib/cashfree-migrate";
 import { ensureBookPayTables } from "./lib/book-pay-migrate";
@@ -72,6 +72,7 @@ app.listen(port, (err) => {
   // One-off: import every Booking.com email already in the mailbox (bookings,
   // guest names, cancellations). Skips itself once it has completed.
   scheduleBookingComBackfill();
+  scheduleAirbnbBackfill();
 
   // One-off: file the PDFs (vouchers, statements) from OTA emails already in
   // the mailbox. New ones are filed by the mail sync as they arrive.

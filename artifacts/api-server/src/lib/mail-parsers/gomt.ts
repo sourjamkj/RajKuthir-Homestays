@@ -16,7 +16,7 @@
 export type ParsedVoucher = {
   /** The channel's own reservation number, e.g. GH75081277131254. */
   externalRef: string;
-  source: "makeMyTrip" | "bookingCom";
+  source: "makeMyTrip" | "bookingCom" | "airbnb";
   /**
    * How much of the stay this email can vouch for. Absent means "full": the
    * Go-MMT voucher, which carries everything. Booking.com sends "notice"
@@ -30,6 +30,8 @@ export type ParsedVoucher = {
   checkIn: string;
   checkOut: string;
   guests: number | null;
+  /** Pets in the party, when the channel says (Airbnb does). */
+  pets?: number | null;
   /** What the guest paid, in paise. Null on a cancellation notice. */
   grossPaise: number | null;
   /** Go-MMT commission including GST, in paise. */
