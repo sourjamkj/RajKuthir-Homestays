@@ -2,7 +2,7 @@
   "expo": {
     "name": "Raj Kuthir Owner",
     "slug": "raj-kuthir-owner",
-    "version": "1.5.0",
+    "version": "1.5.1",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
@@ -15,7 +15,7 @@
       "predictiveBackGestureEnabled": false,
       "package": "casa.rajkuthirhomestays.owner",
       "allowBackup": false,
-      "versionCode": 7,
+      "versionCode": 8,
       "permissions": [
         "USE_BIOMETRIC",
         "USE_FINGERPRINT",

@@ -10,7 +10,8 @@ import { shortDate } from './theme';
 export function buildEnquiryFollowUp(row: Enquiry, now = Date.now()): string {
   const first = row.name.trim().split(/\s+/)[0] || 'there';
   const dates = row.checkIn && row.checkOut ? `${shortDate(row.checkIn)} – ${shortDate(row.checkOut)}` : null;
-  const sign = '\n\nWarm regards,\nTeam Raj Kuthir Homestays – Sobuj Potro';
+  // Every reply states the refundable deposit (owner's rule), as the server's reply does.
+  const sign = '\n\nRefundable security deposit: ₹2,500, paid at check-in and returned at check-out.\n\nWarm regards,\nTeam Raj Kuthir Homestays – Sobuj Potro';
 
   if (row.datesTaken && dates) {
     return (

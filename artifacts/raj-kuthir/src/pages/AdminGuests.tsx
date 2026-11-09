@@ -264,7 +264,8 @@ function buildEnquiryFollowUp(row: Enquiry): string {
     row.checkIn && row.checkOut
       ? `${format(parseISO(row.checkIn), 'd MMM')} – ${format(parseISO(row.checkOut), 'd MMM')}`
       : null;
-  const sign = '\n\nWarm regards,\nTeam Raj Kuthir Homestays – Sobuj Potro';
+  // Every reply states the refundable deposit (owner's rule), as the server's reply does.
+  const sign = '\n\nRefundable security deposit: ₹2,500, paid at check-in and returned at check-out.\n\nWarm regards,\nTeam Raj Kuthir Homestays – Sobuj Potro';
 
   // The nights they asked for are already blocked or booked: say so plainly,
   // whatever the status, instead of asking them to confirm dates we cannot give.
@@ -1908,7 +1909,7 @@ function buildGuestWhatsAppMessage(stay: GuestStay, verificationUrl: string): st
   const paymentLines = PREPAID_CHANNELS.has(stay.source)
     ? `- Paid in full via ${SOURCE_LABELS[stay.source] ?? stay.source} ✅\n- Nothing further is due for the booking`
     : `- Total Booking Amount: ₹${total}\n- Advance Received: ₹${advance} ✅\n- Balance Amount Due: ₹${balance} (Payable at the property during check-in)`;
-  return `Greetings from Raj Kuthir Homestays – Sobuj Potro, Shantiniketan! 🌿\n\nDear ${stay.guestName ?? 'Guest'},\n\nThank you for choosing Raj Kuthir Homestays – Sobuj Potro. We are pleased to confirm your booking.\n\n🔴 IMPORTANT – ACTION REQUIRED BEFORE ARRIVAL\n\n📄 Document Verification / Pre-Arrival Check-in:\n${verificationUrl}\n\nPlease complete the mandatory guest information and ID document verification at least 48 hours before your scheduled check-in time.\n\n⚠️ Failure to complete the mandatory verification within this timeframe may result in check-in being denied without refund, in accordance with the booking terms.\n\n📅 Check-in: ${prettyGuestDate(stay.checkIn)} – ${CHECK_IN_TIME} onwards\n📅 Check-out: ${prettyGuestDate(stay.checkOut)} – ${CHECK_OUT_TIME}\n👥 Guests: ${stay.guests ?? 'As booked'}\n🏡 Accommodation: Entire Two-Bedroom Villa${nights ? ` (${nights} Nights)` : ''}${stay.pets ? `\n🐾 Pets: ${stay.pets}` : ''}\n\n💰 Booking Details\n\n${paymentLines}\n\n📍 Google Maps: https://maps.app.goo.gl/aEdaJaaeEy1DZ8Ps8?g_st=ac\n\n📞 Contact Numbers\n- Host: +91 62903 99165\n- Designated Caretaker: +91 78726 85558\n\nAdditional Information\n\n- High-speed Wi-Fi is available and suitable for work/staycations.\n- Cafe Soi, located within the premises, serves snacks and beverages.\n- Home-cooked meals can also be arranged after discussing the menu and charges directly with the caretaker.\n- Zomato is available in the area with multiple restaurant options. Delivery availability and timings may vary depending on weather and local conditions.\n- Basic cooking utensils are available for simple meals. Additional utensils for elaborate cooking can be arranged subject to availability. Guests are also welcome to bring their own induction/microwave-compatible cookware if required.\n\nWe look forward to hosting you and wish you a wonderful stay at Raj Kuthir Homestays – Sobuj Potro.\n\nWarm regards,\nTeam Raj Kuthir Homestays – Sobuj Potro`;
+  return `Greetings from Raj Kuthir Homestays – Sobuj Potro, Shantiniketan! 🌿\n\nDear ${stay.guestName ?? 'Guest'},\n\nThank you for choosing Raj Kuthir Homestays – Sobuj Potro. We are pleased to confirm your booking.\n\n🔴 IMPORTANT – ACTION REQUIRED BEFORE ARRIVAL\n\n📄 Document Verification / Pre-Arrival Check-in:\n${verificationUrl}\n\nPlease complete the mandatory guest information and ID document verification at least 48 hours before your scheduled check-in time.\n\n⚠️ Failure to complete the mandatory verification within this timeframe may result in check-in being denied without refund, in accordance with the booking terms.\n\n📅 Check-in: ${prettyGuestDate(stay.checkIn)} – ${CHECK_IN_TIME} onwards\n📅 Check-out: ${prettyGuestDate(stay.checkOut)} – ${CHECK_OUT_TIME}\n👥 Guests: ${stay.guests ?? 'As booked'}\n🏡 Accommodation: Entire Two-Bedroom Villa${nights ? ` (${nights} Nights)` : ''}${stay.pets ? `\n🐾 Pets: ${stay.pets}` : ''}\n\n💰 Booking Details\n\n${paymentLines}\n- Refundable security deposit: ₹2,500, paid at check-in and returned at check-out\n\n📍 Google Maps: https://maps.app.goo.gl/aEdaJaaeEy1DZ8Ps8?g_st=ac\n\n📞 Contact Numbers\n- Host: +91 62903 99165\n- Designated Caretaker: +91 78726 85558\n\nAdditional Information\n\n- High-speed Wi-Fi is available and suitable for work/staycations.\n- Cafe Soi, located within the premises, serves snacks and beverages.\n- Home-cooked meals can also be arranged after discussing the menu and charges directly with the caretaker.\n- Zomato is available in the area with multiple restaurant options. Delivery availability and timings may vary depending on weather and local conditions.\n- Basic cooking utensils are available for simple meals. Additional utensils for elaborate cooking can be arranged subject to availability. Guests are also welcome to bring their own induction/microwave-compatible cookware if required.\n\nWe look forward to hosting you and wish you a wonderful stay at Raj Kuthir Homestays – Sobuj Potro.\n\nWarm regards,\nTeam Raj Kuthir Homestays – Sobuj Potro`;
 }
 
 /**
@@ -1979,6 +1980,8 @@ function buildCheckinWhatsAppMessage(stay: GuestStay, info: ArrivalInfo | null):
     ...(balancePaise && balancePaise > 0
       ? ['', `💰 Balance payable at check-in: ₹${money(balancePaise)}`]
       : []),
+    '',
+    `🔐 Refundable security deposit: ₹2,500, paid at check-in and returned at check-out`,
     '',
     `📞 Who to call`,
     ...contacts,
