@@ -25,6 +25,7 @@ export type MailParser = {
     from: string;
     subject: string;
     body: string;
+    date?: string;
   }) => ParsedVoucher | null;
 };
 
@@ -42,7 +43,8 @@ export const PARSERS: MailParser[] = [
   {
     name: "Airbnb",
     handlesSender: handlesAirbnb,
-    parse: ({ from, subject, body }) => parseAirbnbEmail(subject, from, body),
+    // Airbnb prints no year: read the dates against when the email was sent.
+    parse: ({ from, subject, body, date }) => parseAirbnbEmail(subject, from, body, date ? new Date(date) : new Date()),
   },
 ];
 
@@ -64,6 +66,7 @@ export function parseMessage(input: {
   from: string;
   subject: string;
   body: string;
+  date?: string;
 }): { parser: MailParser; voucher: ParsedVoucher } | null {
   const parser = parserFor(input.from);
   if (!parser) return null;

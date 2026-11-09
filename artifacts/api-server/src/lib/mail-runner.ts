@@ -210,8 +210,10 @@ export async function backfillBookingCom(): Promise<BackfillResult> {
   return backfillChannel({ key: BACKFILL_KEY, sender: "booking.com", parser: "Booking.com" });
 }
 
-// v2: the first run (parser bug: it missed the dates) saved nothing; this re-reads once.
-const AIRBNB_BACKFILL_KEY = "mail.backfill.airbnb.v2";
+// v3: v2 read the year against today, so old stays landed in 2027. This
+// re-reads once with each email's own date; bookings are keyed on the
+// confirmation code, so the same rows get their correct dates.
+const AIRBNB_BACKFILL_KEY = "mail.backfill.airbnb.v3";
 
 /** Re-reads every Airbnb email (the parser was added after some had arrived). Idempotent. */
 export async function backfillAirbnb(): Promise<BackfillResult> {

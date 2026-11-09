@@ -15,6 +15,8 @@ export type MailMessage = {
   uid: number;
   from: string;
   subject: string;
+  /** When the email was sent (ISO), from the envelope; dates without a year are read against it. */
+  date?: string;
   body: string;
   /** PDF attachments only — OTA vouchers, cancellations and statements. */
   attachments?: MailAttachment[];
@@ -159,6 +161,7 @@ export async function syncAccount(
       from: message.from,
       subject: message.subject,
       body: message.body,
+      date: message.date,
     });
 
     // Not a booking email — the overwhelming majority of any mailbox. Move

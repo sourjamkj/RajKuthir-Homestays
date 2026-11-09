@@ -114,6 +114,7 @@ export async function readMailbox(
           uid: message.uid,
           from: addressOf(message.envelope?.from),
           subject: message.envelope?.subject ?? "",
+          date: message.envelope?.date ? new Date(message.envelope.date).toISOString() : undefined,
           body,
           attachments,
         });
@@ -180,6 +181,7 @@ export async function readBySender(
           uid: message.uid,
           from: addressOf(message.envelope?.from),
           subject: message.envelope?.subject ?? "",
+          date: message.envelope?.date ? new Date(message.envelope.date).toISOString() : undefined,
           body,
           attachments,
         });
