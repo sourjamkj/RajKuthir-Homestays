@@ -44,6 +44,9 @@ const MUTED = rgb(0.42, 0.45, 0.43);
 const RULE = rgb(0.85, 0.83, 0.78);
 const RED = rgb(0.62, 0.16, 0.12);
 
+/** Cafe Soi's hours, as the owner gave them. Same as CAFE_HOURS in raj-kuthir content/cafe-menu.ts. */
+export const CAFE_HOURS = "10 am to 9 pm";
+
 export const EMERGENCY_NUMBERS: Array<[string, string]> = [
   ["Emergency (all services)", "112"],
   ["Police", "100"],
@@ -87,7 +90,7 @@ export function boardSections(input: BoardInput): Array<{ title: string; lines: 
       title: "Timings",
       lines: [
         "Check-in from 12:00 noon  ·  Check-out by 11:00 am",
-        "Dining: guest kitchen for your own cooking; Cafe Soi on the grounds. Cafe hours: ____________",
+        `Dining: guest kitchen for your own cooking; Cafe Soi on the grounds, open ${CAFE_HOURS}.`,
         "Please keep the volume down after 10:00 pm.",
       ],
     },
