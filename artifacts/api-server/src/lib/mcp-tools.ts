@@ -10,7 +10,9 @@ import { datesProblem, NO_TERMS, parseEnquiryEdit, termsProblem, type EnquiryTer
 import { enquiryViews } from "./enquiry-view";
 import { createEnquiry, getEnquiry, listEnquiries, setAdvancePaid, setEnquiryStatus, updateEnquiryFields } from "./enquiries-repo";
 import { listAllEvents } from "./calendar-repo";
-import { listAdminGuestStays } from "./guest-onboarding-repo";
+import { createOrRefreshOnboarding, listAdminGuestStays } from "./guest-onboarding-repo";
+import { updateBooking } from "./ledger-repo";
+import { SITE_ORIGIN } from "./seo";
 import { todayInIndia } from "./guest-lookup";
 import { logger } from "./logger";
 import { audit } from "./owner-devices";
@@ -437,6 +439,45 @@ export function buildMcpServer(): McpServer {
       if (!(await deleteOverride(id))) return fail("That rule was already removed.");
       await logChange("rates.rule.removed", { rule: shown, id });
       return json({ saved: true, removed: shown });
+    },
+  );
+
+  server.registerTool(
+    "prepare_guest_arrival",
+    {
+      title: "Add a guest's phone and get their ID-upload link",
+      description:
+        "For a booking (id from list_bookings), typically an Airbnb, Booking.com or MakeMyTrip stay whose phone the channel hid: saves the guest's mobile if given, and issues (or refreshes) their pre-arrival ID-upload link. Returns the link, the verification deadline and a WhatsApp message with a tap-to-send link. Does not message the guest.",
+      inputSchema: {
+        bookingId: z.string().uuid(),
+        phone: z.string().max(40).optional().describe("Guest's mobile, e.g. +91 90077 18052"),
+      },
+    },
+    async ({ bookingId, phone }) => {
+      let mobile: string | null = null;
+      if (phone) {
+        mobile = normaliseMobile(phone);
+        if (!mobile) return fail("That does not look like a mobile number we can reach.");
+        const updated = await updateBooking(bookingId, { guestPhone: mobile });
+        if (!updated) return fail("No booking has that id. list_bookings shows them.");
+      }
+      const onboarding = await createOrRefreshOnboarding(bookingId);
+      if (!onboarding) return fail("No booking has that id. list_bookings shows them.");
+      const url = `${SITE_ORIGIN}/pre-arrival#${encodeURIComponent(onboarding.token)}`;
+      const first = (onboarding.booking.guestName ?? "").trim().split(/\s+/)[0] || "there";
+      const text =
+        `Hi ${first}, to keep your check-in quick, please upload a photo ID for each adult here before you arrive:\n${url}\n\n` +
+        `It takes two minutes. Warm regards,\nTeam Raj Kuthir Homestays – Sobuj Potro`;
+      const to = onboarding.booking.guestPhone ?? mobile;
+      await logChange("booking.arrival_prepared", { bookingId, phoneSaved: Boolean(mobile) });
+      return json({
+        guest: onboarding.booking.guestName,
+        phone: to,
+        preArrivalLink: url,
+        verificationDeadline: onboarding.verificationDeadline,
+        whatsappText: text,
+        whatsappLink: to ? manualWhatsappLinkFor(to, text) : null,
+      });
     },
   );
 
