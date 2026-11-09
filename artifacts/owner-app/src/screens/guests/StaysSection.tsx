@@ -22,7 +22,10 @@ import {
   buildCheckinWhatsAppMessage,
   buildGuestWhatsAppMessage,
   buildDocumentsRejectedMessage,
+  buildGuestIdsRejectedMessage,
   COMMON_REJECTION_REASONS,
+  groupByGuest,
+  idTypeLabel,
   buildManagementMessage,
   buildReviewMessage,
   canAskForReview,
@@ -139,18 +142,33 @@ export function StaysSection({
   };
 
   /**
-   * Reject first, and only send the new link if the rejection landed. The
-   * guest gets the reason and the upload instructions, not the booking message.
+   * Reject one guest's ID (or an earlier ungrouped upload), then send a fresh
+   * link with a WhatsApp naming exactly who must re-upload and why. The other
+   * guests stay accepted.
    */
-  const rejectAndResend = async (stay: GuestStay) => {
-    const reason = (rejectReason[stay.bookingId] ?? '').trim();
+  const rejectAndResend = async (stay: GuestStay, slot: number | null) => {
+    const key = `${stay.bookingId}:${slot ?? 'all'}`;
+    const reason = (rejectReason[key] ?? '').trim();
     if (!stay.guestPhone) throw new Error('This booking has no guest mobile number.');
-    await rejectDocuments(stay.bookingId, reason);
-    setRejectReason((r) => ({ ...r, [stay.bookingId]: '' }));
+    await rejectDocuments(stay.bookingId, reason, slot);
+    setRejectReason((r) => ({ ...r, [key]: '' }));
     const link = await createOnboarding(stay.bookingId);
-    await Linking.openURL(waUrl(stay.guestPhone, buildDocumentsRejectedMessage(stay, reason, link.url, link.verificationDeadline)));
-    await load.reload();
     const result = await getStayDocuments(stay.bookingId);
+    let text: string;
+    if (slot === null) {
+      text = buildDocumentsRejectedMessage(stay, reason, link.url, link.verificationDeadline);
+    } else {
+      const groups = groupByGuest(result.documents).filter((g) => g.slot !== null);
+      text = buildGuestIdsRejectedMessage(
+        stay,
+        groups.filter((g) => g.rejected).map((g) => ({ slot: g.slot!, name: g.name ?? `Guest ${g.slot}`, reason: g.reason ?? reason })),
+        groups.filter((g) => !g.rejected).map((g) => g.name ?? `Guest ${g.slot}`),
+        link.url,
+        link.verificationDeadline,
+      );
+    }
+    await Linking.openURL(waUrl(stay.guestPhone, text));
+    await load.reload();
     setDocs({ loading: false, error: null, list: result.documents });
   };
 
@@ -265,6 +283,7 @@ export function StaysSection({
               </Row>
               <Small>
                 {stay.documents.verified} verified · {stay.documents.submitted} submitted · {stay.documents.rejected} rejected
+                {stay.guestsListed != null && stay.guests != null && stay.guestsListed !== stay.guests ? ` · ${stay.guestsListed} IDs for ${stay.guests} booked` : ''}
               </Small>
 
               <StayInvoice bookingId={id} status={invoices[id]} onChanged={() => { reloadInvoices(); void load.reload(); }} />
@@ -375,65 +394,76 @@ export function StaysSection({
                   {docs.loading && <Small>Opening documents…</Small>}
                   {docs.error && <Small tone="bad">{docs.error}</Small>}
                   {!docs.loading && !docs.error && docs.list.length === 0 && <Small>Nothing filed for this stay.</Small>}
-                  {docs.list.map((doc) => (
-                    <View key={doc.id} style={{ borderWidth: 1, borderColor: color.line, borderRadius: 12, padding: space(3), marginBottom: space(2), backgroundColor: color.white }}>
-                      <Body style={{ fontWeight: '600' }}>
-                        {doc.documentType}
-                        {doc.documentNumber ? ` · ${doc.documentNumber}` : ''}
-                      </Body>
-                      <Small>
-                        {doc.originalFilename ?? 'Unnamed file'}
-                        {doc.sizeBytes ? ` · ${Math.round(doc.sizeBytes / 1024)} KB` : ''}
-                        {doc.uploadedAt ? ` · ${when(doc.uploadedAt)}` : ''}
-                      </Small>
-                      {doc.status === 'rejected' && <Small tone="bad">Rejected{doc.rejectionReason ? ` — ${doc.rejectionReason}` : ''}</Small>}
-                      {doc.status === 'verified' && doc.verifiedBy === VERIFIED_ON_UPLOAD && <Small>Marked verified on upload — not yet opened by anyone.</Small>}
-                      <View style={{ marginTop: space(2) }}>
-                        <SmallButton
-                          label="Open"
-                          disabled={busy === `doc:${id}`}
-                          onPress={() =>
-                            void act(id, `doc`, () =>
-                              shareAdminFile(documentFilePath(id, doc.id), doc.originalFilename ?? `${doc.documentType}.pdf`, doc.mimeType ?? 'application/octet-stream'),
-                              'Could not open the document.',
-                            )
-                          }
-                        />
-                      </View>
-                    </View>
-                  ))}
-                  {docs.list.length > 0 && (
-                    <View style={{ marginTop: space(2) }}>
-                      <Small>Why are these being rejected? The guest is sent this reason with upload instructions.</Small>
-                      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space(1), marginTop: space(1) }}>
-                        {COMMON_REJECTION_REASONS.map((reason) => (
-                          <Pressable
-                            key={reason}
-                            onPress={() => setRejectReason((r) => ({ ...r, [id]: reason }))}
-                            style={{ borderWidth: 1, borderColor: rejectReason[id] === reason ? color.ink : color.line, borderRadius: 999, paddingVertical: 6, paddingHorizontal: 10, backgroundColor: color.white }}
-                          >
-                            <Small>{reason}</Small>
-                          </Pressable>
+                  {groupByGuest(docs.list).map((group) => {
+                    const key = `${id}:${group.slot ?? 'all'}`;
+                    const first = (group.name ?? '').split(' ')[0] || `Guest ${group.slot}`;
+                    return (
+                      <View key={key} style={{ borderWidth: 1, borderColor: group.rejected ? color.terracotta : color.line, borderRadius: 12, padding: space(3), marginBottom: space(3), backgroundColor: color.white }}>
+                        <Row style={{ justifyContent: 'space-between' }}>
+                          <Body style={{ fontWeight: '700', flexShrink: 1 }}>
+                            {group.slot === null ? 'Earlier upload (not grouped)' : `Guest ${group.slot} · ${group.name}`}
+                          </Body>
+                          <Pill label={group.rejected ? 'Rejected' : 'Accepted'} tone={group.rejected ? 'bad' : 'ok'} />
+                        </Row>
+                        {group.slot !== null && <Small>{group.age === 'child' ? 'Child · ' : ''}{idTypeLabel(group.idType)}</Small>}
+                        {group.rejected && group.reason && <Small tone="bad">Reason sent: {group.reason}</Small>}
+                        {group.docs.map((doc) => (
+                          <Row key={doc.id} style={{ justifyContent: 'space-between', marginTop: space(2) }}>
+                            <View style={{ flexShrink: 1 }}>
+                              <Body>{doc.guest ? doc.guest.side : doc.documentType}</Body>
+                              <Small>
+                                {doc.sizeBytes ? `${Math.round(doc.sizeBytes / 1024)} KB` : ''}
+                                {doc.uploadedAt ? ` · ${when(doc.uploadedAt)}` : ''}
+                                {doc.status === 'verified' && doc.verifiedBy === VERIFIED_ON_UPLOAD ? ' · not opened yet' : ''}
+                              </Small>
+                            </View>
+                            <SmallButton
+                              label="Open"
+                              disabled={busy === `doc:${id}`}
+                              onPress={() =>
+                                void act(id, `doc`, () =>
+                                  shareAdminFile(documentFilePath(id, doc.id), doc.originalFilename ?? `${doc.documentType}.pdf`, doc.mimeType ?? 'application/octet-stream'),
+                                  'Could not open the document.',
+                                )
+                              }
+                            />
+                          </Row>
                         ))}
+                        {!group.rejected && (
+                          <View style={{ marginTop: space(3), paddingTop: space(2), borderTopWidth: 1, borderTopColor: color.line }}>
+                            <Small>{group.slot === null ? 'Why is this upload being rejected?' : `Why is ${first}'s ID being rejected?`} The guest is sent this with upload instructions.</Small>
+                            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space(1), marginTop: space(1) }}>
+                              {COMMON_REJECTION_REASONS.map((reason) => (
+                                <Pressable
+                                  key={reason}
+                                  onPress={() => setRejectReason((r) => ({ ...r, [key]: reason }))}
+                                  style={{ borderWidth: 1, borderColor: rejectReason[key] === reason ? color.ink : color.line, borderRadius: 999, paddingVertical: 6, paddingHorizontal: 10, backgroundColor: color.white }}
+                                >
+                                  <Small>{reason}</Small>
+                                </Pressable>
+                              ))}
+                            </View>
+                            <TextInput
+                              value={rejectReason[key] ?? ''}
+                              onChangeText={(text) => setRejectReason((r) => ({ ...r, [key]: text }))}
+                              placeholder="Pick a reason above or type one"
+                              placeholderTextColor={color.muted}
+                              style={{ borderWidth: 1, borderColor: color.line, borderRadius: 12, padding: space(3), minHeight: 48, backgroundColor: color.white, color: color.ink, marginTop: space(1) }}
+                            />
+                            <Button
+                              label={group.slot === null ? 'Reject & re-send link' : `Reject ${first}'s ID & send`}
+                              kind="danger"
+                              busy={busy === `reject:${id}`}
+                              disabled={!stay.guestPhone || (rejectReason[key] ?? '').trim().length < 5}
+                              onPress={() => void act(id, 'reject', () => rejectAndResend(stay, group.slot), 'Could not reject and re-send.')}
+                              style={{ marginTop: space(2) }}
+                            />
+                          </View>
+                        )}
                       </View>
-                      <TextInput
-                        value={rejectReason[id] ?? ''}
-                        onChangeText={(text) => setRejectReason((r) => ({ ...r, [id]: text }))}
-                        placeholder="The photo is too blurred to read the number"
-                        placeholderTextColor={color.muted}
-                        style={{ borderWidth: 1, borderColor: color.line, borderRadius: 12, padding: space(3), minHeight: 48, backgroundColor: color.white, color: color.ink, marginTop: space(1) }}
-                      />
-                      <Button
-                        label="Reject & re-send link"
-                        kind="danger"
-                        busy={busy === `reject:${id}`}
-                        disabled={!stay.guestPhone || (rejectReason[id] ?? '').trim().length < 5}
-                        onPress={() => void act(id, 'reject', () => rejectAndResend(stay), 'Could not reject and re-send.')}
-                        style={{ marginTop: space(2) }}
-                      />
-                      {!stay.guestPhone && <Small>No mobile number on this booking, so a new link cannot be sent.</Small>}
-                    </View>
-                  )}
+                    );
+                  })}
+                  {docs.list.length > 0 && !stay.guestPhone && <Small>No mobile number on this booking, so a new link cannot be sent.</Small>}
                 </View>
               )}
             </Card>

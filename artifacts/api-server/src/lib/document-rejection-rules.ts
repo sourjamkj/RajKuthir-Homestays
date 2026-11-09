@@ -15,18 +15,18 @@ export const COMMON_REJECTION_REASONS = [
   "The ID has expired",
   "The name on the ID does not match the guest",
   "This is not an accepted photo ID",
-  "IDs are missing for some adults in the group",
+  "IDs are missing for some guests in the group",
 ] as const;
 
 /** What the guest must do, in the words the page and the message both use. */
 export const UPLOAD_INSTRUCTIONS = [
-  "One valid government photo ID for every adult staying: Aadhaar, passport, driving licence or voter ID",
+  "One photo ID for every guest, children included. Adults: Aadhaar, passport, driving licence or voter ID. Children: Aadhaar, passport, school ID or birth certificate",
   "Front and back, where the ID has two sides",
   "A clear, well-lit photo or scan with all four corners visible, no blur or glare",
   "The name must match the guest, and the ID must not be expired",
   "Foreign nationals: the passport photo page and the Indian visa",
-  "PDF, JPG, PNG or WebP, up to 8 MB each, up to 6 files at a time",
-  'In "Document type", write the ID and whose it is, e.g. "Aadhaar – Riya Sen"',
+  "A camera photo, or a PDF under 4 MB. Photos are made smaller automatically",
+  'Fill one card per guest on the upload page, with the name as it is on the ID',
 ] as const;
 
 export const MIN_REASON_LENGTH = 5;

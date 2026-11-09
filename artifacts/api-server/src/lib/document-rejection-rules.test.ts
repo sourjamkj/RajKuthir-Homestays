@@ -19,7 +19,7 @@ test("a rejection needs a reason the guest can act on", () => {
 
 test("upload instructions cover who, what, quality and file limits", () => {
   const all = UPLOAD_INSTRUCTIONS.join(" ");
-  for (const word of ["every adult", "Aadhaar", "passport", "back", "corners", "expired", "visa", "8 MB", "PDF"]) {
+  for (const word of ["every guest", "Aadhaar", "passport", "back", "corners", "expired", "visa", "PDF"]) {
     assert.ok(all.includes(word), `instructions miss "${word}"`);
   }
 });
