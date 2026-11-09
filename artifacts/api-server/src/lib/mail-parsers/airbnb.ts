@@ -41,9 +41,11 @@ const rupeesAfter = (text: string, label: RegExp): number | null => {
 };
 
 function datesOf(text: string, now: Date): { checkIn: string; checkOut: string } | null {
-  // The two dates under "Check-in  Checkout": "Sat, Nov 21 Sun, Nov 22".
-  const from = text.search(/check-?in/i);
-  const slice = from >= 0 ? text.slice(from, from + 600) : text;
+  // The two dates under the "Check-in  Checkout" heading: "Sat, Nov 21 Sun, Nov 22".
+  // The intro also says "confirm check-in details" a few kilobytes of links
+  // earlier, so anchor on the heading itself, not the first "check-in".
+  const heading = text.search(/check-?in\s+check-?out/i);
+  const slice = heading >= 0 ? text.slice(heading, heading + 400) : text;
   const found = [...slice.matchAll(/\b(?:mon|tue|wed|thu|fri|sat|sun)[a-z]*,?\s+([a-z]{3})[a-z]*\s+(\d{1,2})\b/gi)];
   if (found.length < 2) return null;
   const [a, b] = found;

@@ -1,18 +1,28 @@
+%opentrack%
+https://www.airbnb.co.in/?src_section=BOOKING_EMAIL_HEADER&c=.pi80.pkYm9va2luZy9ob3N0L1Jlc2VydmF0aW9uSG9zdENvbmZpcm1hdGlvblRlbXBsYXRl&euid=1b3436bb-4c7c-d200-db45-4fb65bb581c8
+
 NEW BOOKING CONFIRMED! RIYA ARRIVES NOV 21.
 
 Send a message to confirm check-in details or welcome Riya.
 
-https://www.airbnb.co.in/hosting/reservations/details/HMTEST1234?isPending=true Riya Sen
+https://www.airbnb.co.in/hosting/reservations/details/HMTEST1234?isPending=true&src_section=HOST_PENDING_BOOKING_EMAIL_GUEST_AVATAR&c=.pi80.pkYm9va2luZy9ob3N0L1Jlc2VydmF0aW9uSG9zdENvbmZpcm1hdGlvblRlbXBsYXRl&euid=1b3436bb-4c7c-d200-db45-4fb65bb581c8 Riya Sen
 
-                                                              Identity verified · 2 reviews
+                                                                                                                                                                                                                                                          [https://www.airbnb.co.in/hosting/reservations/details/HMTEST1234?isPending=true&src_section=HOST_PENDING_BOOKING_EMAIL_GUEST_AVATAR&c=.pi80.pkYm9va2luZy9ob3N0L1Jlc2VydmF0aW9uSG9zdENvbmZpcm1hdGlvblRlbXBsYXRl&euid=1b3436bb-4c7c-d200-db45-4fb65bb581c8]
 
-                                                              Kolkata, India
+                                                                                                                                                                                                                                                          Identity verified · 2 reviews
+
+                                                                                                                                                                                                                                                          Kolkata, India
 
 Send Riya a MessageSend Riya a Message
+[https://www.airbnb.co.in/hosting/thread/2700000000?thread_type=home_booking&email_cta=link_hosting_message_thread&src_section=HOST_CONFIRMATION_MESSAGE_GUEST_BUTTON&c=.pi80.pkYm9va2luZy9ob3N0L1Jlc2VydmF0aW9uSG9zdENvbmZpcm1hdGlvblRlbXBsYXRl]
+
+https://www.airbnb.co.in/rooms/832568717669696024?src_section=BOOKING_EMAIL_HERO_IMAGE&c=.pi80.pkYm9va2luZy9ob3N0L1Jlc2VydmF0aW9uSG9zdENvbmZpcm1hdGlvblRlbXBsYXRl
 
 ENTIRE VILLA IN SHANTINIKETAN, PET FRIENDLY
 
 Entire home/apt
+
+[https://www.airbnb.co.in/rooms/832568717669696024?src_section=HOST_PENDING_BOOKING_EMAIL_LISTING_NAME&c=.pi80.pkYm9va2luZy9ob3N0L1Jlc2VydmF0aW9uSG9zdENvbmZpcm1hdGlvblRlbXBsYXRl]
 
 Check-in Checkout
 
@@ -27,6 +37,7 @@ GUESTS
 MORE DETAILS ABOUT WHO’S COMING
 
 Guests will now let you know if they’re bringing children and infants. Learn more
+[https://blog.atairbnb.com/more-host-controls/]
 
 CONFIRMATION CODE
 HMTEST1234
@@ -59,3 +70,4 @@ YOU EARN ₹4,928.04
 
 CANCELLATIONS
 Your cancellation policy for guests is Moderate
+[https://www.airbnb.com/help/article/149].
