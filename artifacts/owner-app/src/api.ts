@@ -203,6 +203,8 @@ export type GuestStay = {
   onboardingStatus: 'pending' | 'submitted' | 'verified' | 'expired' | 'blocked' | null;
   verificationDeadline: string | null;
   documents: { pending: number; submitted: number; verified: number; rejected: number };
+  /** Guests named on the uploaded IDs, to set against `guests`. */
+  guestsListed?: number | null;
 };
 
 /** The management view of a stay: built by the server with no money in it. */
@@ -228,6 +230,8 @@ export type GuestDocument = {
   uploadedAt: string | null;
   verifiedAt: string | null;
   verifiedBy: string | null;
+  /** Which guest and side this file is; null for an upload made before IDs were grouped by guest. */
+  guest?: { slot: number; name: string; age: string; idType: string; side: string } | null;
 };
 
 export type ArrivalInfo = {
@@ -249,8 +253,8 @@ export const getManagementAccess = (bookingId: string) =>
   );
 export const getStayDocuments = (bookingId: string) =>
   adminFetch<{ documents: GuestDocument[] }>(`/api/admin/guest-stays/${bookingId}/documents`);
-export const rejectDocuments = (bookingId: string, reason: string) =>
-  adminFetch<{ rejected: number }>(`/api/admin/guest-stays/${bookingId}/reject`, json('POST', { reason }));
+export const rejectDocuments = (bookingId: string, reason: string, slot: number | null = null) =>
+  adminFetch<{ rejected: number }>(`/api/admin/guest-stays/${bookingId}/reject`, json('POST', slot === null ? { reason } : { reason, slot }));
 export const verifyDocuments = (bookingId: string, verified: boolean) =>
   adminFetch<unknown>(`/api/admin/guest-stays/${bookingId}/verify`, json('POST', { verified }));
 export const documentFilePath = (bookingId: string, documentId: string) =>

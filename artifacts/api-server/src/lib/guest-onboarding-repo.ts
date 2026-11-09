@@ -25,6 +25,8 @@ import {
   type AllowedDocumentMime,
 } from "./document-security.ts";
 import { whatsappReadyPhone } from "./phone-format.ts";
+import { documentLabel, partyProblem, MAX_FILES_PER_SUBMIT, type GuestSlotInput, type IdTypeKey } from "./guest-id-rules.ts";
+import { ensureGuestDocumentSlots, slotsForBooking, documentIdsForSlot, listedGuestCounts } from "./guest-id-slots.ts";
 
 const TOKEN_BYTES = 32;
 
@@ -296,17 +298,49 @@ export async function submitGuestOnboarding(input: {
   state?: string | null;
   country?: string | null;
   documents: GuestDocumentInput[];
+  /**
+   * One card per guest (guest-id-rules.ts). When present it replaces
+   * `documents`: every file is labelled with its guest and side, the party
+   * must cover the booking, and each file gets a slot row.
+   */
+  party?: Array<Omit<GuestSlotInput, "files"> & { files: Array<GuestDocumentInput & { side: string }> }>;
 }) {
   const found = await findOnboarding(input.token);
+  type Meta = { slot: number; name: string; age: string; idType: string; side: string };
+  const meta: Meta[] = [];
+  if (input.party) {
+    input.documents = [];
+    for (const g of input.party) {
+      for (const f of g.files) {
+        input.documents.push({ ...f, documentType: documentLabel(g.slot, g.idType as IdTypeKey, f.side, g.name) });
+        meta.push({ slot: g.slot, name: g.name.trim(), age: g.age, idType: g.idType, side: f.side });
+      }
+    }
+  }
   if (!found) return { ok: false as const, reason: "invalid_link" as const };
 
   const phone = normalisePhone(input.phone);
   if (!phone) return { ok: false as const, reason: "invalid_phone" as const };
   if (!input.fullName.trim()) return { ok: false as const, reason: "invalid_name" as const };
-  if (!input.documents.length) return { ok: false as const, reason: "document_required" as const };
+  if (!input.documents.length) return { ok: false as const, reason: "document_required" as string };
   if (new Date() >= found.onboarding.verificationDeadline) {
     await db.update(guestOnboarding).set({ status: "blocked" }).where(eq(guestOnboarding.id, found.onboarding.id));
-    return { ok: false as const, reason: "deadline_passed" as const };
+    return { ok: false as const, reason: "deadline_passed" as string };
+  }
+
+  if (input.party) {
+    if (input.documents.length > MAX_FILES_PER_SUBMIT) return { ok: false as const, reason: "Too many files in one upload." as string };
+    if (!(await ensureGuestDocumentSlots())) return { ok: false as const, reason: "Uploads are unavailable for a moment. Please try again." as string };
+    // Guests whose IDs were accepted stay as they are; a re-upload only fills
+    // the guests that were rejected or missing.
+    const existing = await slotsForBooking(found.booking.id);
+    const keptSlots = [...new Set(existing.filter((row) => row.status !== "rejected").map((row) => row.slot))];
+    const problem = partyProblem({
+      booked: found.booking.guests ?? 1,
+      keptSlots,
+      slots: input.party.map((g) => ({ ...g, files: g.files.map((f) => ({ side: f.side })) })),
+    });
+    if (problem) return { ok: false as const, reason: problem as string };
   }
 
   // Every document is checked before anything is written: MIME type is
@@ -315,8 +349,17 @@ export async function submitGuestOnboarding(input: {
   const checked: Array<{ doc: GuestDocumentInput; bytes: Buffer; mimeType: AllowedDocumentMime }> = [];
   for (const doc of input.documents) {
     const check = checkDocumentUpload(doc);
-    if (!check.ok) return { ok: false as const, reason: check.reason };
+    if (!check.ok) return { ok: false as const, reason: check.reason as string };
     checked.push({ doc, bytes: check.bytes, mimeType: check.mimeType });
+  }
+
+  // The same file twice (front used as back, or one ID for two guests).
+  const seenFiles = new Map<string, string>();
+  for (const { doc, bytes } of checked) {
+    const digest = crypto.createHash("sha256").update(bytes).digest("hex");
+    const first = seenFiles.get(digest);
+    if (first) return { ok: false as const, reason: `The same file was uploaded twice (${first} and ${doc.documentType}).` as string };
+    seenFiles.set(digest, doc.documentType);
   }
 
   const result = await db.transaction(async (tx) => {
@@ -389,10 +432,25 @@ export async function submitGuestOnboarding(input: {
         ),
       );
 
+    // A grouped upload also supersedes any earlier ungrouped one, so the stay
+    // is judged on one ID per guest and nothing else.
+    if (input.party) {
+      await tx
+        .update(guestDocuments)
+        .set({ deletedAt: new Date() })
+        .where(
+          and(
+            eq(guestDocuments.bookingId, found.booking.id),
+            isNull(guestDocuments.deletedAt),
+            sql`${guestDocuments.id} NOT IN (SELECT document_id FROM guest_document_slots)`,
+          ),
+        );
+    }
+
     const uploadedAt = new Date();
 
-    for (const { doc, bytes, mimeType } of checked) {
-      await tx.insert(guestDocuments).values({
+    for (const [index, { doc, bytes, mimeType }] of checked.entries()) {
+      const [inserted] = await tx.insert(guestDocuments).values({
         guestId: guest.id,
         bookingId: found.booking.id,
         documentType: doc.documentType.trim(),
@@ -411,7 +469,13 @@ export async function submitGuestOnboarding(input: {
         status: "verified",
         verifiedAt: uploadedAt,
         verifiedBy: VERIFIED_ON_UPLOAD,
-      });
+      }).returning({ id: guestDocuments.id });
+      const slot = meta[index];
+      if (slot && inserted) {
+        await tx.execute(sql`
+          INSERT INTO guest_document_slots (document_id, booking_id, slot, guest_name, guest_age, id_type, side)
+          VALUES (${inserted.id}, ${found.booking.id}, ${slot.slot}, ${slot.name}, ${slot.age}, ${slot.idType}, ${slot.side})`);
+      }
     }
 
     await tx.update(guestOnboarding).set({
@@ -461,7 +525,13 @@ export async function listAdminGuestStays() {
     c[d.status] += 1;
     counts.set(d.bookingId, c);
   }
-  return rows.map((row) => ({ ...row, documents: counts.get(row.bookingId) ?? { pending: 0, submitted: 0, verified: 0, rejected: 0 } }));
+  // Guests named on the uploaded IDs, to set against the booked count.
+  const listed = await listedGuestCounts();
+  return rows.map((row) => ({
+    ...row,
+    guestsListed: listed.get(row.bookingId) ?? null,
+    documents: counts.get(row.bookingId) ?? { pending: 0, submitted: 0, verified: 0, rejected: 0 },
+  }));
 }
 
 /**
@@ -478,6 +548,17 @@ export async function listAdminGuestStays() {
  * a time from getAdminDocument.
  */
 export async function listAdminDocuments(bookingId: string) {
+  const [rows, slots] = await Promise.all([listAdminDocumentRows(bookingId), slotsForBooking(bookingId)]);
+  const bySlot = new Map(slots.map((row) => [row.documentId, row]));
+  // Which guest and side each file is, for the per-guest review. Null for an
+  // earlier upload made before IDs were grouped by guest.
+  return rows.map((row) => {
+    const s = bySlot.get(row.id);
+    return { ...row, guest: s ? { slot: s.slot, name: s.guestName, age: s.guestAge, idType: s.idType, side: s.side } : null };
+  });
+}
+
+function listAdminDocumentRows(bookingId: string) {
   return db
     .select({
       id: guestDocuments.id,
@@ -530,11 +611,16 @@ export async function rejectGuestDocuments(
   bookingId: string,
   reason: string | null,
   admin: string,
+  slot?: number | null,
 ) {
-  const live = await db
-    .select({ id: guestDocuments.id })
-    .from(guestDocuments)
-    .where(and(eq(guestDocuments.bookingId, bookingId), isNull(guestDocuments.deletedAt)));
+  // One guest's ID only, when a guest is named; the rest stay as they are.
+  const onlyIds = slot ? await documentIdsForSlot(bookingId, slot) : null;
+  if (onlyIds && onlyIds.length === 0) return { rejected: 0 };
+  const scope = onlyIds
+    ? and(eq(guestDocuments.bookingId, bookingId), isNull(guestDocuments.deletedAt), sql`${guestDocuments.id} = ANY(${`{${onlyIds.join(",")}}`}::uuid[])`)
+    : and(eq(guestDocuments.bookingId, bookingId), isNull(guestDocuments.deletedAt));
+
+  const live = await db.select({ id: guestDocuments.id }).from(guestDocuments).where(scope);
 
   if (live.length === 0) return { rejected: 0 };
 
@@ -546,7 +632,7 @@ export async function rejectGuestDocuments(
       verifiedAt: new Date(),
       verifiedBy: admin,
     })
-    .where(and(eq(guestDocuments.bookingId, bookingId), isNull(guestDocuments.deletedAt)));
+    .where(scope);
 
   await db
     .update(guestOnboarding)
@@ -557,6 +643,26 @@ export async function rejectGuestDocuments(
 }
 
 /** The reason on the documents currently rejected for a booking, or null. */
+/**
+ * What the pre-arrival page needs to show one card per guest: the booked
+ * count, guests already accepted (locked), guests rejected with the reason,
+ * and the rates for any extra guest.
+ */
+export async function partyForPage(bookingId: string) {
+  const rows = await slotsForBooking(bookingId);
+  const bySlot = new Map<number, { slot: number; name: string; age: string; idType: string; rejected: boolean; reason: string | null }>();
+  for (const row of rows) {
+    const cur = bySlot.get(row.slot) ?? { slot: row.slot, name: row.guestName, age: row.guestAge, idType: row.idType, rejected: false, reason: null };
+    if (row.status === "rejected") { cur.rejected = true; cur.reason = cur.reason ?? row.rejectionReason; }
+    bySlot.set(row.slot, cur);
+  }
+  const all = [...bySlot.values()].sort((a, b) => a.slot - b.slot);
+  return {
+    accepted: all.filter((g) => !g.rejected).map(({ slot, name, age, idType }) => ({ slot, name, age, idType })),
+    rejected: all.filter((g) => g.rejected).map(({ slot, name, age, idType, reason }) => ({ slot, name, age, idType, reason })),
+  };
+}
+
 export async function currentRejection(bookingId: string): Promise<{ reason: string | null } | null> {
   const row = (
     await db

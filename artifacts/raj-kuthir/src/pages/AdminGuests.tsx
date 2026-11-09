@@ -33,7 +33,7 @@ import { EnquiryDetailsForm, EMPTY_ENQUIRY_DETAILS, detailsBody, detailsFrom, ty
 import { preferredWhatsappUrl } from '@/lib/whatsapp-link';
 import { StayInvoice, useInvoiceStatuses } from '@/components/StayInvoice';
 import { AdminHeader } from '@/components/AdminHeader';
-import { COMMON_REJECTION_REASONS, MIN_REJECTION_REASON, UPLOAD_INSTRUCTIONS, prettyDeadline } from '@/lib/id-upload';
+import { COMMON_REJECTION_REASONS, MIN_REJECTION_REASON, UPLOAD_INSTRUCTIONS, groupByGuest, idTypeLabel, prettyDeadline, type DocGuest } from '@/lib/id-upload';
 
 const ENQUIRIES_KEY = ['/api/enquiries'];
 const CONTACTS_KEY = ['/api/contacts'];
@@ -188,6 +188,8 @@ type GuestDocument = {
   uploadedAt: string | null;
   verifiedAt: string | null;
   verifiedBy: string | null;
+  /** Which guest and side this file is; null for an upload made before IDs were grouped. */
+  guest?: DocGuest | null;
 };
 
 const VERIFIED_ON_UPLOAD = 'auto:on-upload';
@@ -210,6 +212,8 @@ type GuestStay = {
   onboardingStatus: 'pending' | 'submitted' | 'verified' | 'expired' | 'blocked' | null;
   verificationDeadline: string | null;
   documents: { pending: number; submitted: number; verified: number; rejected: number };
+  /** Guests named on the uploaded IDs, to set against `guests`. */
+  guestsListed?: number | null;
 };
 
 type Contact = {
@@ -596,10 +600,10 @@ export default function AdminGuests() {
   });
 
   const rejectDocuments = useMutation({
-    mutationFn: ({ bookingId, reason }: { bookingId: string; reason: string }) =>
+    mutationFn: ({ bookingId, reason, slot }: { bookingId: string; reason: string; slot: number | null }) =>
       adminFetch<{ rejected: number }>(`/api/admin/guest-stays/${bookingId}/reject`, {
         method: 'POST',
-        body: JSON.stringify({ reason }),
+        body: JSON.stringify(slot === null ? { reason } : { reason, slot }),
       }),
   });
 
@@ -611,24 +615,40 @@ export default function AdminGuests() {
    * documents still read as verified, so a caretaker checking the stay in that
    * gap would be told everything was in order.
    */
-  const rejectAndResend = async (stay: GuestStay) => {
-    const reason = (rejectReason[stay.bookingId] ?? '').trim();
+  /**
+   * Reject one guest's ID (or, for an earlier ungrouped upload, all of it),
+   * then open WhatsApp naming exactly which guest must re-upload and why.
+   */
+  const rejectAndResend = async (stay: GuestStay, slot: number | null) => {
+    const key = `${stay.bookingId}:${slot ?? 'all'}`;
+    const reason = (rejectReason[key] ?? '').trim();
     if (!stay.guestPhone) throw new Error('This booking has no guest mobile number.');
     // The WhatsApp tab is opened now, while the click still counts as the
     // user's, and pointed at the message once the link exists.
     const tab = window.open('about:blank', '_blank');
     try {
-      await rejectDocuments.mutateAsync({ bookingId: stay.bookingId, reason });
-      setRejectReason((current) => ({ ...current, [stay.bookingId]: '' }));
-      // Mints a fresh token and moves the deadline if it had passed. The
-      // guest gets the reason and how to upload, not the booking message.
+      await rejectDocuments.mutateAsync({ bookingId: stay.bookingId, reason, slot });
+      setRejectReason((current) => ({ ...current, [key]: '' }));
+      // Mints a fresh token and moves the deadline if it had passed.
       const link = await adminFetch<{ url: string; verificationDeadline: string }>(
         `/api/admin/guest-stays/${stay.bookingId}/onboarding`,
         { method: 'POST', body: JSON.stringify({}) },
       );
-      const href = `https://wa.me/${waNumber(stay.guestPhone)}?text=${encodeURIComponent(
-        buildDocumentsRejectedMessage(stay, reason, link.url, link.verificationDeadline),
-      )}`;
+      let text: string;
+      if (slot === null) {
+        text = buildDocumentsRejectedMessage(stay, reason, link.url, link.verificationDeadline);
+      } else {
+        const fresh = await adminFetch<{ documents: GuestDocument[] }>(`/api/admin/guest-stays/${stay.bookingId}/documents`);
+        const groups = groupByGuest(fresh.documents).filter((g) => g.slot !== null);
+        text = buildGuestIdsRejectedMessage(
+          stay,
+          groups.filter((g) => g.rejected).map((g) => ({ slot: g.slot!, name: g.name ?? `Guest ${g.slot}`, reason: g.reason ?? reason })),
+          groups.filter((g) => !g.rejected).map((g) => g.name ?? `Guest ${g.slot}`),
+          link.url,
+          link.verificationDeadline,
+        );
+      }
+      const href = `https://wa.me/${waNumber(stay.guestPhone)}?text=${encodeURIComponent(text)}`;
       if (tab) tab.location.href = href;
       else window.open(href, '_blank', 'noopener,noreferrer');
     } catch (error) {
@@ -1301,6 +1321,9 @@ export default function AdminGuests() {
                       </td>
                       <td className="px-5 py-4 text-xs text-muted-foreground">
                         <p>{stay.documents.verified} verified · {stay.documents.submitted} submitted · {stay.documents.rejected} rejected</p>
+                        {stay.guestsListed != null && stay.guests != null && stay.guestsListed !== stay.guests && (
+                          <p className={stay.guestsListed > stay.guests ? 'font-semibold text-[#A65E45]' : ''}>{stay.guestsListed} guest IDs for {stay.guests} booked{stay.guestsListed > stay.guests ? ' · extra guest charge due' : ''}</p>
+                        )}
                         {filed > 0 && (
                           <button
                             type="button"
@@ -1440,108 +1463,73 @@ export default function AdminGuests() {
 
                           {!documents.isLoading && !documents.isError && (
                             <>
-                              <ul className="space-y-2">
-                                {(documents.data?.documents ?? []).map((doc) => (
-                                  <li
-                                    key={doc.id}
-                                    className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border bg-card px-4 py-3"
-                                    data-testid={`document-${doc.id}`}
-                                  >
-                                    <div className="min-w-0">
-                                      <p className="text-sm font-medium text-foreground">
-                                        {doc.documentType}
-                                        {doc.documentNumber ? ` · ${doc.documentNumber}` : ''}
-                                      </p>
-                                      <p className="mt-0.5 truncate text-xs text-muted-foreground">
-                                        {doc.originalFilename ?? 'Unnamed file'}
-                                        {doc.sizeBytes ? ` · ${Math.round(doc.sizeBytes / 1024)} KB` : ''}
-                                        {doc.uploadedAt ? ` · ${format(parseISO(doc.uploadedAt), 'd MMM, h:mm a')}` : ''}
-                                      </p>
-                                      {doc.status === 'rejected' && (
-                                        <p className="mt-1 text-xs text-[#A65E45]">
-                                          Rejected{doc.rejectionReason ? ` — ${doc.rejectionReason}` : ''}
-                                        </p>
-                                      )}
-                                      {doc.status === 'verified' && doc.verifiedBy === VERIFIED_ON_UPLOAD && (
-                                        <p className="mt-1 text-xs text-muted-foreground">
-                                          Marked verified on upload — not yet opened by anyone.
-                                        </p>
-                                      )}
-                                    </div>
-                                    <a
-                                      href={`/api/admin/guest-stays/${stay.bookingId}/documents/${doc.id}/file`}
-                                      download
-                                      className="flex shrink-0 items-center gap-1.5 rounded-lg border border-border px-3 py-2 text-[10px] font-bold uppercase tracking-[.07em] text-primary transition-colors hover:border-primary"
-                                      data-testid={`link-open-document-${doc.id}`}
-                                    >
-                                      <ExternalLink size={12} /> Download
-                                    </a>
-                                  </li>
-                                ))}
-                              </ul>
-
                               {(documents.data?.documents ?? []).length === 0 && (
                                 <p className="text-sm text-muted-foreground">Nothing filed for this stay.</p>
                               )}
-
-                              {/* The veto. One click both un-verifies what was
-                                  filed and opens WhatsApp with a fresh link,
-                                  because a rejection the guest is never told
-                                  about is just a stay that quietly stops being
-                                  ready. */}
-                              {(documents.data?.documents ?? []).length > 0 && (
-                                <div className="mt-4 flex flex-wrap items-end gap-3 border-t border-border pt-4">
-                                  <label className="min-w-[240px] flex-1">
-                                    <span className="eyebrow text-muted-foreground">Why are these being rejected? The guest is sent this with upload instructions.</span>
-                                    <span className="mt-2 flex flex-wrap gap-1.5">
-                                      {COMMON_REJECTION_REASONS.map((reason) => (
-                                        <button
-                                          key={reason}
-                                          type="button"
-                                          onClick={() => setRejectReason((current) => ({ ...current, [stay.bookingId]: reason }))}
-                                          className={`rounded-full border px-2.5 py-1 text-[11px] transition-colors ${rejectReason[stay.bookingId] === reason ? 'border-primary text-primary' : 'border-border text-muted-foreground hover:border-primary'}`}
-                                        >
-                                          {reason}
-                                        </button>
-                                      ))}
-                                    </span>
-                                    <input
-                                      value={rejectReason[stay.bookingId] ?? ''}
-                                      onChange={(event) =>
-                                        setRejectReason((current) => ({
-                                          ...current,
-                                          [stay.bookingId]: event.target.value,
-                                        }))
-                                      }
-                                      placeholder="The photo is too blurred to read the number"
-                                      className="mt-2 w-full border-b border-border bg-transparent px-0 py-2 text-sm text-primary outline-none placeholder:text-muted-foreground/50 focus:border-primary"
-                                      data-testid={`input-reject-reason-${stay.bookingId}`}
-                                    />
-                                  </label>
-                                  <button
-                                    type="button"
-                                    onClick={() =>
-                                      rejectAndResend(stay).catch((error) =>
-                                        window.alert(error instanceof Error ? error.message : 'Could not reject and re-send.'),
-                                      )
-                                    }
-                                    disabled={rejectDocuments.isPending || createOnboarding.isPending || !stay.guestPhone || (rejectReason[stay.bookingId] ?? '').trim().length < MIN_REJECTION_REASON}
-                                    className="flex items-center gap-1.5 rounded-lg border border-[#A65E45]/40 bg-[#A65E45]/5 px-3 py-2.5 text-[10px] font-bold uppercase tracking-[.07em] text-[#A65E45] transition-colors hover:border-[#A65E45] disabled:opacity-40"
-                                    data-testid={`button-reject-resend-${stay.bookingId}`}
-                                  >
-                                    {rejectDocuments.isPending || createOnboarding.isPending ? (
-                                      <Loader2 size={12} className="animate-spin" />
-                                    ) : (
-                                      <XCircle size={12} />
-                                    )}
-                                    Reject &amp; re-send link
-                                  </button>
-                                  {!stay.guestPhone && (
-                                    <p className="text-xs text-muted-foreground">
-                                      No mobile number on this booking, so a new link cannot be sent.
-                                    </p>
-                                  )}
-                                </div>
+                              <div className="space-y-4">
+                                {groupByGuest(documents.data?.documents ?? []).map((group) => {
+                                  const key = `${stay.bookingId}:${group.slot ?? 'all'}`;
+                                  const first = (group.name ?? '').split(' ')[0] || `Guest ${group.slot}`;
+                                  return (
+                                    <div key={key} className={`rounded-xl border bg-card p-4 ${group.rejected ? 'border-[#A65E45]/50' : 'border-border'}`} data-testid={`guest-group-${stay.bookingId}-${group.slot ?? 'all'}`}>
+                                      <div className="flex flex-wrap items-center justify-between gap-2">
+                                        <p className="text-sm font-semibold text-foreground">
+                                          {group.slot === null ? 'Earlier upload (not grouped by guest)' : <>Guest {group.slot} · {group.name} <span className="font-normal text-muted-foreground">· {group.age === 'child' ? 'Child · ' : ''}{idTypeLabel(group.idType)}</span></>}
+                                        </p>
+                                        <span className={`rounded-full px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-[.07em] ${group.rejected ? 'bg-[#A65E45]/10 text-[#A65E45]' : 'bg-[#7a8065]/15 text-[#4b5340]'}`}>{group.rejected ? 'Rejected' : 'Accepted'}</span>
+                                      </div>
+                                      {group.rejected && group.reason && <p className="mt-1 text-xs text-[#A65E45]">Reason sent: {group.reason}</p>}
+                                      <ul className="mt-3 space-y-2">
+                                        {group.docs.map((doc) => (
+                                          <li key={doc.id} className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border px-3 py-2" data-testid={`document-${doc.id}`}>
+                                            <div className="min-w-0">
+                                              <p className="text-sm text-foreground">{doc.guest ? doc.guest.side : doc.documentType}{doc.documentNumber ? ` · ${doc.documentNumber}` : ''}</p>
+                                              <p className="mt-0.5 truncate text-xs text-muted-foreground">
+                                                {doc.originalFilename ?? 'Unnamed file'}
+                                                {doc.sizeBytes ? ` · ${Math.round(doc.sizeBytes / 1024)} KB` : ''}
+                                                {doc.uploadedAt ? ` · ${format(parseISO(doc.uploadedAt), 'd MMM, h:mm a')}` : ''}
+                                                {doc.status === 'verified' && doc.verifiedBy === VERIFIED_ON_UPLOAD ? ' · not yet opened by anyone' : ''}
+                                              </p>
+                                            </div>
+                                            <a href={`/api/admin/guest-stays/${stay.bookingId}/documents/${doc.id}/file`} download className="flex shrink-0 items-center gap-1.5 rounded-lg border border-border px-3 py-2 text-[10px] font-bold uppercase tracking-[.07em] text-primary transition-colors hover:border-primary" data-testid={`link-open-document-${doc.id}`}>
+                                              <ExternalLink size={12} /> Download
+                                            </a>
+                                          </li>
+                                        ))}
+                                      </ul>
+                                      {/* The veto, one guest at a time: the other guests' IDs stay
+                                          accepted, and the WhatsApp names only who must re-upload. */}
+                                      {!group.rejected && (
+                                        <div className="mt-3 flex flex-wrap items-end gap-3 border-t border-border pt-3">
+                                          <label className="min-w-[240px] flex-1">
+                                            <span className="eyebrow text-muted-foreground">{group.slot === null ? 'Why is this upload being rejected?' : `Why is ${first}'s ID being rejected?`} The guest is sent this with upload instructions.</span>
+                                            <span className="mt-2 flex flex-wrap gap-1.5">
+                                              {COMMON_REJECTION_REASONS.map((reason) => (
+                                                <button key={reason} type="button" onClick={() => setRejectReason((current) => ({ ...current, [key]: reason }))} className={`rounded-full border px-2.5 py-1 text-[11px] transition-colors ${rejectReason[key] === reason ? 'border-primary text-primary' : 'border-border text-muted-foreground hover:border-primary'}`}>
+                                                  {reason}
+                                                </button>
+                                              ))}
+                                            </span>
+                                            <input value={rejectReason[key] ?? ''} onChange={(event) => setRejectReason((current) => ({ ...current, [key]: event.target.value }))} placeholder="Pick a reason above or type one" className="mt-2 w-full border-b border-border bg-transparent px-0 py-2 text-sm text-primary outline-none placeholder:text-muted-foreground/50 focus:border-primary" data-testid={`input-reject-reason-${stay.bookingId}-${group.slot ?? 'all'}`} />
+                                          </label>
+                                          <button
+                                            type="button"
+                                            onClick={() => rejectAndResend(stay, group.slot).catch((error) => window.alert(error instanceof Error ? error.message : 'Could not reject and re-send.'))}
+                                            disabled={rejectDocuments.isPending || !stay.guestPhone || (rejectReason[key] ?? '').trim().length < MIN_REJECTION_REASON}
+                                            className="flex items-center gap-1.5 rounded-lg border border-[#A65E45]/40 bg-[#A65E45]/5 px-3 py-2.5 text-[10px] font-bold uppercase tracking-[.07em] text-[#A65E45] transition-colors hover:border-[#A65E45] disabled:opacity-40"
+                                            data-testid={`button-reject-resend-${stay.bookingId}-${group.slot ?? 'all'}`}
+                                          >
+                                            {rejectDocuments.isPending ? <Loader2 size={12} className="animate-spin" /> : <XCircle size={12} />}
+                                            {group.slot === null ? 'Reject & re-send link' : `Reject ${first}'s ID & send`}
+                                          </button>
+                                        </div>
+                                      )}
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                              {!stay.guestPhone && (documents.data?.documents ?? []).length > 0 && (
+                                <p className="mt-3 text-xs text-muted-foreground">No mobile number on this booking, so a new link cannot be sent.</p>
                               )}
                             </>
                           )}
@@ -1744,6 +1732,36 @@ function prettyGuestDate(value: string): string {
  * the reason, the fresh link, and exactly how to upload again (each
  * instruction, e.g. all four corners visible, comes from UPLOAD_INSTRUCTIONS).
  */
+/**
+ * Sent when the owner rejects one or more guests' IDs: names each guest and
+ * what to fix, says the others are accepted, and gives the link and checklist.
+ */
+function buildGuestIdsRejectedMessage(stay: GuestStay, rejected: Array<{ slot: number; name: string; reason: string }>, acceptedNames: string[], verificationUrl: string, deadline?: string | null): string {
+  const first = (stay.guestName ?? '').trim().split(/\s+/)[0] || 'there';
+  const by = prettyDeadline(deadline);
+  return [
+    `Hello ${first} 🌿`,
+    '',
+    `Thank you for uploading the IDs for your stay at Raj Kuthir Homestays – Sobuj Potro (${prettyGuestDate(stay.checkIn)} to ${prettyGuestDate(stay.checkOut)}). ${rejected.length === 1 ? 'One ID needs' : 'These IDs need'} to be uploaded again:`,
+    '',
+    ...rejected.map((r) => `❌ Guest ${r.slot} (${r.name}) – Reason: ${r.reason}`),
+    ...(acceptedNames.length ? ['', `✅ Accepted, nothing more needed: ${acceptedNames.join(', ')}`] : []),
+    '',
+    `📄 Re-upload ${rejected.length === 1 ? 'that ID' : 'those IDs'} here (the accepted guests are already done):`,
+    verificationUrl,
+    '',
+    `✅ How to upload`,
+    ...UPLOAD_INSTRUCTIONS.map((line) => `• ${line}`),
+    '',
+    `⏰ Please complete this${by ? ` by ${by}` : ''}, at least 48 hours before check-in. Without verified IDs, check-in may be denied as per the booking terms.`,
+    '',
+    `Need help? Call or WhatsApp +91 62903 99165.`,
+    '',
+    `Warm regards,`,
+    `Team Raj Kuthir Homestays – Sobuj Potro`,
+  ].join('\n');
+}
+
 function buildDocumentsRejectedMessage(stay: GuestStay, reason: string, verificationUrl: string, deadline?: string | null): string {
   const first = (stay.guestName ?? '').trim().split(/\s+/)[0] || 'there';
   const by = prettyDeadline(deadline);

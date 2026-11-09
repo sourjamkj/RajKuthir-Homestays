@@ -12,11 +12,15 @@ import {
   listAdminGuestStays,
   rejectGuestDocuments,
   currentRejection,
+  partyForPage,
   submitGuestOnboarding,
   verifyGuestDocuments,
 } from "../lib/guest-onboarding-repo";
 import { documentDownloadHeaders } from "../lib/document-security";
 import { rejectionReasonProblem } from "../lib/document-rejection-rules";
+import { maxCards, MAX_FILES_PER_SUBMIT, RATE_LADDER_MAX, type GuestAge } from "../lib/guest-id-rules";
+import { getLadder } from "../lib/rates-repo";
+import { EXTRA_ADULT_PAISE } from "../lib/party";
 
 const router: IRouter = Router();
 const MAX_TEXT = 500;
@@ -98,13 +102,56 @@ router.post("/guest/onboarding/lookup", async (req, res) => {
     // Why the last upload was turned down, so the guest sees it on the page
     // they re-upload from. Null once they upload again.
     rejection: await currentRejection(found.booking.id),
+    // One card per guest: who is already accepted, who must re-upload, the
+    // most cards allowed, and what an extra guest costs per night.
+    party: {
+      booked: found.booking.guests ?? 1,
+      maxCards: maxCards(found.booking.guests ?? 1),
+      ...(await partyForPage(found.booking.id)),
+      extraRates: await extraRates(),
+    },
   });
 });
+
+async function extraRates() {
+  try {
+    const ladder = await getLadder();
+    return { includedGuests: ladder.includedGuests, ladderPaise: ladder.extraGuestPaise, ladderMax: RATE_LADDER_MAX, abovePaise: EXTRA_ADULT_PAISE };
+  } catch {
+    return null;
+  }
+}
 
 router.post("/guest/onboarding/submit", async (req, res) => {
   res.setHeader("Cache-Control", "no-store");
   const body = req.body ?? {};
-  const documents = Array.isArray(body.documents) ? body.documents.slice(0, 6) : [];
+  // IDs come grouped by guest now. A page opened before this change still
+  // posts loose documents: ask for a reload rather than accept an upload
+  // that cannot be checked against the guest count.
+  if (!Array.isArray(body.guests)) {
+    res.status(400).json({ error: "This page was updated. Please reload it and add one ID for each guest." });
+    return;
+  }
+  const party = (body.guests as any[]).slice(0, 8).map((g) => ({
+    slot: Number(g?.slot),
+    name: clean(g?.name, 120) ?? "",
+    age: (g?.age === "child" ? "child" : "adult") as GuestAge,
+    idType: clean(g?.idType, 20) ?? "",
+    foreign: g?.foreign === true,
+    files: (Array.isArray(g?.files) ? g.files.slice(0, 3) : []).map((f: any) => ({
+      side: clean(f?.side, 30) ?? "",
+      documentType: "",
+      source: "upload",
+      originalFilename: clean(f?.originalFilename, 180),
+      mimeType: clean(f?.mimeType, 100),
+      dataBase64: typeof f?.dataBase64 === "string" ? f.dataBase64 : "",
+    })),
+  }));
+  if (party.reduce((n, g) => n + g.files.length, 0) > MAX_FILES_PER_SUBMIT) {
+    res.status(400).json({ error: "Too many files in one upload." });
+    return;
+  }
+  const documents: any[] = [];
   const result = await submitGuestOnboarding({
     token: cleanToken(body.token),
     fullName: clean(body.fullName, 160) ?? "",
@@ -114,6 +161,7 @@ router.post("/guest/onboarding/submit", async (req, res) => {
     city: clean(body.city, 100),
     state: clean(body.state, 100),
     country: clean(body.country, 100),
+    party,
     documents: documents.map((doc: any) => ({
       documentType: clean(doc?.documentType, 80) ?? "",
       documentNumber: clean(doc?.documentNumber, 100),
@@ -254,7 +302,9 @@ router.post("/admin/guest-stays/:bookingId/reject", requireAdmin, async (req, re
     res.status(400).json({ error: problem });
     return;
   }
-  const result = await rejectGuestDocuments(bookingId, reason, "admin");
+  // A guest number rejects only that guest's ID; without one, the whole upload.
+  const slot = Number.isInteger(req.body?.slot) && req.body.slot > 0 && req.body.slot <= 8 ? (req.body.slot as number) : null;
+  const result = await rejectGuestDocuments(bookingId, reason, "admin", slot);
   if (result.rejected === 0) {
     res.status(409).json({ error: "There are no documents on this booking to reject." });
     return;
