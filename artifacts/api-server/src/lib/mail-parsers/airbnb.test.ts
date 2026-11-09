@@ -66,3 +66,16 @@ test("airbnb · the year is never more than 60 days back, and a New Year stay ro
   assert.equal(ny.checkOut, "2027-01-02");
   assert.equal(ny.pets, 0);
 });
+
+test("airbnb · an old email is read against its own date, not today", async () => {
+  const { parseMessage } = await import("./index.ts");
+  const hit = parseMessage({
+    from: "automated@airbnb.com",
+    subject: "Reservation confirmed - Riya Sen arrives Nov 21",
+    body: confirmed,
+    date: "2024-10-30T08:00:00Z",
+  });
+  assert.ok(hit);
+  assert.equal(hit.voucher.checkIn, "2024-11-21");
+  assert.equal(hit.voucher.checkOut, "2024-11-22");
+});
