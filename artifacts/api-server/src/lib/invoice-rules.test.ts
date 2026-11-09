@@ -146,6 +146,12 @@ test("the booking confirmation renders with a QR for the balance", async () => {
   assert.equal(Buffer.from(bytes.slice(0, 5)).toString(), "%PDF-");
   const email = confirmationEmail(content);
   assert.match(email.subject, /RK-18NOV-AB12C/);
+  // The guest's login is the booking reference, never the invoice number.
+  const numbered = invoiceContent({ booking: booking({ receivedPaise: 280000, reference: "RK-13NOV-6ERQE" }), number: "RK/2026-27/0007", issuedOn: "2026-11-09", email: null });
+  const told = confirmationEmail(numbered);
+  assert.match(told.text, /Booking reference: RK-13NOV-6ERQE/);
+  assert.match(told.text, /Confirmation no\.: RK\/2026-27\/0007/);
+  assert.match(told.subject, /RK-13NOV-6ERQE/);
   assert.match(email.text, /Balance at check-in: Rs\. 2,800/);
 });
 

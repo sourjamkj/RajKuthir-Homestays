@@ -329,11 +329,14 @@ export function invoiceWhatsappText(content: InvoiceContent, link: string): stri
 export function confirmationEmail(content: InvoiceContent): { subject: string; text: string } {
   const first = content.billedTo.name.split(/\s+/)[0] || "there";
   return {
-    subject: `Booking confirmed — ${content.number}`,
+    subject: `Booking confirmed — ${content.stay.reference ?? content.number}`,
     text: [
       `Hello ${first}, your stay at ${BUSINESS.name} is confirmed.`,
       "",
-      `Booking reference: ${content.number}`,
+      // The RK- reference is what /welcome and the pre-arrival form ask for;
+      // the confirmation number is the one the invoice will carry.
+      `Booking reference: ${content.stay.reference ?? content.number}`,
+      ...(content.stay.reference ? [`Confirmation no.: ${content.number}`] : []),
       `Check-in: ${prettyDate(content.stay.checkIn)} (from 12 noon)`,
       `Check-out: ${prettyDate(content.stay.checkOut)} (by 11 am)`,
       `Total: ${money(content.totalPaise)}`,
