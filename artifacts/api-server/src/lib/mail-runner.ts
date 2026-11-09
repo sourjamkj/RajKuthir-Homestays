@@ -112,6 +112,7 @@ async function saveBooking(voucher: ParsedVoucher): Promise<void> {
     checkIn: voucher.checkIn,
     checkOut: voucher.checkOut,
     guests: voucher.guests,
+    ...(voucher.pets !== undefined && voucher.pets !== null ? { pets: voucher.pets } : {}),
     grossPaise: voucher.grossPaise,
     commissionPaise: voucher.commissionPaise,
     taxPaise: voucher.taxPaise,
@@ -193,7 +194,11 @@ export type BackfillResult = {
 };
 
 export async function getBookingComBackfill(): Promise<BackfillResult | null> {
-  const [row] = await db.select({ value: appSettings.value }).from(appSettings).where(eq(appSettings.key, BACKFILL_KEY));
+  return getBackfill(BACKFILL_KEY);
+}
+
+async function getBackfill(key: string): Promise<BackfillResult | null> {
+  const [row] = await db.select({ value: appSettings.value }).from(appSettings).where(eq(appSettings.key, key));
   try {
     return row?.value ? (JSON.parse(row.value) as BackfillResult) : null;
   } catch {
@@ -202,6 +207,31 @@ export async function getBookingComBackfill(): Promise<BackfillResult | null> {
 }
 
 export async function backfillBookingCom(): Promise<BackfillResult> {
+  return backfillChannel({ key: BACKFILL_KEY, sender: "booking.com", parser: "Booking.com" });
+}
+
+const AIRBNB_BACKFILL_KEY = "mail.backfill.airbnb";
+
+/** Re-reads every Airbnb email (the parser was added after some had arrived). Idempotent. */
+export async function backfillAirbnb(): Promise<BackfillResult> {
+  return backfillChannel({ key: AIRBNB_BACKFILL_KEY, sender: "airbnb.com", parser: "Airbnb" });
+}
+
+/** Runs the Airbnb backfill once, two minutes after boot, if it has never completed. */
+export function scheduleAirbnbBackfill(): void {
+  setTimeout(() => {
+    void (async () => {
+      try {
+        if (await getBackfill(AIRBNB_BACKFILL_KEY)) return;
+        await backfillAirbnb();
+      } catch (error) {
+        logger.error({ err: error }, "Airbnb email backfill failed");
+      }
+    })();
+  }, 120_000).unref?.();
+}
+
+async function backfillChannel(channel: { key: string; sender: string; parser: string }): Promise<BackfillResult> {
   const result: BackfillResult = {
     ranAt: new Date().toISOString(),
     mailboxes: 0,
@@ -222,7 +252,7 @@ export async function backfillBookingCom(): Promise<BackfillResult> {
     result.mailboxes += 1;
     let messages;
     try {
-      messages = await readBySender(account, "booking.com");
+      messages = await readBySender(account, channel.sender);
     } catch (error) {
       result.errors.push(`${account.label}: ${error instanceof Error ? error.message.slice(0, 200) : "could not read"}`);
       continue;
@@ -231,7 +261,7 @@ export async function backfillBookingCom(): Promise<BackfillResult> {
     for (const message of messages) {
       result.scanned += 1;
       const hit = parseMessage(message);
-      if (!hit || hit.parser.name !== "Booking.com") continue;
+      if (!hit || hit.parser.name !== channel.parser) continue;
       try {
         await saveBooking(hit.voucher);
         result.saved += 1;
@@ -250,13 +280,13 @@ export async function backfillBookingCom(): Promise<BackfillResult> {
     const value = JSON.stringify(result);
     await db
       .insert(appSettings)
-      .values({ key: BACKFILL_KEY, value, updatedAt: new Date() })
+      .values({ key: channel.key, value, updatedAt: new Date() })
       .onConflictDoUpdate({ target: appSettings.key, set: { value, updatedAt: new Date() } });
   }
 
   logger.info(
     { mailboxes: result.mailboxes, scanned: result.scanned, saved: result.saved, failed: result.failed },
-    "Booking.com email backfill finished",
+    `${channel.parser} email backfill finished`,
   );
   return result;
 }

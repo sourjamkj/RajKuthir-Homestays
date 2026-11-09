@@ -4,6 +4,7 @@ import {
   handlesSender as handlesBookingCom,
   parseBookingComEmail,
 } from "./bookingcom.ts";
+import { handlesSender as handlesAirbnb, parseAirbnbEmail } from "./airbnb.ts";
 
 export type { ParsedVoucher };
 
@@ -37,6 +38,11 @@ export const PARSERS: MailParser[] = [
     name: "Booking.com",
     handlesSender: handlesBookingCom,
     parse: ({ from, subject, body }) => parseBookingComEmail(subject, from, body),
+  },
+  {
+    name: "Airbnb",
+    handlesSender: handlesAirbnb,
+    parse: ({ from, subject, body }) => parseAirbnbEmail(subject, from, body),
   },
 ];
 
