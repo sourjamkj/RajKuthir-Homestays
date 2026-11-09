@@ -51,6 +51,7 @@ import Pay from '@/pages/Pay';
 import GuestInvoice from '@/pages/GuestInvoice';
 import ManagementDocuments from '@/pages/ManagementDocuments';
 import Feedback from '@/pages/Feedback';
+import { CAFE_HOURS } from '@/content/cafe-menu';
 import AdminCompliance from '@/pages/AdminCompliance';
 import {
   useRatePlan,
@@ -233,7 +234,7 @@ function homeFaqs(plan: RatePlan | undefined): Faq[] {
     },
     {
       question: 'Is food available nearby?',
-      answer: 'Cafe Soi is inside the premises, and Zomato availability makes it easy to order in when you prefer a slower evening at home.',
+      answer: `Cafe Soi is inside the premises, open ${CAFE_HOURS}, and Zomato availability makes it easy to order in when you prefer a slower evening at home.`,
     },
     {
       // Guests spell the name every way: say so in plain words, once.

@@ -1,15 +1,17 @@
 import { useEffect } from 'react';
 import { BackIcon, LeafIcon, PhoneIcon } from '@/components/icons';
 
-import { CAFE_MENU, CAFE_PHONE, CAFE_PHONE_HREF, MENU_UPDATED } from '@/content/cafe-menu';
+import { CAFE_HOURS, CAFE_MENU, CAFE_PHONE, CAFE_PHONE_HREF, MENU_UPDATED } from '@/content/cafe-menu';
 import { basePath, track } from '@/lib/site';
 
 /**
  * Cafe Soi, the café on the grounds of Sobuj Potro, open to everyone.
  *
  * The menu and prices come from content/cafe-menu.ts, typed out from the
- * café's own menu. Nothing here is invented: no opening hours (the page says
- * to call), no ratings, no claims about the kitchen beyond the menu itself.
+ * café's own menu. Nothing here is invented: the opening hours are the
+ * owner's own (CAFE_HOURS), and there are no ratings and no claims about
+ * the kitchen beyond the menu itself. The hours are page text only, not
+ * openingHours structured data, which the SEO tests keep out of the schema.
  */
 
 function prettyDate(iso: string): string {
@@ -70,6 +72,9 @@ export default function CafeSoi() {
             <p>
               Cafe Soi is on the grounds of Sobuj Potro in Bolpur and is open to everyone, not only guests at the
               villa. Bengali home cooking, breakfast combos, tea and snacks, cooked fresh to order in Santiniketan.
+            </p>
+            <p data-testid="text-cafe-hours">
+              Open <strong className="text-primary">{CAFE_HOURS}</strong>.
             </p>
             <p className="text-sm leading-6 text-muted-foreground">
               Prices are in rupees and are <strong className="text-primary">plus 5% GST</strong>. Everything is

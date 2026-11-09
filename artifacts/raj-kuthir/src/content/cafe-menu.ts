@@ -13,6 +13,8 @@ export const MENU_UPDATED = '2026-10-29';
 /** The café manager's number, as in the arrival pack. */
 export const CAFE_PHONE = '+91 98308 36670';
 export const CAFE_PHONE_HREF = 'tel:+919830836670';
+/** Opening hours, as the owner gave them (Nov 2026). Also on the notice board (api-server display-board.ts). */
+export const CAFE_HOURS = '10 am to 9 pm';
 
 export type MenuItem = { name: string; price: number };
 export type MenuGroup = { title: string; items: MenuItem[] };
