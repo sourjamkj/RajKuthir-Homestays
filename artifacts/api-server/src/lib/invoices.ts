@@ -411,7 +411,9 @@ export async function deliverConfirmation(
                 const sent = await sendTemplate({
                   to,
                   templateName: template,
-                  params: [content.billedTo.name.split(/\s+/)[0] || "there", content.number],
+                  // The booking reference, not the invoice number: it is what
+                  // the guest types into /welcome and the pre-arrival form.
+                  params: [content.billedTo.name.split(/\s+/)[0] || "there", content.stay.reference ?? content.number],
                   headerDocument: { mediaId: media.mediaId, filename },
                 });
                 return sent.ok ? { ok: true } : { ok: false, error: sent.error };

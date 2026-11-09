@@ -149,7 +149,7 @@ export async function renderInvoicePdf(
   } else {
     rightText(page, "INVOICE", right, y - 4, 20, bold, GREEN);
   }
-  rightText(page, confirmation ? `Ref: ${invoice.number}` : invoice.number, right, y - 24, 10, bold);
+  rightText(page, confirmation ? `No. ${invoice.number}` : invoice.number, right, y - 24, 10, bold);
   rightText(page, `Date: ${prettyDate(invoice.issuedOn)}`, right, y - 38, 9, regular, MUTED);
   if (confirmation) {
     // The one word the guest is looking for, impossible to miss.

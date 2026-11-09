@@ -66,6 +66,27 @@ export function todayInIndia(now = new Date()): string {
   }).format(now);
 }
 
+/**
+ * The booking reference behind a confirmation / invoice number, or null.
+ * guest_invoices is created by invoices.ts at boot; if it is missing, this is
+ * simply not a confirmation number.
+ */
+async function referenceForConfirmationNumber(raw: string): Promise<string | null> {
+  const wanted = normaliseReference(raw);
+  if (!/^RK\d{8,}$/.test(wanted)) return null;
+  try {
+    const result = await db.execute<{ reference: string | null }>(sql`
+      SELECT b.reference
+        FROM guest_invoices gi
+        JOIN bookings b ON b.id = gi.booking_id
+       WHERE upper(regexp_replace(gi.number, '[^A-Za-z0-9]', '', 'g')) = ${wanted}
+       LIMIT 1`);
+    return result.rows[0]?.reference ?? null;
+  } catch {
+    return null;
+  }
+}
+
 /** Minimum length worth a database round-trip. */
 export const MIN_REFERENCE_LENGTH = 4;
 
@@ -100,7 +121,7 @@ export async function lookupBooking(
   // could ever match, for any booking.
   const normalisedColumn = sql`upper(regexp_replace(${bookings.reference}, '[^A-Za-z0-9]', '', 'g'))`;
 
-  const rows = await db
+  const byReference = (wanted: string) => db
     .select({
       reference: bookings.reference,
       guestName: bookings.guestName,
@@ -112,11 +133,23 @@ export async function lookupBooking(
       status: bookings.status,
     })
     .from(bookings)
-    .where(sql`${normalisedColumn} = ${reference}`)
+    .where(sql`${normalisedColumn} = ${wanted}`)
     // Latest stay first, so a repeat guest reusing a reference gets the
     // current one rather than a stay from two years ago.
     .orderBy(desc(bookings.checkOut))
     .limit(5);
+
+  let rows = await byReference(reference);
+
+  // Guests were told their confirmation number (RK/2026-27/0007, the number
+  // the invoice will carry) was their "booking reference": the confirmation
+  // email said so and the PDF printed it as "Ref:". It is on their paperwork
+  // and it is unique to their booking, so it opens the pack too — the
+  // phone check below applies exactly as it does to an RK- reference.
+  if (rows.length === 0) {
+    const reference = await referenceForConfirmationNumber(rawReference);
+    if (reference) rows = await byReference(normaliseReference(reference));
+  }
 
   if (rows.length === 0) return { ok: false, reason: "not_found" };
 
