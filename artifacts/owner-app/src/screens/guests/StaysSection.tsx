@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Linking, TextInput, View } from 'react-native';
+import { Linking, Pressable, TextInput, View } from 'react-native';
 
 import {
   createOnboarding,
@@ -21,6 +21,8 @@ import { shareAdminFile } from '../../files';
 import {
   buildCheckinWhatsAppMessage,
   buildGuestWhatsAppMessage,
+  buildDocumentsRejectedMessage,
+  COMMON_REJECTION_REASONS,
   buildManagementMessage,
   buildReviewMessage,
   canAskForReview,
@@ -136,11 +138,18 @@ export function StaysSection({
     }
   };
 
-  /** Reject first, and only send the new link if the rejection landed. */
+  /**
+   * Reject first, and only send the new link if the rejection landed. The
+   * guest gets the reason and the upload instructions, not the booking message.
+   */
   const rejectAndResend = async (stay: GuestStay) => {
-    await rejectDocuments(stay.bookingId, (rejectReason[stay.bookingId] ?? '').trim());
+    const reason = (rejectReason[stay.bookingId] ?? '').trim();
+    if (!stay.guestPhone) throw new Error('This booking has no guest mobile number.');
+    await rejectDocuments(stay.bookingId, reason);
     setRejectReason((r) => ({ ...r, [stay.bookingId]: '' }));
-    await sendVerification(stay);
+    const link = await createOnboarding(stay.bookingId);
+    await Linking.openURL(waUrl(stay.guestPhone, buildDocumentsRejectedMessage(stay, reason, link.url, link.verificationDeadline)));
+    await load.reload();
     const result = await getStayDocuments(stay.bookingId);
     setDocs({ loading: false, error: null, list: result.documents });
   };
@@ -395,7 +404,18 @@ export function StaysSection({
                   ))}
                   {docs.list.length > 0 && (
                     <View style={{ marginTop: space(2) }}>
-                      <Small>Why are these being rejected? (optional)</Small>
+                      <Small>Why are these being rejected? The guest is sent this reason with upload instructions.</Small>
+                      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space(1), marginTop: space(1) }}>
+                        {COMMON_REJECTION_REASONS.map((reason) => (
+                          <Pressable
+                            key={reason}
+                            onPress={() => setRejectReason((r) => ({ ...r, [id]: reason }))}
+                            style={{ borderWidth: 1, borderColor: rejectReason[id] === reason ? color.ink : color.line, borderRadius: 999, paddingVertical: 6, paddingHorizontal: 10, backgroundColor: color.white }}
+                          >
+                            <Small>{reason}</Small>
+                          </Pressable>
+                        ))}
+                      </View>
                       <TextInput
                         value={rejectReason[id] ?? ''}
                         onChangeText={(text) => setRejectReason((r) => ({ ...r, [id]: text }))}
@@ -407,7 +427,7 @@ export function StaysSection({
                         label="Reject & re-send link"
                         kind="danger"
                         busy={busy === `reject:${id}`}
-                        disabled={!stay.guestPhone}
+                        disabled={!stay.guestPhone || (rejectReason[id] ?? '').trim().length < 5}
                         onPress={() => void act(id, 'reject', () => rejectAndResend(stay), 'Could not reject and re-send.')}
                         style={{ marginTop: space(2) }}
                       />

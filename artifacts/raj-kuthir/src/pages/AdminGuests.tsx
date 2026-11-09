@@ -33,6 +33,7 @@ import { EnquiryDetailsForm, EMPTY_ENQUIRY_DETAILS, detailsBody, detailsFrom, ty
 import { preferredWhatsappUrl } from '@/lib/whatsapp-link';
 import { StayInvoice, useInvoiceStatuses } from '@/components/StayInvoice';
 import { AdminHeader } from '@/components/AdminHeader';
+import { COMMON_REJECTION_REASONS, MIN_REJECTION_REASON, UPLOAD_INSTRUCTIONS, prettyDeadline } from '@/lib/id-upload';
 
 const ENQUIRIES_KEY = ['/api/enquiries'];
 const CONTACTS_KEY = ['/api/contacts'];
@@ -612,11 +613,28 @@ export default function AdminGuests() {
    */
   const rejectAndResend = async (stay: GuestStay) => {
     const reason = (rejectReason[stay.bookingId] ?? '').trim();
-    await rejectDocuments.mutateAsync({ bookingId: stay.bookingId, reason });
-    setRejectReason((current) => ({ ...current, [stay.bookingId]: '' }));
-    // Mints a fresh token, moves the deadline if it had passed, and opens
-    // WhatsApp with the message already written.
-    await createOnboarding.mutateAsync(stay);
+    if (!stay.guestPhone) throw new Error('This booking has no guest mobile number.');
+    // The WhatsApp tab is opened now, while the click still counts as the
+    // user's, and pointed at the message once the link exists.
+    const tab = window.open('about:blank', '_blank');
+    try {
+      await rejectDocuments.mutateAsync({ bookingId: stay.bookingId, reason });
+      setRejectReason((current) => ({ ...current, [stay.bookingId]: '' }));
+      // Mints a fresh token and moves the deadline if it had passed. The
+      // guest gets the reason and how to upload, not the booking message.
+      const link = await adminFetch<{ url: string; verificationDeadline: string }>(
+        `/api/admin/guest-stays/${stay.bookingId}/onboarding`,
+        { method: 'POST', body: JSON.stringify({}) },
+      );
+      const href = `https://wa.me/${waNumber(stay.guestPhone)}?text=${encodeURIComponent(
+        buildDocumentsRejectedMessage(stay, reason, link.url, link.verificationDeadline),
+      )}`;
+      if (tab) tab.location.href = href;
+      else window.open(href, '_blank', 'noopener,noreferrer');
+    } catch (error) {
+      tab?.close();
+      throw error;
+    }
     await queryClient.invalidateQueries({ queryKey: GUEST_STAYS_KEY });
     await documents.refetch();
   };
@@ -1474,7 +1492,19 @@ export default function AdminGuests() {
                               {(documents.data?.documents ?? []).length > 0 && (
                                 <div className="mt-4 flex flex-wrap items-end gap-3 border-t border-border pt-4">
                                   <label className="min-w-[240px] flex-1">
-                                    <span className="eyebrow text-muted-foreground">Why are these being rejected? (optional)</span>
+                                    <span className="eyebrow text-muted-foreground">Why are these being rejected? The guest is sent this with upload instructions.</span>
+                                    <span className="mt-2 flex flex-wrap gap-1.5">
+                                      {COMMON_REJECTION_REASONS.map((reason) => (
+                                        <button
+                                          key={reason}
+                                          type="button"
+                                          onClick={() => setRejectReason((current) => ({ ...current, [stay.bookingId]: reason }))}
+                                          className={`rounded-full border px-2.5 py-1 text-[11px] transition-colors ${rejectReason[stay.bookingId] === reason ? 'border-primary text-primary' : 'border-border text-muted-foreground hover:border-primary'}`}
+                                        >
+                                          {reason}
+                                        </button>
+                                      ))}
+                                    </span>
                                     <input
                                       value={rejectReason[stay.bookingId] ?? ''}
                                       onChange={(event) =>
@@ -1495,7 +1525,7 @@ export default function AdminGuests() {
                                         window.alert(error instanceof Error ? error.message : 'Could not reject and re-send.'),
                                       )
                                     }
-                                    disabled={rejectDocuments.isPending || createOnboarding.isPending || !stay.guestPhone}
+                                    disabled={rejectDocuments.isPending || createOnboarding.isPending || !stay.guestPhone || (rejectReason[stay.bookingId] ?? '').trim().length < MIN_REJECTION_REASON}
                                     className="flex items-center gap-1.5 rounded-lg border border-[#A65E45]/40 bg-[#A65E45]/5 px-3 py-2.5 text-[10px] font-bold uppercase tracking-[.07em] text-[#A65E45] transition-colors hover:border-[#A65E45] disabled:opacity-40"
                                     data-testid={`button-reject-resend-${stay.bookingId}`}
                                   >
@@ -1707,6 +1737,36 @@ export default function AdminGuests() {
 
 function prettyGuestDate(value: string): string {
   return format(parseISO(value), 'd MMMM yyyy (EEEE)');
+}
+
+/**
+ * Sent when the owner rejects an ID upload, in place of the booking message:
+ * the reason, the fresh link, and exactly how to upload again (each
+ * instruction, e.g. all four corners visible, comes from UPLOAD_INSTRUCTIONS).
+ */
+function buildDocumentsRejectedMessage(stay: GuestStay, reason: string, verificationUrl: string, deadline?: string | null): string {
+  const first = (stay.guestName ?? '').trim().split(/\s+/)[0] || 'there';
+  const by = prettyDeadline(deadline);
+  return [
+    `Hello ${first} 🌿`,
+    '',
+    `Thank you for uploading your ID for your stay at Raj Kuthir Homestays – Sobuj Potro (${prettyGuestDate(stay.checkIn)} to ${prettyGuestDate(stay.checkOut)}). Unfortunately we could not accept it.`,
+    '',
+    `❌ Reason: ${reason.trim()}`,
+    '',
+    `📄 Please upload again here:`,
+    verificationUrl,
+    '',
+    `✅ How to upload`,
+    ...UPLOAD_INSTRUCTIONS.map((line) => `• ${line}`),
+    '',
+    `⏰ Please complete this${by ? ` by ${by}` : ''}, at least 48 hours before check-in. Without verified IDs, check-in may be denied as per the booking terms.`,
+    '',
+    `Need help? Call or WhatsApp +91 62903 99165.`,
+    '',
+    `Warm regards,`,
+    `Team Raj Kuthir Homestays – Sobuj Potro`,
+  ].join('\n');
 }
 
 /*

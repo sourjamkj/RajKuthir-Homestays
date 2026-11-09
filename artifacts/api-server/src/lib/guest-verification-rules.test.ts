@@ -658,10 +658,11 @@ test("console · the owner can open each document and reject in place", () => {
 test("console · rejection happens before the new link is sent", () => {
   const flow = ADMIN_GUESTS_TSX.slice(
     ADMIN_GUESTS_TSX.indexOf("const rejectAndResend"),
-  ).slice(0, 1200);
+  ).slice(0, 1800);
 
   const reject = flow.indexOf("rejectDocuments.mutateAsync");
-  const resend = flow.indexOf("createOnboarding.mutateAsync");
+  // The new link is minted by the onboarding route, then sent with the reason.
+  const resend = flow.indexOf("/onboarding`");
 
   assert.ok(reject > -1 && resend > -1, "the reject-and-resend flow is gone");
   assert.ok(
