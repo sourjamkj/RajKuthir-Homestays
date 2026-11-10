@@ -19,11 +19,12 @@ test("sale plan · ₹3,500 for 5 on normal nights, weekday and weekend alike; f
   }
 });
 
-test("sale plan · ₹4,500 for 5 on every peak night, 2026 and 2027", () => {
+test("sale plan · a flat ₹4,500 on every peak night, 2026 and 2027, whatever the party", () => {
   const { ladder, peaks } = salePlan(live, oldPeaks);
   for (const night of ["2026-12-23", "2026-12-27", "2026-12-31", "2027-01-01", "2027-03-19", "2027-03-22", "2027-12-25", "2028-01-01"]) {
     assert.equal(nightPrice(ladder, peaks, night, 5), 450_000, night);
-    assert.equal(nightPrice(ladder, peaks, night, 2), 390_000, night);
+    assert.equal(nightPrice(ladder, peaks, night, 2), 450_000, night);
+    assert.equal(nightPrice(ladder, peaks, night, 1), 450_000, night);
   }
   for (const night of ["2026-12-22", "2026-12-28", "2026-12-30", "2027-01-02"]) assert.equal(nightPrice(ladder, peaks, night, 5), 350_000, night);
   assert.equal(peaks.length, 5);

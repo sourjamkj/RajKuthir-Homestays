@@ -196,7 +196,7 @@ function homeFaqs(plan: RatePlan | undefined): Faq[] {
     ? [
         `You book the whole villa, priced by the night for your party: ${formatRupees(ladder.weekdayBasePaise)} Sunday–Thursday and ${formatRupees(ladder.weekendBasePaise)} Friday–Saturday for up to ${ladder.includedGuests} guests, plus ${formatRupees(ladder.extraGuestPaise)} a night for each guest after that, up to ${maxGuests}.`,
         ladder.weeklyDiscountPercent > 0 ? `Stays of ${ladder.weeklyMinNights} nights or more are ${ladder.weeklyDiscountPercent}% off.` : '',
-        peakNames.length ? `Festival dates (${peakNames.join(', ')}) have their own rates and a minimum stay.` : '',
+        peakNames.length ? `Festival dates (${peakNames.join(', ')}) are one flat rate for the whole villa, whatever your party size, with a minimum stay.` : '',
         'The calendar shows the exact total for your dates before you pay anything.',
         deposit ?? '',
       ]

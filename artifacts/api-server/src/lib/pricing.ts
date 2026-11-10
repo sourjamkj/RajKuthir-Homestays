@@ -132,6 +132,17 @@ export function peakBase(peak: PeakPeriod): number | null {
 }
 
 /**
+ * A peak night is one flat price for the whole villa, whatever the party
+ * size (the owner's rule, Nov 2026): the full-house rate, so a festival
+ * night earns the same from a couple as from five. Null if no Booking.com
+ * rate is entered.
+ */
+export function peakNightPrice(peak: PeakPeriod, ladder: Ladder): number | null {
+  const base = peakBase(peak);
+  return base === null ? null : base + extraGuestCharge(ladder, LADDER_MAX_GUESTS);
+}
+
+/**
  * A night before any floor: the peak or weekday/weekend base, plus extra
  * guests. `adjust` lets the older percentage rules in rate_overrides apply
  * on non-peak nights without this file knowing about them.
@@ -144,8 +155,8 @@ export function rawNightPrice(
   adjust?: (price: number) => number,
 ): number {
   const peak = peakFor(peaks, isoDate);
-  const peaked = peak ? peakBase(peak) : null;
-  if (peaked !== null) return peaked + extraGuestCharge(ladder, guests);
+  const peaked = peak ? peakNightPrice(peak, ladder) : null;
+  if (peaked !== null) return peaked;
 
   const base = isWeekendNight(isoDate)
     ? ladder.weekendBasePaise

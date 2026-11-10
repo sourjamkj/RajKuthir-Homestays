@@ -1,4 +1,4 @@
-import { extraGuestCharge, ladderProblem, peakBase, peakProblem, withFloor, type Ladder, type PeakPeriod } from "./pricing.ts";
+import { extraGuestCharge, ladderProblem, peakBase, peakNightPrice, peakProblem, withFloor, type Ladder, type PeakPeriod } from "./pricing.ts";
 
 /**
  * Rate changes made through the Claude connector: work out the new ladder or
@@ -44,7 +44,7 @@ export function peakTable(peak: PeakPeriod, ladder: Ladder) {
     nights: `${peak.startDate} to ${lastNight.toISOString().slice(0, 10)} (both included)`,
     minNights: peak.minNights,
     bookingComReference: peak.bookingComPaise === null ? "not entered" : `${rupeeText(peak.bookingComPaise)} less ${peak.discountPercent}%`,
-    prices: base === null ? "no Booking.com rate: priced as normal nights" : row((n) => withFloor(ladder, base + extraGuestCharge(ladder, n))),
+    prices: base === null ? "no Booking.com rate: priced as normal nights" : row(() => withFloor(ladder, peakNightPrice(peak, ladder)!)),
   };
 }
 
