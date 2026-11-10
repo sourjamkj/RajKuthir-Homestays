@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react';
 import { AlertIcon, CheckCircleIcon, SpinnerIcon, UploadIcon } from '@/components/icons';
-import { ID_TYPES, UPLOAD_INSTRUCTIONS, extraGuestPerNightPaise, requiredSides, type ExtraGuestRates, type IdTypeKey } from '@/lib/id-upload';
+import { ID_TYPES, PDF_BOTH_SIDES, UPLOAD_INSTRUCTIONS, extraGuestPerNightPaise, requiredSides, type ExtraGuestRates, type IdTypeKey } from '@/lib/id-upload';
 import { MAX_TOTAL_BYTES, blobToBase64, checkIdPhoto, sizeText, type PhotoCheck } from '@/lib/id-photo-check';
 
 /**
@@ -51,17 +51,28 @@ function nightsBetween(a: string, b: string): number {
   return Math.max(1, Math.round((Date.parse(b) - Date.parse(a)) / 86_400_000));
 }
 
+/**
+ * The photos this card still needs. A PDF in the front slot of a two-sided
+ * ID covers the back as well (the e-Aadhaar is one PDF with both sides).
+ */
+function cardSides(card: Card): string[] {
+  const sides = requiredSides(card.idType, card.foreign);
+  const front = card.files.Front;
+  const pdfFront = front && 'ok' in front && front.ok && front.mimeType === 'application/pdf';
+  return pdfFront && sides.includes('Back') ? sides.filter((s) => s !== 'Back') : sides;
+}
+
 /** Problems that stop this card going up, by side; empty when the card is complete. */
 function cardProblems(card: Card, allCards: Card[]): { complete: boolean; dupes: Record<string, string> } {
   const dupes: Record<string, string> = {};
-  const sides = requiredSides(card.idType, card.foreign);
+  const sides = cardSides(card);
   for (const side of sides) {
     const file = card.files[side];
     if (!file || !('ok' in file) || !file.ok) continue;
     for (const other of allCards) {
       for (const [otherSide, otherFile] of Object.entries(other.files)) {
         if (other === card && otherSide === side) continue;
-        if (!requiredSides(other.idType, other.foreign).includes(otherSide)) continue;
+        if (!cardSides(other).includes(otherSide)) continue;
         if (otherFile && 'ok' in otherFile && otherFile.ok && otherFile.hash === file.hash) {
           dupes[side] = other === card ? `This is the same file as the ${otherSide.toLowerCase()}. Add the other side.` : `This file is already used for Guest ${other.slot}. Each guest needs their own ID.`;
         }
@@ -146,7 +157,7 @@ export default function PreArrival() {
   const listed = accepted.length + cards.length;
   const status = useMemo(() => cards.map((c) => cardProblems(c, cards)), [cards]);
   const doneCount = status.filter((s) => s.complete).length;
-  const totalBytes = cards.reduce((n, c) => n + requiredSides(c.idType, c.foreign).reduce((m, side) => {
+  const totalBytes = cards.reduce((n, c) => n + cardSides(c).reduce((m, side) => {
     const f = c.files[side];
     return m + (f && 'ok' in f && f.ok ? f.blob.size : 0);
   }, 0), 0);
@@ -173,9 +184,10 @@ export default function PreArrival() {
         age: c.age,
         idType: c.idType,
         foreign: c.foreign,
-        files: await Promise.all(requiredSides(c.idType, c.foreign).map(async (side) => {
+        files: await Promise.all(cardSides(c).map(async (side) => {
           const f = c.files[side] as Extract<PhotoCheck, { ok: true }>;
-          return { side, originalFilename: f.filename, mimeType: f.mimeType, dataBase64: await blobToBase64(f.blob) };
+          const both = side === 'Front' && f.mimeType === 'application/pdf' && requiredSides(c.idType, c.foreign).includes('Back');
+          return { side: both ? PDF_BOTH_SIDES : side, originalFilename: f.filename, mimeType: f.mimeType, dataBase64: await blobToBase64(f.blob) };
         })),
       })));
       const response = await fetch('/api/guest/onboarding/submit', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token, fullName: name, phone, email, address, country, guests }) });
@@ -244,7 +256,7 @@ export default function PreArrival() {
             </div>
             {card.idType === 'passport' && <label className="flex items-center gap-2 text-sm text-muted-foreground"><input type="checkbox" checked={card.foreign} onChange={(e) => update(card.slot, (c) => ({ ...c, foreign: e.target.checked }))}/> Not an Indian national (add the visa page)</label>}
             <div className="grid gap-3 sm:grid-cols-2">
-              {requiredSides(card.idType, card.foreign).map((side) => {
+              {cardSides(card).map((side) => {
                 const file = card.files[side];
                 const checking = Boolean(file && 'checking' in file);
                 const ok = file && 'ok' in file && file.ok && !dupes[side];
@@ -252,10 +264,10 @@ export default function PreArrival() {
                 const preview = file && 'previewUrl' in file ? file.previewUrl : null;
                 const inputId = `id-${card.slot}-${side.replace(/\W/g, '')}`;
                 return <div key={side} className={`min-w-0 space-y-2 rounded-xl border p-3 ${ok ? 'border-olive/60' : bad ? 'border-terracotta/60' : 'border-dashed border-border'}`}>
-                  <div className="flex items-center justify-between gap-2"><span className="text-sm font-semibold text-primary">{side}</span>{file && !checking && <label htmlFor={inputId} className="cursor-pointer text-xs font-semibold text-muted-foreground underline">Retake</label>}</div>
+                  <div className="flex items-center justify-between gap-2"><span className="text-sm font-semibold text-primary">{side === 'Front' && requiredSides(card.idType, card.foreign).includes('Back') ? 'Front (or one PDF with both sides)' : side}</span>{file && !checking && <label htmlFor={inputId} className="cursor-pointer text-xs font-semibold text-muted-foreground underline">Retake</label>}</div>
                   {preview && <img src={preview} alt={`${side} of ${card.name || `guest ${card.slot}`}'s ID`} className="aspect-[1.6] w-full max-w-full rounded-lg object-cover"/>}
                   {checking ? <p className="flex items-center gap-2 text-xs text-muted-foreground"><SpinnerIcon className="animate-spin"/> Checking the photo…</p>
-                    : file && 'ok' in file ? <p className={`text-xs leading-5 ${ok ? 'text-olive-ink' : 'text-terracotta'}`} role={bad ? 'alert' : undefined}>{dupes[side] ?? (file.ok ? file.warn ?? file.note : file.message)}</p>
+                    : file && 'ok' in file ? <p className={`text-xs leading-5 ${ok ? 'text-olive-ink' : 'text-terracotta'}`} role={bad ? 'alert' : undefined}>{dupes[side] ?? (file.ok ? (file.mimeType === 'application/pdf' && side === 'Front' && requiredSides(card.idType, card.foreign).includes('Back') ? `${file.note} · covers front and back` : file.warn ?? file.note) : file.message)}</p>
                     : <label htmlFor={inputId} className="flex cursor-pointer items-center justify-center gap-2 rounded-lg border border-border px-3 py-4 text-[13px] font-medium text-primary hover:border-primary"><UploadIcon /> Take or choose photo</label>}
                   <input id={inputId} type="file" accept={DOCUMENT_ACCEPT} className="hidden" onChange={(e) => { void addFile(card.slot, side, e.target.files?.[0]); e.target.value = ''; }} data-testid={`input-file-${card.slot}-${side.replace(/\W/g, '')}`}/>
                 </div>;

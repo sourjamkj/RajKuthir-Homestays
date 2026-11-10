@@ -72,3 +72,10 @@ test("extra-guest charge follows the ladder, then the extra-adult rate", () => {
 test("document label names the guest, ID and side", () => {
   assert.equal(documentLabel(2, "aadhaar", "Back", " Riya Sen "), "Guest 2 · Aadhaar · Back – Riya Sen");
 });
+
+test("one PDF can cover both sides of an Aadhaar", async () => {
+  const { PDF_BOTH_SIDES } = await import("./guest-id-rules.ts");
+  assert.equal(partyProblem({ booked: 1, keptSlots: [], slots: [card(1, { files: [{ side: PDF_BOTH_SIDES }] })] }), null);
+  assert.match(partyProblem({ booked: 1, keptSlots: [], slots: [card(1, { files: [{ side: PDF_BOTH_SIDES }, { side: "Back" }] })] })!, /Only one back/);
+  assert.match(partyProblem({ booked: 1, keptSlots: [], slots: [card(1, { idType: "passport", files: [{ side: PDF_BOTH_SIDES }] })] })!, /photo page|not part/);
+});

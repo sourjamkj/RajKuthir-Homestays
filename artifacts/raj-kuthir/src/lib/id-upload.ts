@@ -16,7 +16,7 @@ export const COMMON_REJECTION_REASONS = [
 
 export const UPLOAD_INSTRUCTIONS = [
   'One photo ID for every guest, children included. Adults: Aadhaar, passport, driving licence or voter ID. Children: Aadhaar, passport, school ID or birth certificate',
-  'Front and back, where the ID has two sides',
+  'Front and back, where the ID has two sides (one PDF with both sides, like the e-Aadhaar, is fine)',
   'A clear, well-lit photo or scan with all four corners visible, no blur or glare',
   'The name must match the guest, and the ID must not be expired',
   'Foreign nationals: the passport photo page and the Indian visa',
@@ -45,6 +45,8 @@ export const ID_TYPES: Record<IdTypeKey, { label: string; sides: string[]; adult
   birth: { label: 'Birth certificate', sides: ['Certificate'], adult: false, child: true },
 };
 export const VISA_SIDE = 'Indian visa';
+/** Mirrors PDF_BOTH_SIDES on the server: one PDF with both sides of the ID. */
+export const PDF_BOTH_SIDES = 'Front and back (PDF)';
 export function requiredSides(idType: IdTypeKey, foreign: boolean): string[] {
   const sides = [...ID_TYPES[idType].sides];
   if (foreign && idType === 'passport') sides.push(VISA_SIDE);
