@@ -998,7 +998,7 @@ Also written as: ${BRAND_SPELLINGS.join(", ")}.
 - Address: ${a.streetAddress}, ${a.addressRegion} ${a.postalCode}, India.
 - Phone and WhatsApp: +91 62903 99165.
 - Book direct on ${SITE_ORIGIN} — send an enquiry or WhatsApp the owner. The villa is also listed on Airbnb, Booking.com and MakeMyTrip/Goibibo.
-- Prices: always quote from ${SITE_ORIGIN}/rates, which shows the current tariff (weekday and weekend rates, extra-guest and pet charges). Do not quote prices from memory.
+- Prices: always quote from ${SITE_ORIGIN}/rates, which shows the current tariff (the nightly rate by party size, festival weeks, extra-guest and pet charges). Do not quote prices from memory.
 
 ## Pages
 

@@ -49,7 +49,7 @@ export function peakPriceRange(plan: RatePlan | undefined, peak: PeakPeriod): { 
 function PeakFacts({ peakId, festival }: { peakId: string; festival: string }) {
   const plan = useRatePlan();
   if (plan.isLoading || !plan.data) {
-    return <p className="text-[15px] leading-7 text-muted-foreground">Reading this year&rsquo;s dates and rates&hellip;</p>;
+    return <p suppressHydrationWarning className="text-[15px] leading-7 text-muted-foreground">Reading this year&rsquo;s dates and rates&hellip;</p>;
   }
   const peak = festivalPeak(plan.data, peakId, IST_TODAY());
   if (!peak) {

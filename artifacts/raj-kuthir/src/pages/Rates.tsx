@@ -143,8 +143,7 @@ export default function Rates() {
               </h2>
               <p className="mt-6 max-w-[380px] text-sm leading-6 text-muted-foreground">
                 What you pay depends on how many of you are staying and on your
-                dates; the house you get is the same. The standing rate for each party size, Sunday to Thursday nights
-                and Friday to Saturday nights. Festival weeks are priced
+                dates; the house you get is the same. The standing nightly rate for each party size. Festival weeks are priced
                 differently and may need a minimum stay, so the availability
                 calendar shows the exact rate for every night before you ask.
                 {plan.data?.ladder && plan.data.ladder.weeklyDiscountPercent > 0 && (
@@ -158,7 +157,7 @@ export default function Rates() {
 
             <div>
               {plan.isLoading ? (
-                <p className="rounded-[1.2rem] border border-border bg-background px-6 py-8 text-sm text-muted-foreground" data-testid="text-rates-loading">
+                <p suppressHydrationWarning className="rounded-[1.2rem] border border-border bg-background px-6 py-8 text-sm text-muted-foreground" data-testid="text-rates-loading">
                   Loading the current rate card&hellip;
                 </p>
               ) : rows.length === 0 ? (
