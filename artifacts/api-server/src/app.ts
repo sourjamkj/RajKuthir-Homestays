@@ -11,6 +11,9 @@ import mcpRouter from "./routes/mcp";
 import { logger } from "./lib/logger";
 import { prerenderFileFor, staticCacheControl, withPrerender, wwwRedirectTarget } from "./lib/site-host";
 import { injectMeta, isKnownPath, isPrivatePath, llmsTxt, sitemapXml } from "./lib/seo";
+import { withRateFacts } from "./lib/rate-facts";
+import { getRatePlan, rateForNight, type RatePlan } from "./lib/rates-repo";
+import { todayInIndia } from "./lib/guest-lookup";
 
 const app: Express = express();
 
@@ -193,6 +196,19 @@ if (clientDist) {
     return prerendered.get(route) ?? null;
   };
 
+  // The rate plan for the HTML, refreshed in the background at most every
+  // five minutes so no page request ever waits on the database.
+  let htmlPlan: RatePlan | null = null;
+  let htmlPlanAt = 0;
+  const ratePlanForHtml = (): RatePlan | null => {
+    if (Date.now() - htmlPlanAt > 5 * 60_000) {
+      htmlPlanAt = Date.now();
+      getRatePlan().then((plan) => { htmlPlan = plan; }, (error) => logger.warn({ error }, "Could not read rates for the page HTML"));
+    }
+    return htmlPlan;
+  };
+  ratePlanForHtml();
+
   app.get("/sitemap.xml", (_req, res) => {
     res.setHeader("Cache-Control", "public, max-age=3600");
     res.type("application/xml").send(sitemapXml());
@@ -231,7 +247,8 @@ if (clientDist) {
       // The page itself is always revalidated, so a deploy shows at once.
       res.setHeader("Cache-Control", "no-cache");
       const fragment = res.statusCode === 200 && !isPrivatePath(req.path) ? prerenderFor(req.path) : null;
-      res.type("html").send(withPrerender(injectMeta(readBaseHtml(), req.path), fragment));
+      // Live rates and festival dates as plain text, for readers that run no script.
+      res.type("html").send(withRateFacts(withPrerender(injectMeta(readBaseHtml(), req.path), fragment), req.path, ratePlanForHtml(), todayInIndia(), rateForNight));
     } catch (error) {
       // A metadata problem must never take the site down. The raw shell is
       // safe to send for any route: it carries no canonical, og:url or
