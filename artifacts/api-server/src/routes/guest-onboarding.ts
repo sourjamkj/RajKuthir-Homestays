@@ -18,7 +18,7 @@ import {
 } from "../lib/guest-onboarding-repo";
 import { documentDownloadHeaders } from "../lib/document-security";
 import { rejectionReasonProblem } from "../lib/document-rejection-rules";
-import { maxCards, MAX_FILES_PER_SUBMIT, RATE_LADDER_MAX, type GuestAge } from "../lib/guest-id-rules";
+import { maxCards, MAX_FILES_PER_SUBMIT, PDF_BOTH_SIDES, RATE_LADDER_MAX, type GuestAge } from "../lib/guest-id-rules";
 import { getLadder } from "../lib/rates-repo";
 import { EXTRA_ADULT_PAISE } from "../lib/party";
 
@@ -139,7 +139,12 @@ router.post("/guest/onboarding/submit", async (req, res) => {
     idType: clean(g?.idType, 20) ?? "",
     foreign: g?.foreign === true,
     files: (Array.isArray(g?.files) ? g.files.slice(0, 3) : []).map((f: any) => ({
-      side: clean(f?.side, 30) ?? "",
+      // Only a PDF may stand in for both sides.
+      side: (() => {
+        const side = clean(f?.side, 30) ?? "";
+        const isPdf = f?.mimeType === "application/pdf" || /\.pdf$/i.test(String(f?.originalFilename ?? ""));
+        return side === PDF_BOTH_SIDES && !isPdf ? "Front" : side;
+      })(),
       documentType: "",
       source: "upload",
       originalFilename: clean(f?.originalFilename, 180),

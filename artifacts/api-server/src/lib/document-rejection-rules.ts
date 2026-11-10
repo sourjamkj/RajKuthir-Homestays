@@ -21,7 +21,7 @@ export const COMMON_REJECTION_REASONS = [
 /** What the guest must do, in the words the page and the message both use. */
 export const UPLOAD_INSTRUCTIONS = [
   "One photo ID for every guest, children included. Adults: Aadhaar, passport, driving licence or voter ID. Children: Aadhaar, passport, school ID or birth certificate",
-  "Front and back, where the ID has two sides",
+  "Front and back, where the ID has two sides (one PDF with both sides, like the e-Aadhaar, is fine)",
   "A clear, well-lit photo or scan with all four corners visible, no blur or glare",
   "The name must match the guest, and the ID must not be expired",
   "Foreign nationals: the passport photo page and the Indian visa",

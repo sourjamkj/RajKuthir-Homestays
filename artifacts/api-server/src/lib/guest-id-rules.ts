@@ -33,6 +33,12 @@ export const ID_TYPES: Record<IdTypeKey, { label: string; sides: string[]; adult
 };
 
 export const VISA_SIDE = "Indian visa";
+/**
+ * One PDF holding both sides of a two-sided ID: the e-Aadhaar download, a
+ * scanned licence. Guests send exactly that, and asking them to split it
+ * into two photos is what made the page refuse real IDs.
+ */
+export const PDF_BOTH_SIDES = "Front and back (PDF)";
 export const MAX_PARTY = 8;
 /** Top of the rate ladder (pricing.ts LADDER_MAX_GUESTS); above it the extra-adult rate applies. */
 export const RATE_LADDER_MAX = 5;
@@ -87,8 +93,13 @@ export function partyProblem(input: { booked: number; keptSlots: number[]; slots
     if (slot.age === "child" ? !type.child : !type.adult) {
       return `${type.label} is not accepted for ${slot.age === "child" ? "a child" : "an adult"} (${label}).`;
     }
-    const need = requiredSides(slot.idType, slot.foreign);
-    const have = slot.files.map((f) => f.side);
+    const sides = requiredSides(slot.idType, slot.foreign);
+    let have = slot.files.map((f) => f.side);
+    // A both-sides PDF stands in for the front and the back.
+    if (have.includes(PDF_BOTH_SIDES) && sides.includes("Front") && sides.includes("Back")) {
+      have = have.flatMap((s) => (s === PDF_BOTH_SIDES ? ["Front", "Back"] : [s]));
+    }
+    const need = sides;
     for (const side of need) {
       const count = have.filter((s) => s === side).length;
       if (count === 0) return `Add the ${side.toLowerCase()} of ${slot.name.trim()}'s ${type.label}.`;
