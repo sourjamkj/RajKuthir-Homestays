@@ -252,7 +252,8 @@ export function rateForNight(
 
   let price: number;
   if (peak && peak.bookingComPaise !== null) {
-    price = wholeRupees(peak.bookingComPaise * (1 - peak.discountPercent / 100)) + extra;
+    // Peak nights are one flat price for the whole villa: the full-house rate (pricing.ts peakNightPrice).
+    price = wholeRupees(peak.bookingComPaise * (1 - peak.discountPercent / 100)) + Math.max(0, plan.maxGuests - ladder.includedGuests) * ladder.extraGuestPaise;
   } else {
     price = (isWeekendNight(isoDate) ? ladder.weekendBasePaise : ladder.weekdayBasePaise) + extra;
     if (!peak) {

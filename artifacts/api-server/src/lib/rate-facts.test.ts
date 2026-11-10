@@ -25,7 +25,7 @@ test("festival line gives the nights, the minimum stay and a price", () => {
   const line = festivalLine(plan, "poush-mela", "2026-11-10", price)!;
   assert.match(line, /23 December 2026 to 27 December 2026/);
   assert.match(line, /Minimum stay: 2 nights/);
-  assert.match(line, /₹[\d,]+ a night for two guests, ₹[\d,]+ for 5/);
+  assert.match(line, /₹4,500 a night, one price for up to 5 guests/);
   assert.equal(festivalLine(plan, "poush-mela", "2027-01-05", price), null);
   assert.equal(festivalLine(plan, "basanta-utsav", "2026-11-10", price), null);
 });

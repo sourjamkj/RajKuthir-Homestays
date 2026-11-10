@@ -21,13 +21,13 @@ test("rate edit · only the fields given change; bad amounts refused", () => {
   assert.equal(nextLadder(current, { weekdayBaseRupees: -5 }).ok, false);
 });
 
-test("rate edit · a peak priced at ₹4,500 for five lands exactly, with the usual steps", () => {
+test("rate edit · a peak priced at ₹4,500 for five is ₹4,500 for every party size", () => {
   const ladder = { ...current, weekdayBasePaise: 290_000, weekendBasePaise: 290_000, extraGuestPaise: 20_000 };
   const made = nextPeak(null, { label: "Poush Mela", firstNight: "2026-12-23", lastNight: "2026-12-27", priceFor5GuestsRupees: 4500, minNights: 2 }, ladder, "p1");
   assert.ok(made.ok, JSON.stringify(made));
   assert.equal(made.peak.endDate, "2026-12-28");
   const table = peakTable(made.peak, ladder);
-  assert.deepEqual(table.prices, { "1 guest": "₹3,900", "2 guests": "₹3,900", "3 guests": "₹4,100", "4 guests": "₹4,300", "5 guests": "₹4,500" });
+  assert.deepEqual(table.prices, { "1 guest": "₹4,500", "2 guests": "₹4,500", "3 guests": "₹4,500", "4 guests": "₹4,500", "5 guests": "₹4,500" });
 });
 
 test("rate edit · a new peak needs its label and nights", () => {

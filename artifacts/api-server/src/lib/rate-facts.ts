@@ -31,8 +31,8 @@ export function ratesLine(plan: RatePlan): string {
   };
   const same = Object.keys(plan.rates).every((g) => plan.rates[+g] === plan.weekendRates[+g]);
   return same
-    ? `Whole villa, per night, every night of the week: ${part(plan.rates)}. Festival weeks are priced separately.`
-    : `Whole villa, per night. Sunday to Thursday: ${part(plan.rates)}. Friday and Saturday: ${part(plan.weekendRates)}. Festival weeks are priced separately.`;
+    ? `Whole villa, per night, every night of the week: ${part(plan.rates)}. Festival weeks are one flat rate for the whole villa.`
+    : `Whole villa, per night. Sunday to Thursday: ${part(plan.rates)}. Friday and Saturday: ${part(plan.weekendRates)}. Festival weeks are one flat rate for the whole villa.`;
 }
 
 /** The next peak whose id starts with `peakId`: its nights, minimum stay and price for two. */
@@ -42,12 +42,9 @@ export function festivalLine(plan: RatePlan, peakId: string, today: string, rate
     .sort((a, b) => a.startDate.localeCompare(b.startDate))
     .find((p) => p.endDate > today);
   if (!peak) return null;
-  const prices: number[] = [];
-  for (let night = peak.startDate; night < peak.endDate; night = addDays(night, 1)) prices.push(rateForNight(plan, night, 2));
-  const low = Math.min(...prices);
-  const high = Math.max(...prices);
-  const top = rateForNight(plan, peak.startDate, plan.maxGuests);
-  return `Peak nights: ${day(peak.startDate)} to ${day(addDays(peak.endDate, -1))}. Minimum stay: ${peak.minNights} night${peak.minNights === 1 ? "" : "s"}. Whole villa: ${low === high ? rupees(low) : `${rupees(low)} to ${rupees(high)}`} a night for two guests, ${rupees(top)} for ${plan.maxGuests}, booked direct.`;
+  // Peak nights are one flat price for the whole villa (pricing.ts peakNightPrice).
+  const price = rateForNight(plan, peak.startDate, plan.maxGuests);
+  return `Peak nights: ${day(peak.startDate)} to ${day(addDays(peak.endDate, -1))}. Minimum stay: ${peak.minNights} night${peak.minNights === 1 ? "" : "s"}. Whole villa: ${rupees(price)} a night, one price for up to ${plan.maxGuests} guests, booked direct.`;
 }
 
 const FESTIVAL_PATHS: Record<string, string> = {

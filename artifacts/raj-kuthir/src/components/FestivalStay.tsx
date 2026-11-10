@@ -77,11 +77,11 @@ function PeakFacts({ peakId, festival }: { peakId: string; festival: string }) {
         </dd>
       </div>
       <div>
-        <dt className="text-[13px] text-muted-foreground">Whole villa, two guests</dt>
+        <dt className="text-[13px] text-muted-foreground">Whole villa, up to 5 guests</dt>
         <dd className="mt-2 font-journal text-2xl leading-tight text-primary tabular-nums">
           {range ? (range.low === range.high ? formatRupees(range.low) : `${formatRupees(range.low)} – ${formatRupees(range.high)}`) : 'On request'}
         </dd>
-        <dd className="mt-1 text-xs text-muted-foreground">a night, booked direct; more guests on the rates page</dd>
+        <dd className="mt-1 text-xs text-muted-foreground">a night, booked direct; one price whatever your party size</dd>
       </div>
     </dl>
   );

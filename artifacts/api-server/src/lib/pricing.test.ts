@@ -42,11 +42,13 @@ const PEAK: PeakPeriod = {
   bookingComPaise: 600_000,
 };
 
-test("peak night is 10% below the Booking.com rate, extra guests on top", () => {
-  assert.equal(nightPrice(L, [PEAK], "2026-12-24", 2), 540_000);
-  assert.equal(nightPrice(L, [PEAK], "2026-12-24", 4), 610_000);
+test("peak night is one flat price for any party: 10% below Booking.com, plus the full-house step", () => {
+  assert.equal(nightPrice(L, [PEAK], "2026-12-24", 1), 645_000);
+  assert.equal(nightPrice(L, [PEAK], "2026-12-24", 2), 645_000);
+  assert.equal(nightPrice(L, [PEAK], "2026-12-24", 4), 645_000);
+  assert.equal(nightPrice(L, [PEAK], "2026-12-24", 5), 645_000);
   // Range is half-open: Sat 2 Jan is the first night after the period.
-  assert.equal(nightPrice(L, [PEAK], "2027-01-01", 2), 540_000);
+  assert.equal(nightPrice(L, [PEAK], "2027-01-01", 2), 645_000);
   assert.equal(nightPrice(L, [PEAK], "2027-01-02", 2), 390_000);
 });
 
@@ -56,7 +58,7 @@ test("a peak with no Booking.com rate yet keeps the normal rate — never a disc
 });
 
 test("floor: nothing goes below ₹2,900 — not a cheap peak, not an old -% rule", () => {
-  const cheapPeak = { ...PEAK, bookingComPaise: 250_000 };
+  const cheapPeak = { ...PEAK, bookingComPaise: 150_000 };
   assert.equal(nightPrice(L, [cheapPeak], "2026-12-24", 2), 290_000);
   assert.equal(nightPrice(L, [], THU, 2, (p) => p * 0.5), 290_000);
 });
