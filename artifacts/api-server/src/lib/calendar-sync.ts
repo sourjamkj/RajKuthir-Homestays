@@ -1,6 +1,7 @@
 import { logger } from "./logger";
 import { fetchFeed, parseIcs, type ImportSource } from "./ics-utils";
-import { replaceSourceEvents } from "./calendar-repo";
+import { currentReleases, replaceSourceEvents } from "./calendar-repo";
+import { isReleased } from "./calendar-release-rules.ts";
 import { reconcileAssumedCheckouts } from "./ledger-repo";
 import { getFeedUrls } from "./settings-repo";
 
@@ -70,6 +71,7 @@ async function runSync(
     return null;
   });
 
+  const releases = await currentReleases();
   for (const definition of SOURCE_DEFINITIONS) {
     const url =
       overrides[definition.key] ||
@@ -89,7 +91,9 @@ async function runSync(
     }
 
     try {
-      const events = parseIcs(await fetchFeed(url), definition.key);
+      // Nights the owner has just freed: the OTA's copy of the old block is ignored
+      // until the OTA has reopened them (calendar-release-rules.ts).
+      const events = parseIcs(await fetchFeed(url), definition.key).filter((event) => !isReleased(event, releases));
       const count = await replaceSourceEvents(definition.key, events);
       totalEvents += count;
       sources.push({

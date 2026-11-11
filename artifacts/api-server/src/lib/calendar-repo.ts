@@ -1,5 +1,6 @@
-import { and, asc, eq, gt, inArray, lt, ne } from "drizzle-orm";
-import { db } from "@workspace/db";
+import { and, asc, eq, gt, gte, inArray, lt, lte, ne, notInArray } from "drizzle-orm";
+import { db, pool } from "@workspace/db";
+import { activeReleases, newRelease, type Release } from "./calendar-release-rules.ts";
 import {
   bookings,
   calendarEvents,
@@ -157,17 +158,49 @@ export async function createManualBlock(input: {
 }
 
 export async function deleteOwnedEvent(id: string): Promise<boolean> {
-  const deleted = await db
+  return (await releaseEvent(id)) !== null;
+}
+
+const RELEASES_KEY = "calendar.released_ranges";
+
+/** Releases still in force: OTA copies of these nights are ignored at import. */
+export async function currentReleases(now = new Date()): Promise<Release[]> {
+  const { rows } = await pool.query<{ value: string }>("SELECT value FROM app_settings WHERE key = $1", [RELEASES_KEY]);
+  try {
+    return activeReleases(JSON.parse(rows[0]?.value ?? "[]") as Release[], now);
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Frees the nights of a block: the owner's own, or an OTA "not available"
+ * copy of one (never a booking: those live in the ledger and have no row
+ * here to delete). Removes every OTA copy inside the same nights and
+ * remembers the release so the next imports do not bring them back
+ * (calendar-release-rules.ts). Returns the freed range, or null if not found.
+ */
+export async function releaseEvent(id: string): Promise<{ startDate: string; endDate: string } | null> {
+  const [event] = await db.select().from(calendarEvents).where(eq(calendarEvents.id, id));
+  if (!event) return null;
+  const { startDate, endDate } = event;
+  const releases = [...(await currentReleases()), newRelease(startDate, endDate, new Date())];
+  await pool.query(
+    `INSERT INTO app_settings (key, value, updated_at) VALUES ($1, $2, now())
+     ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = now()`,
+    [RELEASES_KEY, JSON.stringify(releases)],
+  );
+  await db.delete(calendarEvents).where(eq(calendarEvents.id, id));
+  await db
     .delete(calendarEvents)
     .where(
       and(
-        eq(calendarEvents.id, id),
-        inArray(calendarEvents.source, OWNED_SOURCES),
+        notInArray(calendarEvents.source, OWNED_SOURCES),
+        gte(calendarEvents.startDate, startDate),
+        lte(calendarEvents.endDate, endDate),
       ),
-    )
-    .returning({ id: calendarEvents.id });
-
-  return deleted.length > 0;
+    );
+  return { startDate, endDate };
 }
 
 /**
