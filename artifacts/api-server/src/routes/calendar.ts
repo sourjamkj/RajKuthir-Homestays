@@ -9,7 +9,6 @@ import {
   type CalendarEventDto as CalendarEventDtoType,
 } from "@workspace/api-zod";
 import {
-  OWNED_SOURCES,
   deleteOwnedEvent,
   createManualBlock,
   listAllEvents,
@@ -87,9 +86,9 @@ function toEventDto(event: Awaited<ReturnType<typeof listAllEvents>>[number]) {
     // Only real calendar rows can be edited. A booking-derived entry has no
     // calendar_events id behind it, so offering a delete button would just
     // produce a 404 — change the booking in the ledger instead.
-    editable:
-      event.origin === "event" &&
-      (OWNED_SOURCES as readonly string[]).includes(event.source),
+    // An OTA row that is not a booking is that OTA's "not available" copy of
+    // a block, and can be freed too (calendar-release-rules.ts).
+    editable: event.origin === "event",
   });
 }
 
@@ -148,7 +147,7 @@ router.delete("/calendar/block/:id", requireAdmin, async (req, res) => {
   const deleted = await deleteOwnedEvent(id);
   if (!deleted) {
     res.status(404).json({
-      error: "Not found, or it is an OTA booking that cannot be removed here.",
+      error: "Not found. A booking cannot be removed here: cancel it in Guests & bookings.",
     });
     return;
   }
