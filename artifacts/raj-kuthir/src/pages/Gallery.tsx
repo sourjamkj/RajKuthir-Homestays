@@ -12,7 +12,7 @@ import { CONFIG, asset, basePath, phoneHref, track } from '@/lib/site';
  * a megabyte of the homepage's weight, paid for by every visitor whether or
  * not they scrolled that far.
  *
- * Here everything is rendered, grouped rather than filtered, so all twelve
+ * Here everything is rendered, grouped rather than filtered, so all fourteen
  * photographs are in the markup at once. Only the first two load eagerly —
  * the rest wait until they are near the viewport.
  *
@@ -59,15 +59,22 @@ const HOUSE: Photo[] = [
     height: 557,
   },
   {
-    file: 'interior-living.jpg',
+    file: 'living-room.jpg',
     title: 'The living room',
-    alt: 'The living room at Sobuj Potro, Raj Kuthir Homestays',
-    width: 598,
-    height: 453,
+    alt: 'The living room at Sobuj Potro: Patachitra paintings, a dining nook and the TV wall under the stairs',
+    width: 1536,
+    height: 864,
   },
 ];
 
 const OUTSIDE: Photo[] = [
+  {
+    file: 'terrace-evening.jpg',
+    title: 'The terrace, evening',
+    alt: 'The private terrace at Sobuj Potro at dusk: a swing chair, garden table, plants and string lights among palm trees',
+    width: 1536,
+    height: 864,
+  },
   {
     file: 'villa-day.jpg',
     title: 'Under open sky',
@@ -92,6 +99,13 @@ const OUTSIDE: Photo[] = [
 ];
 
 const DETAILS: Photo[] = [
+  {
+    file: 'stairwell.jpg',
+    title: 'The stairwell',
+    alt: 'The stairwell at Sobuj Potro, lined with lit prints of old Kolkata and money-plant vines',
+    width: 864,
+    height: 1536,
+  },
   {
     file: 'interior-entrance.jpg',
     title: 'The entrance',
@@ -167,7 +181,7 @@ export const GALLERY: Photo[] = GROUPS.flatMap((group) => group.photos);
  * "view all" worth clicking. Defined here so the homepage can never drift out
  * of step with the gallery it links to.
  */
-export const GALLERY_TEASER: Photo[] = ['The villa, morning', 'The bedroom']
+export const GALLERY_TEASER: Photo[] = ['The terrace, evening', 'The living room']
   .map((title) => GALLERY.find((photo) => photo.title === title))
   .filter((photo): photo is Photo => Boolean(photo));
 
