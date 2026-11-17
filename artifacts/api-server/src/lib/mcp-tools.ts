@@ -9,7 +9,7 @@ import { saveTerms, termsOf } from "./enquiry-terms";
 import { datesProblem, NO_TERMS, parseEnquiryEdit, termsProblem, type EnquiryTerms } from "./enquiry-terms-rules";
 import { enquiryViews } from "./enquiry-view";
 import { createEnquiry, getEnquiry, listEnquiries, setAdvancePaid, setEnquiryStatus, updateEnquiryFields } from "./enquiries-repo";
-import { listAllEvents } from "./calendar-repo";
+import { listAllEvents, releaseEvent } from "./calendar-repo";
 import { createOrRefreshOnboarding, listAdminGuestStays } from "./guest-onboarding-repo";
 import { updateBooking } from "./ledger-repo";
 import { SITE_ORIGIN } from "./seo";
@@ -439,6 +439,44 @@ export function buildMcpServer(): McpServer {
       if (!(await deleteOverride(id))) return fail("That rule was already removed.");
       await logChange("rates.rule.removed", { rule: shown, id });
       return json({ saved: true, removed: shown });
+    },
+  );
+
+  server.registerTool(
+    "list_blocks",
+    {
+      title: "List calendar blocks",
+      description:
+        "Upcoming blocked nights that are not bookings: the owner's own blocks and the OTA 'not available' copies of them, with ids for release_block.",
+      inputSchema: {},
+      annotations: { readOnlyHint: true },
+    },
+    async () => {
+      const today = todayInIndia();
+      const blocks = (await listAllEvents())
+        .filter((e) => e.origin === "event" && e.endDate > today)
+        .map((e) => ({ id: e.id, source: e.source, title: e.title, startDate: e.startDate, endDate: e.endDate }));
+      return json(blocks);
+    },
+  );
+
+  server.registerTool(
+    "release_block",
+    {
+      title: "Release a blocked period",
+      description:
+        "Frees a block by id (from list_blocks), with every OTA copy of the same nights, and keeps those copies from coming back on the next sync. Never touches bookings. Previews unless apply: true.",
+      inputSchema: { id: z.string().uuid(), apply: APPLY },
+    },
+    async ({ id, apply }) => {
+      const block = (await listAllEvents()).find((e) => e.id === id && e.origin === "event");
+      if (!block) return fail("No block has that id. list_blocks lists them (bookings cannot be released here).");
+      const shown = { source: block.source, title: block.title, startDate: block.startDate, endDate: block.endDate };
+      if (!apply) return preview(shown, "released: these nights open on every channel after the next sync");
+      const freed = await releaseEvent(id);
+      if (!freed) return fail("That block was already released.");
+      await logChange("calendar.block.released", { block: shown });
+      return json({ released: true, ...freed });
     },
   );
 
