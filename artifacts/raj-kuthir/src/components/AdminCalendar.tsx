@@ -155,6 +155,33 @@ export function AdminCalendar() {
     onError: (cause: Error) => setError(cause.message),
   });
 
+  // Blocks (owner's or an OTA's "not available" copy) on the selected nights.
+  // Bookings are never editable, so they can't be released from here.
+  const selectedBlocks = useMemo(() => {
+    if (!range?.from) return [];
+    const from = format(range.from, "yyyy-MM-dd");
+    const to = format(addDays(range.to ?? range.from, 1), "yyyy-MM-dd");
+    return events.filter((e) => e.editable && e.startDate < to && e.endDate > from);
+  }, [events, range]);
+
+  const releaseMutation = useMutation({
+    mutationFn: async (ids: string[]) => {
+      for (const id of ids) {
+        // A release also removes OTA copies of the same nights, so a later id may already be gone.
+        await api<void>(`/block/${id}`, { method: "DELETE" }).catch((cause: Error) => {
+          if (!/Not found/.test(cause.message)) throw cause;
+        });
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: EVENTS_QUERY_KEY });
+      queryClient.invalidateQueries({ queryKey: ["/api/calendar/public"] });
+      setRange(undefined);
+      setError(null);
+    },
+    onError: (cause: Error) => setError(cause.message),
+  });
+
   function handleBlock() {
     if (!range?.from) return;
 
@@ -170,7 +197,7 @@ export function AdminCalendar() {
 
   const upcoming = useMemo(
     () =>
-      [...events].sort((left, right) =>
+      events.filter((e) => e.endDate > format(new Date(), "yyyy-MM-dd")).sort((left, right) =>
         sortDescending
           ? right.startDate.localeCompare(left.startDate)
           : left.startDate.localeCompare(right.startDate),
@@ -184,7 +211,7 @@ export function AdminCalendar() {
         <h3 className="font-journal text-xl text-primary">Owner calendar</h3>
         <p className="mt-1 text-xs text-muted-foreground">
           Select the nights to hold for a direct booking, family stay, or
-          maintenance.
+          maintenance. Tap a blocked night to release it.
         </p>
 
         <DayPicker
@@ -245,6 +272,18 @@ export function AdminCalendar() {
             )}
             Block selected dates
           </button>
+          {selectedBlocks.length > 0 && (
+            <button
+              type="button"
+              disabled={releaseMutation.isPending}
+              onClick={() => releaseMutation.mutate(selectedBlocks.map((e) => e.id))}
+              className="flex items-center justify-center gap-2 rounded-full border border-[#A65E45] px-5 py-2.5 text-xs font-bold uppercase tracking-[.12em] text-[#A65E45] disabled:opacity-50"
+              data-testid="button-release-selected"
+            >
+              {releaseMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+              Release selected dates
+            </button>
+          )}
           {error && <p className="text-xs text-[#A65E45]">{error}</p>}
         </div>
       </div>
@@ -268,7 +307,7 @@ export function AdminCalendar() {
           </p>
         ) : upcoming.length === 0 ? (
           <p className="mt-4 text-sm text-muted-foreground">
-            Nothing blocked yet. Your villa shows fully available.
+            Nothing blocked or booked ahead. Your villa shows fully available.
           </p>
         ) : (
           <ul className="mt-4 flex flex-col gap-2">
