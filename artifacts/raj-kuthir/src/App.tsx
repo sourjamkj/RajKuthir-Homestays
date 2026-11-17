@@ -103,7 +103,7 @@ const queryClient: QueryClient = new QueryClient({
 
 // basePath, CONFIG and asset() now live in lib/site.ts — see the import above.
 
-// Photographs used by the homepage itself. The gallery's twelve live in
+// Photographs used by the homepage itself. The gallery's fourteen live in
 // pages/Gallery.tsx with their measured dimensions and alt text; the four
 // shown in the teaser below come from there, not from here.
 const IMG = {
@@ -1395,7 +1395,7 @@ function Home() {
         </section>
 
         {/* ------------------------------------------------------- gallery
-            A teaser, not the gallery. The twelve photographs live on /gallery
+            A teaser, not the gallery. The fourteen photographs live on /gallery
             so the homepage does not make every visitor download a megabyte of
             pictures to reach the enquiry form below them. */}
         <section id="gallery" className="scroll-mt-24 section-shell py-24 md:py-36" aria-labelledby="gallery-title">
