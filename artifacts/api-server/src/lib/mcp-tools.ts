@@ -1,7 +1,7 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { bookings, db } from "@workspace/db";
-import { eq } from "drizzle-orm";
+import { and, eq, gt, lt, ne } from "drizzle-orm";
 
 import { firstConflict } from "./availability";
 import { listPublicBlocks } from "./calendar-repo";
@@ -13,7 +13,7 @@ import { enquiryViews } from "./enquiry-view";
 import { createEnquiry, getEnquiry, listEnquiries, setAdvancePaid, setEnquiryStatus, updateEnquiryFields } from "./enquiries-repo";
 import { listAllEvents, releaseEvent } from "./calendar-repo";
 import { createOrRefreshOnboarding, listAdminGuestStays } from "./guest-onboarding-repo";
-import { updateBooking } from "./ledger-repo";
+import { updateBooking, upsertImportedBooking } from "./ledger-repo";
 import { SITE_ORIGIN } from "./seo";
 import { todayInIndia } from "./guest-lookup";
 import { logger } from "./logger";
@@ -329,7 +329,7 @@ export function buildMcpServer(): McpServer {
     {
       title: "List bookings",
       description:
-        "Bookings from every channel with guest, dates, party, channel, status, money (paise) and the guest's ID verification. upcomingOnly (default true) leaves out stays that have ended.",
+        "Bookings from every channel with guest, dates, party, channel, status, money (paise), externalRef (the OTA's own confirmation code) and the guest's ID verification. upcomingOnly (default true) leaves out stays that have ended.",
       inputSchema: { upcomingOnly: z.boolean().optional() },
       annotations: { readOnlyHint: true },
     },
@@ -468,6 +468,98 @@ export function buildMcpServer(): McpServer {
       if (!updated) return fail("That booking no longer exists.");
       await logChange("booking.cancelled", { bookingId: id, ...after });
       return json({ cancelled: true, ...shown, keptRupees, note });
+    },
+  );
+
+  const DATE = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
+  const RUPEES = z.number().min(0).max(10_000_000);
+  /** Confirmed bookings sharing a night with these dates, other than `exceptId`. */
+  const clashes = (checkIn: string, checkOut: string, exceptId?: string) =>
+    db
+      .select({ id: bookings.id, reference: bookings.reference, source: bookings.source, guestName: bookings.guestName, checkIn: bookings.checkIn, checkOut: bookings.checkOut })
+      .from(bookings)
+      .where(and(eq(bookings.status, "confirmed"), lt(bookings.checkIn, checkOut), gt(bookings.checkOut, checkIn), ...(exceptId ? [ne(bookings.id, exceptId)] : [])));
+
+  server.registerTool(
+    "update_booking",
+    {
+      title: "Update a booking",
+      description:
+        "Brings a booking (from list_bookings) in line with what the channel now says: dates, party, guest name or phone, money. Only the fields given change. noteAppend adds a line to the booking's note (say where the change came from). Refuses dates that clash with another confirmed booking. Previews unless apply: true.",
+      inputSchema: {
+        id: z.string().uuid(),
+        checkIn: DATE.optional(),
+        checkOut: DATE.optional(),
+        guests: z.number().int().min(1).max(30).optional(),
+        pets: z.number().int().min(0).max(10).optional(),
+        guestName: z.string().trim().min(1).max(120).optional(),
+        guestPhone: z.string().trim().min(6).max(30).optional(),
+        grossRupees: RUPEES.optional(),
+        receivedRupees: RUPEES.optional(),
+        noteAppend: z.string().trim().min(3).max(300).optional(),
+        apply: APPLY,
+      },
+    },
+    async ({ id, apply, noteAppend, grossRupees, receivedRupees, ...fields }) => {
+      const [current] = await db.select().from(bookings).where(eq(bookings.id, id)).limit(1);
+      if (!current) return fail("No booking has that id.");
+      if (current.status === "cancelled") return fail("That booking is cancelled; cancelled bookings are not edited.");
+      const checkIn = fields.checkIn ?? current.checkIn;
+      const checkOut = fields.checkOut ?? current.checkOut;
+      if (checkOut <= checkIn) return fail("checkOut must be after checkIn.");
+      const patch = {
+        ...fields,
+        ...(grossRupees !== undefined ? { grossPaise: Math.round(grossRupees * 100) } : {}),
+        ...(receivedRupees !== undefined ? { receivedPaise: Math.round(receivedRupees * 100) } : {}),
+        ...(noteAppend ? { note: [current.note, noteAppend].filter(Boolean).join(" · ") } : {}),
+      };
+      if (Object.keys(patch).length === 0) return fail("Nothing to change.");
+      if (fields.checkIn || fields.checkOut) {
+        const clash = await clashes(checkIn, checkOut, id);
+        if (clash.length) return fail(`Those dates clash with ${clash.map((c) => `${c.reference} (${c.source}, ${c.guestName ?? "guest"}, ${c.checkIn} to ${c.checkOut})`).join("; ")}. Tell the owner.`);
+      }
+      const before = Object.fromEntries(Object.keys(patch).map((k) => [k, current[k as keyof typeof current]]));
+      if (!apply) return preview({ reference: current.reference, ...before }, patch);
+      const updated = await updateBooking(id, patch);
+      if (!updated) return fail("That booking no longer exists.");
+      await logChange("booking.updated", { bookingId: id, before, after: patch });
+      return json({ saved: true, reference: current.reference, changed: patch });
+    },
+  );
+
+  server.registerTool(
+    "add_ota_booking",
+    {
+      title: "Record an OTA booking the site missed",
+      description:
+        "Records a Booking.com, Airbnb or MakeMyTrip reservation that is not in list_bookings yet. externalRef is the OTA's confirmation code; calling again with the same source and externalRef updates the same booking, never a second one. Saved even when it overlaps another booking (it is real on the OTA), but the reply names the clash: tell the owner at once. Previews unless apply: true.",
+      inputSchema: {
+        source: z.enum(["bookingCom", "airbnb", "makeMyTrip"]),
+        externalRef: z.string().trim().min(4).max(40),
+        guestName: z.string().trim().min(1).max(120),
+        guestPhone: z.string().trim().min(6).max(30).optional(),
+        checkIn: DATE,
+        checkOut: DATE,
+        guests: z.number().int().min(1).max(30).optional(),
+        grossRupees: RUPEES.optional(),
+        receivedRupees: RUPEES.optional(),
+        apply: APPLY,
+      },
+    },
+    async ({ apply, grossRupees, receivedRupees, ...input }) => {
+      if (input.checkOut <= input.checkIn) return fail("checkOut must be after checkIn.");
+      const clash = (await clashes(input.checkIn, input.checkOut)).filter((c) => !(c.source === input.source && c.checkIn === input.checkIn));
+      const booking = {
+        ...input,
+        status: "confirmed" as const,
+        grossPaise: grossRupees === undefined ? null : Math.round(grossRupees * 100),
+        receivedPaise: receivedRupees === undefined ? null : Math.round(receivedRupees * 100),
+        importedFromEmail: "Recorded by the booking agent",
+      };
+      if (!apply) return preview(null, booking, clash.length ? { doubleBookedWith: clash } : {});
+      const saved = await upsertImportedBooking(booking);
+      await logChange("booking.added_by_agent", { bookingId: saved.id, source: input.source, externalRef: input.externalRef, clash: clash.map((c) => c.reference) });
+      return json({ saved: true, bookingId: saved.id, reference: saved.reference, ...(clash.length ? { doubleBookedWith: clash, warning: "DOUBLE BOOKING: tell the owner now." } : {}) });
     },
   );
 
