@@ -57,6 +57,8 @@ import { buildBookingSummary, buildConfirmation, sendConfirmation } from "../lib
 import { CashfreeError, cashfreeConfig } from "../lib/cashfree-client";
 import { checkoutMethod, looksLikeOrderId, orderIdFromWebhook, verifyWebhook } from "../lib/cashfree-rules";
 import { findOrder, gatewayInfoFor } from "../lib/cashfree-repo";
+import { RazorpayError, razorpayConfig } from "../lib/razorpay";
+import { razorpaySignatureValid } from "../lib/razorpay-rules";
 import { cancellationRefund } from "../lib/cancellation-rules";
 import { cardFeeFor, onlinePaymentMode, refundOnline, settleOrder, startCheckout } from "../lib/cashfree-service";
 import { notifyOwner } from "../lib/owner-alerts";
@@ -804,7 +806,7 @@ router.post("/book/pay/confirmation", async (req, res) => {
 const checkoutLimiter = createLimiter(20, HOUR);
 
 /** Opens a Cashfree checkout for the advance. Bearer token in the body. */
-router.post("/book/pay/cashfree/order", async (req, res) => {
+router.post(["/book/pay/order", "/book/pay/cashfree/order"], async (req, res) => {
   res.setHeader("Cache-Control", "no-store");
   if (checkoutLimiter(ipOf(req))) {
     res.status(429).json({ error: "Too many attempts. Please pay by UPI below, or call us." });
@@ -833,8 +835,14 @@ router.post("/book/pay/cashfree/order", async (req, res) => {
       mode: result.mode,
       feePaise: result.feePaise,
       amountPaise: result.amountPaise,
+      ...(result.razorpay ? { provider: "razorpay", razorpay: result.razorpay } : { provider: "cashfree" }),
     });
   } catch (error) {
+    if (error instanceof RazorpayError && error.status === 401) {
+      logger.error("Razorpay rejected the API keys");
+      res.status(401).json({ error: "Online payment is not available just now. Please pay by UPI below." });
+      return;
+    }
     if (isNotMigrated(error)) {
       res.status(503).json({ error: "Online payment is not switched on yet. Please pay by UPI below." });
       return;
@@ -870,6 +878,49 @@ router.post("/book/pay/cashfree/verify", async (req, res) => {
     res.json({ status: result.status });
   } catch (error) {
     logger.error({ err: error }, "Cashfree verify failed");
+    res.status(502).json({ error: "We could not check the payment just now. If money has left your account, it is safe: we will confirm shortly." });
+  }
+});
+
+/**
+ * Razorpay's checkout handler hands back order id, payment id and signature.
+ * The signature (HMAC-SHA256 of order|payment with our secret) must match
+ * before anything happens; then settleOrder still asks Razorpay's API for the
+ * order, so the booking is only made on Razorpay's own word.
+ */
+router.post("/book/pay/razorpay/verify", async (req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  if (payLimiter(ipOf(req))) {
+    res.status(429).json({ error: "Too many requests. Please wait a little and refresh." });
+    return;
+  }
+  const { token, orderId, razorpay_order_id: rzpOrderId, razorpay_payment_id: paymentId, razorpay_signature: signature } = req.body ?? {};
+  if (
+    !looksLikePayToken(token) ||
+    !looksLikeOrderId(orderId) ||
+    typeof rzpOrderId !== "string" ||
+    typeof paymentId !== "string" ||
+    typeof signature !== "string"
+  ) {
+    res.status(400).json({ error: "The payment details are incomplete. If money has left your account, please call us." });
+    return;
+  }
+  const config = razorpayConfig();
+  try {
+    const [found, order] = await Promise.all([findByToken(token), findOrder(orderId)]);
+    if (!config || !found || !order || order.paymentRequestId !== found.request.id || order.cfOrderId !== rzpOrderId) {
+      res.status(404).json({ error: "We could not find that payment. If money has left your account, please call us." });
+      return;
+    }
+    if (!razorpaySignatureValid(rzpOrderId, paymentId, signature, config.keySecret)) {
+      logger.warn({ orderId }, "Razorpay signature mismatch");
+      res.status(400).json({ error: "We could not verify that payment. If money has left your account, please call us." });
+      return;
+    }
+    const result = await settleOrder(orderId, "checkout");
+    res.json({ status: result.status });
+  } catch (error) {
+    logger.error({ err: error }, "Razorpay verify failed");
     res.status(502).json({ error: "We could not check the payment just now. If money has left your account, it is safe: we will confirm shortly." });
   }
 });

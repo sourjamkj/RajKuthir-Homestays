@@ -45,14 +45,18 @@ type PayData = {
 };
 
 type CashfreeCheckout = { checkout: (options: { paymentSessionId: string; redirectTarget: '_self' }) => Promise<unknown> };
+type RazorpaySuccess = { razorpay_payment_id: string; razorpay_order_id: string; razorpay_signature: string };
+type RazorpayCheckout = { open: () => void; on: (event: 'payment.failed', handler: (response: { error?: { description?: string } }) => void) => void };
 declare global {
   interface Window {
     Cashfree?: (options: { mode: 'sandbox' | 'production' }) => CashfreeCheckout;
+    Razorpay?: new (options: Record<string, unknown>) => RazorpayCheckout;
   }
 }
 
 const TOKEN_KEY = 'rk-pay-token';
 const CASHFREE_SDK = 'https://sdk.cashfree.com/js/v3/cashfree.js';
+const RAZORPAY_SDK = 'https://checkout.razorpay.com/v1/checkout.js';
 
 function tokenFromFragment(): string {
   if (typeof window === 'undefined') return '';
@@ -80,14 +84,19 @@ function returningOrderId(): string | null {
   return id && /^[A-Za-z0-9_-]{3,50}$/.test(id) ? id : null;
 }
 
-function loadCashfree(): Promise<NonNullable<Window['Cashfree']>> {
-  if (window.Cashfree) return Promise.resolve(window.Cashfree);
+function loadSdk<T>(src: string, get: () => T | undefined): Promise<T> {
+  const ready = get();
+  if (ready) return Promise.resolve(ready);
   return new Promise((resolve, reject) => {
     const script = document.createElement('script');
-    script.src = CASHFREE_SDK;
+    script.src = src;
     script.async = true;
-    script.onload = () => (window.Cashfree ? resolve(window.Cashfree) : reject(new Error('Cashfree did not load')));
-    script.onerror = () => reject(new Error('Cashfree did not load'));
+    script.onload = () => {
+      const loaded = get();
+      if (loaded) resolve(loaded);
+      else reject(new Error('Checkout did not load'));
+    };
+    script.onerror = () => reject(new Error('Checkout did not load'));
     document.head.appendChild(script);
   });
 }
@@ -282,11 +291,34 @@ export default function Pay() {
     }
   };
 
+  // Razorpay hands back a signed result in the page; the server checks the
+  // signature and asks Razorpay before it books anything.
+  const verifyRazorpay = async (orderId: string, response: RazorpaySuccess) => {
+    setVerifying(true);
+    setOnlineNote('Confirming your payment…');
+    try {
+      const result = await fetch('/api/book/pay/razorpay/verify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token, orderId, ...response }),
+      });
+      const body = await result.json().catch(() => ({}));
+      if (!result.ok) setOnlineNote(body.error ?? 'We could not check the payment just now.');
+      else if (body.status === 'pending') setOnlineNote('Your bank has not confirmed the payment yet. If money has left your account, it is safe: we will confirm by WhatsApp or email shortly.');
+      else setOnlineNote(null);
+    } catch {
+      setOnlineNote('Could not reach the server. If money has left your account, it is safe: we will confirm shortly.');
+    } finally {
+      setVerifying(false);
+      void load();
+    }
+  };
+
   const payOnline = async (method?: 'upi' | 'card') => {
     setOnlineNote(null);
     setOpening(method ?? 'all');
     try {
-      const response = await fetch('/api/book/pay/cashfree/order', {
+      const response = await fetch('/api/book/pay/order', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(method ? { token, method } : { token }),
@@ -302,7 +334,33 @@ export default function Pay() {
       } catch {
         /* the return page then asks for the link again; payment still settles */
       }
-      const Cashfree = await loadCashfree();
+      if (body.provider === 'razorpay') {
+        const Razorpay = await loadSdk(RAZORPAY_SDK, () => window.Razorpay);
+        const only = body.razorpay.method;
+        const checkout = new Razorpay({
+          key: body.razorpay.keyId,
+          order_id: body.razorpay.orderId,
+          amount: body.amountPaise,
+          currency: 'INR',
+          name: 'Raj Kuthir Homestays',
+          description: `Advance ${data?.reference ?? ''}`.trim(),
+          // With a card convenience fee the guest chose UPI or card; the server already priced that choice.
+          ...(only === 'upi'
+            ? { method: { upi: true, card: false, netbanking: false, wallet: false, emi: false, paylater: false } }
+            : only === 'card'
+              ? { method: { upi: false } }
+              : {}),
+          theme: { color: '#2f5d3a' },
+          handler: (response: RazorpaySuccess) => void verifyRazorpay(body.orderId, response),
+          modal: { ondismiss: () => setOnlineNote('Payment cancelled. You can try again below, or pay by UPI.') },
+        });
+        checkout.on('payment.failed', (response) =>
+          setOnlineNote(`The payment did not go through${response.error?.description ? `: ${response.error.description}` : ''}. You can try again below.`),
+        );
+        checkout.open();
+        return;
+      }
+      const Cashfree = await loadSdk(CASHFREE_SDK, () => window.Cashfree);
       await Cashfree({ mode: body.mode === 'production' ? 'production' : 'sandbox' }).checkout({
         paymentSessionId: body.paymentSessionId,
         redirectTarget: '_self',
@@ -556,7 +614,7 @@ export default function Pay() {
                   </button>
                 )}
                 <p className="mt-3 flex items-center justify-center gap-1.5 text-center text-xs text-muted-foreground">
-                  {data.cardFee && data.cardFee.feePaise > 0 ? 'Secure checkout by Cashfree' : 'UPI, cards or net banking · secure checkout by Cashfree'} · booking confirmed instantly
+                  {data.cardFee && data.cardFee.feePaise > 0 ? 'Secure checkout' : 'UPI, cards or net banking · secure checkout'} · booking confirmed instantly
                 </p>
                 {payable && (
                   <p className="mt-6 flex items-center gap-3 text-xs text-muted-foreground">
