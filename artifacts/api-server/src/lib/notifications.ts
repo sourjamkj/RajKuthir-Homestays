@@ -1,10 +1,14 @@
 import { logger } from "./logger";
 import type { Booking } from "@workspace/db";
 import { buildTemplate, type MessageKind } from "./whatsapp-templates";
+import { readFile } from "node:fs/promises";
 import {
   sendTemplate,
   toWhatsappNumber,
+  uploadMedia,
+  type SendResult,
 } from "./whatsapp-client";
+import { findPackPdf } from "./arrival-pack";
 import { reviewStillSendable, reviewTemplateForSend } from "./review-requests";
 import {
   bookingsNeedingMessages,
@@ -204,15 +208,18 @@ export async function drainOutbox(now = new Date()): Promise<DrainResult> {
 
     result.attempted += 1;
 
-    const outcome = await sendTemplate({
-      to: message.toPhone,
-      templateName:
-        message.kind === "review_request"
-          ? reviewTemplateForSend(message.templateName)
-          : message.templateName,
-      languageCode: "en",
-      params: message.templateParams,
-    });
+    const outcome =
+      (message.kind === "checkin_reminder" &&
+        (await sendWithArrivalPack(message.toPhone, message.templateParams))) ||
+      (await sendTemplate({
+        to: message.toPhone,
+        templateName:
+          message.kind === "review_request"
+            ? reviewTemplateForSend(message.templateName)
+            : message.templateName,
+        languageCode: "en",
+        params: message.templateParams,
+      }));
 
     if (outcome.ok) {
       await markSent(message.id, outcome.providerMessageId);
@@ -234,6 +241,27 @@ export async function drainOutbox(now = new Date()): Promise<DrainResult> {
   }
 
   return result;
+}
+
+/**
+ * The day-before reminder with the arrival pack PDF (Wi-Fi QR, contacts)
+ * attached, when WHATSAPP_ARRIVAL_PACK_TEMPLATE names an approved template
+ * with a Document header and the same three body params as
+ * rk_checkin_reminder. Returns null when not set up or refused, so the
+ * caller falls back to the plain reminder and the guest still hears from us.
+ */
+async function sendWithArrivalPack(to: string, params: string[]): Promise<SendResult | null> {
+  const templateName = process.env["WHATSAPP_ARRIVAL_PACK_TEMPLATE"]?.trim();
+  const file = templateName ? findPackPdf() : null;
+  if (!templateName || !file) return null;
+
+  const filename = "raj-kuthir-arrival-pack.pdf";
+  const media = await uploadMedia({ bytes: await readFile(file), mimeType: "application/pdf", filename });
+  if (!media.ok) return null;
+
+  const sent = await sendTemplate({ to, templateName, params, headerDocument: { mediaId: media.mediaId, filename } });
+  if (!sent.ok) logger.warn({ error: sent.error }, "Arrival pack reminder refused; sending the plain reminder");
+  return sent.ok ? sent : null;
 }
 
 export async function runNotifications(): Promise<DrainResult> {
