@@ -51,6 +51,19 @@ test("airbnb · a cancellation is saved as cancelled with no money", () => {
   assert.equal(parsed.grossPaise, null);
 });
 
+test("airbnb · a real cancellation (range dates, no weekdays) is understood", () => {
+  const body = "RESERVATION CANCELED\n\nEntire Villa in Shantiniketan, Pet Friendly\n\nListing #832568717669696024\n\nNov 21 – 22, 4 guests\n\nUnfortunately, your guest Arkadip had to cancel reservation HMQ5KA988T for Nov 21 – 22.";
+  const parsed = parseAirbnbEmail("Canceled: Reservation HMQ5KA988T for November 21 – 22", "automated@airbnb.com", body, NOW);
+  assert.ok(parsed);
+  assert.equal(parsed.status, "cancelled");
+  assert.equal(parsed.externalRef, "HMQ5KA988T");
+  assert.equal(parsed.checkIn, "2026-11-21");
+  assert.equal(parsed.checkOut, "2026-11-22");
+  const across = parseAirbnbEmail("Canceled: Reservation HMQ5KA988T for November 30 – December 2", "automated@airbnb.com", "Reservation canceled", NOW);
+  assert.equal(across?.checkIn, "2026-11-30");
+  assert.equal(across?.checkOut, "2026-12-02");
+});
+
 test("airbnb · other Airbnb mail (messages, payouts) is ignored", () => {
   assert.equal(parseAirbnbEmail("New message from Riya", "automated@airbnb.com", "Hi! See you soon", NOW), null);
   assert.equal(parseAirbnbEmail("We sent a payout", "express@airbnb.com", "₹4,928.04 is on its way", NOW), null);

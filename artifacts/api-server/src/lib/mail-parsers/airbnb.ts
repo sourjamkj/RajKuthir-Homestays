@@ -47,8 +47,10 @@ function datesOf(text: string, now: Date): { checkIn: string; checkOut: string }
   const heading = text.search(/check-?in\s+check-?out/i);
   const slice = heading >= 0 ? text.slice(heading, heading + 400) : text;
   const found = [...slice.matchAll(/\b(?:mon|tue|wed|thu|fri|sat|sun)[a-z]*,?\s+([a-z]{3})[a-z]*\s+(\d{1,2})\b/gi)];
-  if (found.length < 2) return null;
-  const [a, b] = found;
+  // A cancellation has no heading, only a range: "Nov 21 – 22" or "Nov 30 – Dec 2".
+  const range = found.length < 2 ? text.match(/\b([a-z]{3})[a-z]*\s+(\d{1,2})\s*[–—-]\s*(?:([a-z]{3})[a-z]*\s+)?(\d{1,2})\b/i) : null;
+  if (found.length < 2 && !range) return null;
+  const [a, b] = range ? [[, range[1], range[2]], [, range[3] ?? range[1], range[4]]] : found;
   const m1 = MONTHS[a![1]!.toLowerCase()];
   const m2 = MONTHS[b![1]!.toLowerCase()];
   if (!m1 || !m2) return null;
@@ -79,7 +81,7 @@ export function parseAirbnbEmail(subject: string, from: string, body: string, no
   const confirmed = /reservation confirmed|new booking confirmed/i.test(subject + " " + text.slice(0, 400));
   if (!cancelled && !confirmed) return null;
 
-  const dates = datesOf(text, now);
+  const dates = datesOf(text, now) ?? (cancelled ? datesOf(subject, now) : null);
   if (!dates) return null;
   const party = partyOf(text);
   const guestName =
