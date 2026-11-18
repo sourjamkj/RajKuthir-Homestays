@@ -495,6 +495,7 @@ export async function listAdminGuestStays() {
       bookingId: bookings.id,
       reference: bookings.reference,
       source: bookings.source,
+      externalRef: bookings.externalRef,
       createdAt: bookings.createdAt,
       guestName: bookings.guestName,
       guestPhone: bookings.guestPhone,
