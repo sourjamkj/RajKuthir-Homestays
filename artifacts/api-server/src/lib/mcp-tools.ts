@@ -1,5 +1,7 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
+import { bookings, db } from "@workspace/db";
+import { eq } from "drizzle-orm";
 
 import { firstConflict } from "./availability";
 import { listPublicBlocks } from "./calendar-repo";
@@ -439,6 +441,33 @@ export function buildMcpServer(): McpServer {
       if (!(await deleteOverride(id))) return fail("That rule was already removed.");
       await logChange("rates.rule.removed", { rule: shown, id });
       return json({ saved: true, removed: shown });
+    },
+  );
+
+  server.registerTool(
+    "cancel_booking",
+    {
+      title: "Cancel a booking",
+      description:
+        "Cancels a booking the guest called off (from list_bookings), which opens its nights on every channel at the next sync. keptRupees: what the owner keeps after any refund (0 when everything was refunded). note: what happened, e.g. refunds and the deposit. Previews unless apply: true. For an OTA booking, cancel it on the OTA too.",
+      inputSchema: {
+        id: z.string().uuid(),
+        keptRupees: z.number().min(0).max(10_000_000),
+        note: z.string().trim().min(3).max(500),
+        apply: APPLY,
+      },
+    },
+    async ({ id, keptRupees, note, apply }) => {
+      const [current] = await db.select().from(bookings).where(eq(bookings.id, id)).limit(1);
+      if (!current) return fail("No booking has that id.");
+      if (current.status === "cancelled") return fail("That booking is already cancelled.");
+      const shown = { guest: current.guestName, reference: current.reference, checkIn: current.checkIn, checkOut: current.checkOut, receivedRupees: (current.receivedPaise ?? 0) / 100 };
+      const after = { status: "cancelled", keptRupees, note };
+      if (!apply) return preview(shown, after);
+      const updated = await updateBooking(id, { status: "cancelled", receivedPaise: Math.round(keptRupees * 100), note });
+      if (!updated) return fail("That booking no longer exists.");
+      await logChange("booking.cancelled", { bookingId: id, ...after });
+      return json({ cancelled: true, ...shown, keptRupees, note });
     },
   );
 
