@@ -50,6 +50,15 @@ import {
   stretchHold,
   updateRefund,
 } from "./cashfree-repo";
+import {
+  createRazorpayOrder,
+  createRazorpayRefund,
+  getRazorpayOrder,
+  getRazorpayOrderPayments,
+  getRazorpayRefund,
+  razorpayConfig,
+} from "./razorpay";
+import { capturedPayment, isRazorpayOrderId, refundStatusFrom } from "./razorpay-rules";
 
 /**
  * Online payment of a Book & Pay advance, end to end:
@@ -64,12 +73,27 @@ import {
  * proof of payment on its own.
  */
 
+/** Razorpay, when its keys are set, replaces Cashfree for new checkouts. */
 export function onlinePaymentMode(): CashfreeEnv | null {
-  return cashfreeConfig()?.env ?? null;
+  return razorpayConfig()?.env ?? cashfreeConfig()?.env ?? null;
+}
+
+/** Which gateway took a payment, for logs and owner alerts. */
+function gatewayOf(paymentId: string | null): string {
+  return paymentId?.startsWith("pay_") ? "Razorpay" : "Cashfree";
 }
 
 export type CheckoutResult =
-  | { ok: true; paymentSessionId: string; orderId: string; mode: CashfreeEnv; feePaise: number; amountPaise: number }
+  | {
+      ok: true;
+      paymentSessionId: string;
+      orderId: string;
+      mode: CashfreeEnv;
+      feePaise: number;
+      amountPaise: number;
+      /** Set for Razorpay: what the browser needs to open the checkout modal. */
+      razorpay?: { keyId: string; orderId: string; method: CheckoutMethod | null };
+    }
   | { ok: false; status: number; error: string };
 
 /** The card / net banking convenience fee this request would carry now (0 when off). */
@@ -89,7 +113,8 @@ export async function startCheckout(
   now = new Date(),
 ): Promise<CheckoutResult> {
   const config = cashfreeConfig();
-  if (!config) return { ok: false, status: 503, error: "Online payment is not switched on yet. Please pay by UPI below." };
+  const rzp = razorpayConfig();
+  if (!config && !rzp) return { ok: false, status: 503, error: "Online payment is not switched on yet. Please pay by UPI below." };
 
   const { request, enquiry } = found;
   if (request.status !== "awaiting_payment" || !holdBlocks(request, now)) {
@@ -114,8 +139,37 @@ export async function startCheckout(
   const attempt = await nextAttempt(request.id);
   const orderId = orderIdFor(request.reference, attempt);
   const digits = phone.replace(/\D/g, "").slice(-10);
+  const note =
+    `Advance ${request.reference} ${enquiry.checkIn ?? ""} to ${enquiry.checkOut ?? ""}` +
+    (charge.feePaise ? ` + convenience fee ${rupeesFromPaise(charge.feePaise)}` : "");
 
-  const created = await createOrder(config, {
+  if (rzp) {
+    const order = await createRazorpayOrder(rzp, {
+      amountPaise: charge.totalPaise,
+      receipt: orderId,
+      notes: { reference: request.reference, note },
+    });
+    await insertOrder({
+      paymentRequestId: request.id,
+      orderId,
+      cfOrderId: order.id,
+      amountPaise: charge.totalPaise,
+      feePaise: charge.feePaise,
+      expiresAt: window.orderExpiresAt,
+    });
+    await logPaymentEvent(request.id, "online_checkout", `Razorpay order ${order.id} (${orderId})` + (charge.feePaise ? ` (card/net banking, convenience fee ₹${rupeesFromPaise(charge.feePaise)})` : ""));
+    return {
+      ok: true,
+      paymentSessionId: "",
+      orderId,
+      mode: rzp.env,
+      feePaise: charge.feePaise,
+      amountPaise: charge.totalPaise,
+      razorpay: { keyId: rzp.keyId, orderId: order.id, method: charge.feePaise ? method : null },
+    };
+  }
+
+  const created = await createOrder(config!, {
     orderId,
     amountRupees: rupeesFromPaise(charge.totalPaise),
     paymentMethods: charge.methods,
@@ -128,9 +182,7 @@ export async function startCheckout(
     returnUrl: `${SITE_ORIGIN}/pay?order_id={order_id}`,
     notifyUrl: `${SITE_ORIGIN}/api/book/cashfree/webhook`,
     expiresAtIso: istIso(window.orderExpiresAt),
-    note:
-      `Advance ${request.reference} ${enquiry.checkIn ?? ""} to ${enquiry.checkOut ?? ""}` +
-      (charge.feePaise ? ` + convenience fee ${rupeesFromPaise(charge.feePaise)}` : ""),
+    note,
     tags: { reference: request.reference },
   });
 
@@ -152,7 +204,7 @@ export async function startCheckout(
     ok: true,
     paymentSessionId: created.payment_session_id,
     orderId,
-    mode: config.env,
+    mode: config!.env,
     feePaise: charge.feePaise,
     amountPaise: charge.totalPaise,
   };
@@ -172,8 +224,10 @@ export type SettleResult = {
  */
 export async function settleOrder(orderId: string, source: string, now = new Date()): Promise<SettleResult> {
   const config = cashfreeConfig();
+  const rzp = razorpayConfig();
   const row = await findOrder(orderId);
-  if (!config || !row) return { status: "unknown" };
+  const isRzp = isRazorpayOrderId(row?.cfOrderId);
+  if (!row || (isRzp ? !rzp : !config)) return { status: "unknown" };
 
   // Paid earlier but the booking step never finished (crash, deploy): finish it.
   if (row.status === "PAID") {
@@ -181,7 +235,14 @@ export async function settleOrder(orderId: string, source: string, now = new Dat
     return { status: "paid", paymentRequestId: row.paymentRequestId };
   }
 
-  const order = await getOrder(config, orderId);
+  // Razorpay's order answered in Cashfree's words, so everything below is shared.
+  const order = isRzp
+    ? await getRazorpayOrder(rzp!, row.cfOrderId!).then((o) => ({
+        ...o,
+        order_status: o.status === "paid" ? "PAID" : "ACTIVE",
+        order_amount: o.amount_paid / 100,
+      }))
+    : await getOrder(config!, orderId);
   const outcome = settlementFor(order, row.amountPaise);
 
   if (outcome.kind === "pending") return { status: "pending", paymentRequestId: row.paymentRequestId };
@@ -191,16 +252,17 @@ export async function settleOrder(orderId: string, source: string, now = new Dat
     return { status: "closed", paymentRequestId: row.paymentRequestId };
   }
 
-  const payments = await getOrderPayments(config, orderId).catch(() => []);
-  const payment = successfulPayment(payments);
+  const payment = isRzp
+    ? capturedPayment(await getRazorpayOrderPayments(rzp!, row.cfOrderId!).catch(() => []))
+    : successfulPayment(await getOrderPayments(config!, orderId).catch(() => []));
   const claimed = await claimPaid(orderId, payment, { order, payment }, now);
   if (!claimed) return { status: "paid", paymentRequestId: row.paymentRequestId };
 
   if (outcome.kind === "amount_mismatch") {
-    const problem = `Cashfree reports ₹${((outcome.gotPaise ?? 0) / 100).toFixed(2)} paid, but the advance was ₹${(outcome.expectedPaise / 100).toFixed(2)}.`;
+    const problem = `${isRzp ? "Razorpay" : "Cashfree"} reports ₹${((outcome.gotPaise ?? 0) / 100).toFixed(2)} paid, but the advance was ₹${(outcome.expectedPaise / 100).toFixed(2)}.`;
     logger.error({ orderId, expected: outcome.expectedPaise, got: outcome.gotPaise }, "Cashfree amount mismatch");
     await markRequestPaidOnline(row.paymentRequestId, now);
-    await logPaymentEvent(row.paymentRequestId, "paid_online", `Cashfree ${orderId}: amount mismatch`);
+    await logPaymentEvent(row.paymentRequestId, "paid_online", `${isRzp ? "Razorpay" : "Cashfree"} ${orderId}: amount mismatch`);
     await markSettled(claimed.id, problem, now);
     await alertOwner(row.paymentRequestId, claimed.amountPaise, claimed.paymentGroup, claimed.cfPaymentId, false, problem);
     return { status: "mismatch", paymentRequestId: row.paymentRequestId };
@@ -228,7 +290,7 @@ async function finishPaid(
 ): Promise<boolean> {
   const method = methodLabel(paymentGroup);
   await markRequestPaidOnline(paymentRequestId);
-  await logPaymentEvent(paymentRequestId, "paid_online", `${method} via Cashfree${cfPaymentId ? ` (payment ${cfPaymentId})` : ""}, seen by ${source}`);
+  await logPaymentEvent(paymentRequestId, "paid_online", `${method} via ${gatewayOf(cfPaymentId)}${cfPaymentId ? ` (payment ${cfPaymentId})` : ""}, seen by ${source}`);
 
   const found = await findById(paymentRequestId);
   if (!found) {
@@ -310,7 +372,7 @@ async function alertOwner(
     await sendWhatsappTemplate(ownerWhatsappNumberIfSet(), "WHATSAPP_OWNER_ALERT_TEMPLATE", [
       found.enquiry.name,
       `₹${amountPaise / 100}`,
-      `Cashfree ${cfPaymentId ?? methodLabel(paymentGroup)}`,
+      `${gatewayOf(cfPaymentId)} ${cfPaymentId ?? methodLabel(paymentGroup)}`,
       found.request.reference,
     ]);
   } catch (error) {
@@ -328,7 +390,7 @@ let reconciling = false;
  * refresh pending refunds. Never throws.
  */
 export async function reconcileOnlinePayments(now = new Date()): Promise<void> {
-  if (reconciling || !cashfreeConfig()) return;
+  if (reconciling || !onlinePaymentMode()) return;
   reconciling = true;
   try {
     for (const order of await ordersToReconcile(now)) {
@@ -344,9 +406,17 @@ export async function reconcileOnlinePayments(now = new Date()): Promise<void> {
     }
 
     const config = cashfreeConfig();
-    if (!config) return;
+    const rzp = razorpayConfig();
     for (const refund of await pendingRefunds()) {
       try {
+        if (refund.cfRefundId?.startsWith("rfnd_")) {
+          if (!rzp) continue;
+          const fresh = await getRazorpayRefund(rzp, refund.cfRefundId);
+          const status = refundStatusFrom(fresh.status);
+          if (status !== refund.status) await updateRefund(refund.refundId, status, fresh, now);
+          continue;
+        }
+        if (!config) continue;
         const fresh = await getRefund(config, refund.orderId, refund.refundId);
         if (fresh.refund_status !== refund.status) await updateRefund(refund.refundId, fresh.refund_status, fresh, now);
       } catch (error) {
@@ -365,12 +435,16 @@ export async function reconcileOnlinePayments(now = new Date()): Promise<void> {
 export type RefundOutcome = { ok: true; refundId: string; status: string } | { ok: false; status: number; error: string };
 
 export async function refundOnline(paymentRequestId: string, amountPaise: unknown, note: string | null): Promise<RefundOutcome> {
-  const config = cashfreeConfig();
-  if (!config) return { ok: false, status: 503, error: "Cashfree is not configured." };
-
   const found = await findById(paymentRequestId);
   const order = await paidOrderFor(paymentRequestId);
   if (!found || !order) return { ok: false, status: 404, error: "There is no online payment on this booking to refund." };
+
+  const isRzp = isRazorpayOrderId(order.cfOrderId);
+  const config = cashfreeConfig();
+  const rzp = razorpayConfig();
+  if (isRzp ? !rzp || !order.cfPaymentId : !config) {
+    return { ok: false, status: 503, error: `${isRzp ? "Razorpay" : "Cashfree"} is not configured.` };
+  }
 
   const existing = await refundsFor(order.id);
   // The convenience fee is not refundable (Cancellation & Refund Policy).
@@ -380,7 +454,16 @@ export async function refundOnline(paymentRequestId: string, amountPaise: unknow
 
   const amount = amountPaise as number;
   const refundId = refundIdFor(found.request.reference, existing.length + 1);
-  const result = await createRefund(config, {
+
+  if (isRzp) {
+    const made = await createRazorpayRefund(rzp!, order.cfPaymentId!, { amountPaise: amount, receipt: refundId, note: note || `Refund ${found.request.reference}` });
+    const status = refundStatusFrom(made.status);
+    await insertRefund({ gatewayOrderId: order.id, refundId, cfRefundId: made.id, amountPaise: made.amount ?? amount, status, note, raw: made });
+    await logPaymentEvent(paymentRequestId, "refund", `₹${(amount / 100).toFixed(2)} via Razorpay (${refundId})${note ? `: ${note}` : ""}`);
+    return { ok: true, refundId, status };
+  }
+
+  const result = await createRefund(config!, {
     orderId: order.orderId,
     refundId,
     amountRupees: rupeesFromPaise(amount),
