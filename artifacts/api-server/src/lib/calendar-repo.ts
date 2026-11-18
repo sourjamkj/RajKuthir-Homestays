@@ -1,4 +1,4 @@
-import { and, asc, eq, gt, gte, inArray, lt, lte, ne, notInArray } from "drizzle-orm";
+import { and, asc, eq, gt, gte, inArray, lt, lte, ne, notInArray, sql } from "drizzle-orm";
 import { db, pool } from "@workspace/db";
 import { activeReleases, newRelease, type Release } from "./calendar-release-rules.ts";
 import {
@@ -15,6 +15,9 @@ import {
 } from "./calendar-bookings";
 import { readLiveHolds } from "./book-pay-repo";
 import { holdsAsEvents } from "./book-pay-rules";
+import { bookingsGoneFromFeed } from "./feed-cancel-rules.ts";
+import { todayInIndia } from "./guest-lookup";
+import { logger } from "./logger";
 
 export type CalendarSource = CalendarEvent["source"];
 
@@ -283,6 +286,30 @@ export async function replaceSourceEvents(
       await transaction
         .delete(calendarEvents)
         .where(inArray(calendarEvents.id, gone));
+
+      // The OTA dropped a reservation: cancel our copy so the nights reopen everywhere.
+      const confirmed = await transaction
+        .select({ id: bookings.id, checkIn: bookings.checkIn, checkOut: bookings.checkOut })
+        .from(bookings)
+        .where(and(eq(bookings.source, source), eq(bookings.status, "confirmed")));
+      const cancelled = bookingsGoneFromFeed({
+        removed: existing.filter((row) => gone.includes(row.id)),
+        feed: events,
+        bookings: confirmed,
+        addedCount: fresh.length,
+        today: todayInIndia(),
+      });
+      for (const booking of cancelled) {
+        await transaction
+          .update(bookings)
+          .set({
+            status: "cancelled",
+            note: sql`concat_ws(' · ', ${bookings.note}, ${"Cancelled on the channel: gone from its calendar."})`,
+            updatedAt: new Date(),
+          })
+          .where(eq(bookings.id, booking.id));
+        logger.info({ source, bookingId: booking.id }, "Booking cancelled: gone from the channel calendar");
+      }
     }
 
     if (fresh.length > 0) {
