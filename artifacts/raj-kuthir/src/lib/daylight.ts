@@ -40,3 +40,18 @@ export function followsDaylight(pathname: string, basePath = "/"): boolean {
   const path = pathname.startsWith(basePath) ? pathname.slice(basePath.length) : pathname.replace(/^\/+/, "");
   return !/^(admin|invoice|management-documents)(\/|$)/.test(path.replace(/^\/+/, ""));
 }
+
+const clock = new Intl.DateTimeFormat("en-IN", { timeZone: "Asia/Kolkata", hour: "numeric", minute: "2-digit", hour12: true });
+const span = (m: number) => {
+  const r = Math.max(1, Math.round(m));
+  return r < 60 ? `${r} min` : `${Math.floor(r / 60)}h ${String(r % 60).padStart(2, "0")}m`;
+};
+
+/** "Santiniketan · 3:42 pm · lights on in 1h 12m", from the villa's own sunset. */
+export function sunsetLine(now = new Date()): string {
+  const time = clock.format(now).toLowerCase();
+  const left = minutesToSunset(now);
+  return left === null
+    ? `Santiniketan · ${time} · the lights are on`
+    : `Santiniketan · ${time} · lights on in ${span(left)}`;
+}

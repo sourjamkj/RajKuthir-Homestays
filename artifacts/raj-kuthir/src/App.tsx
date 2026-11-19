@@ -75,6 +75,7 @@ import {
   markSessionExpired,
 } from '@/lib/admin-api';
 import { LightsSwitch } from '@/components/LightsSwitch';
+import { HeroPhotos, SunsetLine } from '@/components/HeroLights';
 
 /**
  * A signed-out session used to look exactly like an empty business.
@@ -108,7 +109,6 @@ const queryClient: QueryClient = new QueryClient({
 // pages/Gallery.tsx with their measured dimensions and alt text; the four
 // shown in the teaser below come from there, not from here.
 const IMG = {
-  villaNight: asset('villa-night.jpg'),
   bedroom: asset('Bedroom.jpg'),
   pet: asset('Pet%20View.jpg'),
   // Two review cards, not three. "Review 3.jpg" repeated Review 1's quote and
@@ -862,25 +862,16 @@ function Home() {
 
       <main id="top">
         {/* --------------------------------------------------------- cover
-            The villa after sundown, full width, with the headline sitting in
-            the dark at the foot of the frame.
+            The villa by day or after sundown (same frame, chosen by
+            Santiniketan's sun or the Lights switch), headline at the foot.
 
-            This photograph is the Largest Contentful Paint for the whole site,
-            so it is the one image that loads eagerly and at high priority —
+            These two photographs are the Largest Contentful Paint for the whole
+            site, so they are the images that load eagerly and at high priority —
             everything else on the page waits its turn. Its dimensions are
             declared so the browser reserves the frame before the bytes land,
             which is what keeps the headline from jumping as it arrives. */}
         <section ref={heroRef} className="on-dark relative isolate flex min-h-[clamp(560px,86vh,880px)] items-end overflow-hidden" aria-labelledby="hero-title">
-          <img
-            src={IMG.villaNight}
-            alt="Raj Kuthir Homestays, Sobuj Potro, lit up after sundown in Bolpur, Shantiniketan"
-            width={1600}
-            height={900}
-            loading="eager"
-            fetchPriority="high"
-            decoding="async"
-            className="absolute inset-0 h-full w-full object-cover"
-          />
+          <HeroPhotos />
           {/* Two overlays rather than one: a vertical wash dark enough to carry
               white type at the foot, and a soft vignette that keeps the eye on
               the lit house rather than the corners. */}
@@ -893,6 +884,7 @@ function Home() {
                   tagline beneath it says what it feels like. Same typeface,
                   colours and italic accent as before — the words swapped roles.
                   "2-Bedroom" is kept on one line so the hyphen never breaks. */}
+              <SunsetLine className="mb-5 font-mono-ui text-[10px] font-medium uppercase tracking-[.12em] text-white/75 sm:text-[11px] sm:tracking-[.2em]" />
               <h1 id="hero-title" className="font-journal text-[clamp(2.5rem,6.6vw,5.4rem)] leading-[.95] tracking-[-.035em] text-white [text-wrap:balance]">
                 Private <span className="whitespace-nowrap">2-Bedroom</span> Villa <em className="text-secondary">in Shantiniketan</em>
               </h1>

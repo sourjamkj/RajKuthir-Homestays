@@ -203,6 +203,24 @@ html[data-daylight="night"] .on-dark {
 }
 html { transition: background-color .6s ease; }
 
+/* Homepage cover: day and night photos of the same frame, chosen by data-daylight.
+   The lantern is the other light, masked to a soft circle at the cursor or finger. */
+@property --spot-r { syntax: '<length>'; inherits: true; initial-value: 0px; }
+.hero-lights { --x: -999px; --y: -999px; --spot-r: 0px; transition: --spot-r .5s ease; }
+.hero-lights.is-lit { --spot-r: 280px; }
+@media (hover: none) { .hero-lights.is-lit { --spot-r: 170px; } }
+.hero-photo { transition: opacity .9s ease; }
+html[data-daylight="night"] .hero-photo--day,
+html:not([data-daylight="night"]) .hero-photo--night { opacity: 0; }
+.hero-lantern {
+  pointer-events: none;
+  -webkit-mask-image: radial-gradient(circle var(--spot-r) at var(--x) var(--y), #000 0%, #000 40%, rgba(0,0,0,.75) 60%, rgba(0,0,0,.4) 75%, rgba(0,0,0,.12) 88%, transparent 100%);
+          mask-image: radial-gradient(circle var(--spot-r) at var(--x) var(--y), #000 0%, #000 40%, rgba(0,0,0,.75) 60%, rgba(0,0,0,.4) 75%, rgba(0,0,0,.12) 88%, transparent 100%);
+  -webkit-mask-repeat: no-repeat; mask-repeat: no-repeat;
+}
+html[data-daylight="night"] .hero-lantern--night,
+html:not([data-daylight="night"]) .hero-lantern--day { display: none; }
+
 @layer base {
   * { @apply border-border; }
   html { scroll-behavior: smooth; }
