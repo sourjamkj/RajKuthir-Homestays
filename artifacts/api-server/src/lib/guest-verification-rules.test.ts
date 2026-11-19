@@ -506,12 +506,12 @@ test("quote · can always be re-sent, not only once", () => {
   // of this test sliced to the first occurrence of "Send quote", which sits
   // ABOVE this branch in the file, so the slice ran backwards and silently
   // compared an empty string.
-  const branchStart = ADMIN_GUESTS_TSX.indexOf("{row.quoteSentAt ? (");
+  const branchStart = ADMIN_GUESTS_TSX.indexOf("{quoted && row.quoteSentAt && (");
   assert.ok(branchStart > -1, "the quoteSentAt branch is gone");
-  const elseArm = ADMIN_GUESTS_TSX.indexOf(") : (", branchStart);
+  const branchEnd = ADMIN_GUESTS_TSX.indexOf("\n                            )}", branchStart);
   const sentBranch = ADMIN_GUESTS_TSX.slice(
     branchStart,
-    elseArm > -1 ? elseArm : branchStart + 4000,
+    branchEnd > -1 ? branchEnd : branchStart + 4000,
   );
   assert.ok(
     sentBranch.includes("button-resend-quote-"),

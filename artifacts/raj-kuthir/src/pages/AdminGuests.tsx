@@ -9,11 +9,13 @@ import {
   ArrowUpDown,
   CalendarPlus,
   Check,
+  ChevronDown,
   ExternalLink,
   FileText,
   Inbox,
   Loader2,
   MessageCircle,
+  Pencil,
   Phone,
   Plus,
   Send,
@@ -318,6 +320,14 @@ function enquiryFollowUpUrl(row: Enquiry): string {
   return `https://wa.me/${waNumber(row.phone)}?text=${encodeURIComponent(row.followUpText ?? buildEnquiryFollowUp(row))}`;
 }
 
+// Admin tables scroll inside their own box with the header pinned, so a long
+// list never makes the whole console scroll past everything below it.
+const TABLE_SCROLL = 'mt-4 max-h-[70vh] overflow-auto overscroll-contain rounded-2xl border border-border bg-card';
+const TABLE_HEAD = 'sticky top-0 z-10 bg-card shadow-[0_1px_0_hsl(var(--border))]';
+const ACT_BTN = 'inline-flex shrink-0 items-center gap-1 rounded-lg border border-border px-2.5 py-1.5 text-[10px] font-bold uppercase tracking-[.07em] text-primary transition-colors hover:border-primary disabled:cursor-not-allowed disabled:opacity-40';
+const ACT_PRIMARY = 'inline-flex shrink-0 items-center gap-1 rounded-lg border border-primary bg-primary px-2.5 py-1.5 text-[10px] font-bold uppercase tracking-[.07em] text-primary-foreground transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40';
+const ICON_BTN = 'grid h-8 w-8 shrink-0 place-items-center rounded-full border border-border text-primary transition-colors hover:border-primary';
+
 export default function AdminGuests() {
   const [, navigate] = useLocation();
   const session = useAdminSession();
@@ -489,6 +499,7 @@ export default function AdminGuests() {
   const [addingEnquiry, setAddingEnquiry] = useState(false);
   const [addFormKey, setAddFormKey] = useState(0);
   const [editingEnquiry, setEditingEnquiry] = useState<string | null>(null);
+  const [openEnquiry, setOpenEnquiry] = useState<string | null>(null);
 
   // Said once, right after Add, when the nights entered are already taken.
   const [addedClash, setAddedClash] = useState<string | null>(null);
@@ -861,402 +872,333 @@ export default function AdminGuests() {
             </p>
           )}
 
-          <div className="mt-4 space-y-3">
-            {enquiries.isLoading && (
-              <p className="text-sm text-muted-foreground">Loading…</p>
-            )}
-
-            {!enquiries.isLoading && rows.length === 0 && (
-              <div className="rounded-2xl border border-border bg-card p-5">
-                <p className="text-sm text-muted-foreground">
-                  No enquiries yet. They'll appear here the moment someone uses
-                  the form.
-                </p>
-              </div>
-            )}
-
-            {rows.map((row) => (
-              <div
-                key={row.id}
-                id={`enquiry-${row.id}`}
-                className="scroll-mt-6 rounded-2xl border border-border bg-card p-5"
-                data-testid={`row-enquiry-${row.id}`}
-              >
-                <div className="flex flex-wrap items-start justify-between gap-4">
-                  <div className="min-w-0">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <p className="font-journal text-xl text-primary">
-                        {row.name}
-                      </p>
-                      <span
-                        className={`rounded-full border px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-[.07em] ${STATUS_STYLE[row.status]}`}
+          {/* A table with its own scroll, so twenty enquiries no longer push
+              the stays and contacts a mile down the page. Everything that was
+              on the old card is still one click away in the row's details. */}
+          <div className={TABLE_SCROLL}>
+            <table className="w-full min-w-[1120px] border-collapse text-sm">
+              <thead className={TABLE_HEAD}>
+                <tr className="border-b border-border text-left text-[10px] uppercase tracking-[.08em] text-muted-foreground">
+                  <th className="px-4 py-3 font-bold">Guest</th>
+                  <th className="px-4 py-3 font-bold">Stay</th>
+                  <th className="px-4 py-3 font-bold">Received</th>
+                  <th className="px-4 py-3 font-bold">Price</th>
+                  <th className="px-4 py-3 text-right font-bold">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((row) => {
+                  const open = openEnquiry === row.id || editingEnquiry === row.id;
+                  const quoted = !row.datesTaken && row.quote.ok;
+                  return (
+                    <Fragment key={row.id}>
+                      <tr
+                        id={`enquiry-${row.id}`}
+                        className={`scroll-mt-16 border-b border-border align-top ${open ? 'bg-muted/40' : ''}`}
+                        data-testid={`row-enquiry-${row.id}`}
                       >
-                        {row.status}
-                      </span>
-                    </div>
-
-                    <p className="mt-1.5 text-xs text-muted-foreground">
-                      {row.checkIn && row.checkOut ? (
-                        <>
-                          {format(parseISO(row.checkIn), 'd MMM')} →{' '}
-                          {format(parseISO(row.checkOut), 'd MMM yyyy')}
-                        </>
-                      ) : (
-                        'No dates given'
-                      )}
-                      {row.adults !== null && (
-                        <>
-                          {' · '}
-                          {row.adults} adult{row.adults === 1 ? '' : 's'}
-                          {row.children ? `, ${row.children} children` : ''}
-                          {row.pets ? `, ${row.pets} pets` : ''}
-                        </>
-                      )}
-                      {' · '}
-                      received{' '}
-                      {format(parseISO(row.createdAt), 'd MMM, h:mm a')}
-                    </p>
-
-                    {row.requests && (
-                      <p className="mt-2 max-w-[560px] text-sm leading-6 text-foreground">
-                        “{row.requests}”
-                      </p>
-                    )}
-                    {row.childrenAges && <p className="mt-1 text-xs text-muted-foreground">Children's ages: {row.childrenAges}</p>}
-                    {row.ownerNote && <p className="mt-1 max-w-[560px] text-xs italic text-muted-foreground">Note: {row.ownerNote}</p>}
-                    <button
-                      type="button"
-                      onClick={() => setEditingEnquiry(editingEnquiry === row.id ? null : row.id)}
-                      className="mt-2 text-[10px] font-bold uppercase tracking-[.07em] text-primary underline decoration-accent underline-offset-2"
-                      data-testid={`button-edit-enquiry-${row.id}`}
-                    >
-                      {editingEnquiry === row.id ? 'Close' : 'Edit details & price'}
-                    </button>
-                  </div>
-
-                  <div className="flex shrink-0 items-center gap-2">
-                    <a
-                      href={`tel:${row.phone}`}
-                      className="grid h-9 w-9 place-items-center rounded-full border border-border text-primary transition-colors hover:border-primary"
-                      aria-label={`Call ${row.name}`}
-                    >
-                      <Phone size={14} />
-                    </a>
-                    <a
-                      href={waLink(row.phone, row.name)}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="grid h-9 w-9 place-items-center rounded-full border border-border text-primary transition-colors hover:border-primary"
-                      aria-label={`WhatsApp ${row.name}`}
-                    >
-                      <MessageCircle size={14} />
-                    </a>
-                    <button
-                      type="button"
-                      onClick={() => removeEnquiry.mutate(row.id)}
-                      className="grid h-9 w-9 place-items-center rounded-full border border-border text-muted-foreground transition-colors hover:border-[#A65E45] hover:text-[#A65E45]"
-                      aria-label="Delete enquiry"
-                    >
-                      <Trash2 size={13} />
-                    </button>
-                  </div>
-                </div>
-
-                {editingEnquiry === row.id && (
-                  <EnquiryDetailsForm
-                    initial={detailsFrom(row)}
-                    submitLabel="Save"
-                    busy={editEnquiry.isPending}
-                    error={editEnquiry.isError ? (editEnquiry.error instanceof Error ? editEnquiry.error.message : 'Could not save the changes.') : null}
-                    onSubmit={(values) => editEnquiry.mutate({ id: row.id, values })}
-                    testId={`form-edit-enquiry-${row.id}`}
-                  />
-                )}
-
-                {/*
-                  The price, and the one button that sends it. Shown on every
-                  card rather than behind a menu: the owner's first question
-                  about a new enquiry is always "what is this worth", and the
-                  answer should not need a click.
-                */}
-                <div className="mt-4 border-t border-border pt-4">
-                  {row.datesTaken ? (
-                    <div
-                      className="rounded-xl border border-[#A65E45]/40 bg-[#A65E45]/[.07] px-4 py-3 text-[13px] leading-6 text-[#7a3f2c]"
-                      role="status"
-                      data-testid={`notice-dates-taken-${row.id}`}
-                    >
-                      <p className="font-semibold">
-                        These dates are already taken ({row.datesTaken.label}, {format(parseISO(row.datesTaken.startDate), 'd MMM')} → {format(parseISO(row.datesTaken.endDate), 'd MMM yyyy')}).
-                      </p>
-                      <p className="mt-1">
-                        No quote or booking is offered for them. If this is the guest who already booked, mark it Converted. Otherwise, offer other dates or mark it Closed.
-                      </p>
-                    </div>
-                  ) : row.quote.ok ? (
-                    <div className="flex flex-wrap items-center justify-between gap-3">
-                      <div>
-                        <p className="text-[10px] font-bold uppercase tracking-[.1em] text-muted-foreground">
-                          {row.quote.nights} night{row.quote.nights === 1 ? '' : 's'} · {row.quote.guests} guest{row.quote.guests === 1 ? '' : 's'}
-                          {row.quote.agreed ? ' · your agreed price' : ''}
-                        </p>
-                        {row.quote.agreed && row.quote.priceNote && <p className="mt-1 whitespace-pre-line text-xs text-muted-foreground">{row.quote.priceNote}</p>}
-                        <p className="mt-1 text-sm text-primary">
-                          <span className="font-bold">
-                            {formatRupees(row.quote.totalPaise)}
-                          </span>{' '}
-                          total
-                          <span className="text-muted-foreground">
-                            {' '}· {formatRupees(row.quote.advancePaise)} advance
-                          </span>
-                        </p>
-                      </div>
-
-                      {row.quoteSentAt ? (
-                        <div className="flex flex-wrap items-center gap-3">
-                          <HoldBadge hold={row.hold} />
-
-                          {/* A quote you can only ever send once is wrong:
-                              guests lose messages, holds lapse, phones change,
-                              and a blocked popup means it never arrived at all.
-                              The button used to vanish the moment quoteSentAt
-                              was set, with no way back. */}
-                          <button
-                            type="button"
-                            onClick={() => sendQuote.mutate(row.id)}
-                            disabled={sendQuote.isPending || !quotingReady}
-                            className="flex shrink-0 items-center justify-center gap-1.5 rounded-lg border border-border px-3 py-2 text-[10px] font-bold uppercase tracking-[.07em] text-primary transition-colors hover:border-primary disabled:cursor-not-allowed disabled:opacity-40"
-                            data-testid={`button-resend-quote-${row.id}`}
-                          >
-                            {sendQuote.isPending && sendQuote.variables === row.id ? (
-                              <Loader2 size={12} className="animate-spin" />
-                            ) : (
-                              <Send size={12} />
-                            )}
-                            Re-send quote
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() =>
-                              setAdvancePaid.mutate({
-                                id: row.id,
-                                paid: row.hold.state !== 'paid',
-                              })
-                            }
-                            disabled={setAdvancePaid.isPending}
-                            className={
-                              row.hold.state === 'paid'
-                                ? 'flex shrink-0 items-center justify-center gap-1.5 rounded-lg border border-border px-3 py-2 text-[11px] font-bold uppercase tracking-[.07em] text-muted-foreground transition-colors hover:border-primary hover:text-primary disabled:cursor-not-allowed disabled:opacity-40'
-                                : 'flex shrink-0 items-center justify-center gap-1.5 rounded-lg bg-primary px-4 py-2.5 text-[11px] font-bold uppercase tracking-[.07em] text-primary-foreground transition-transform hover:-translate-y-0.5 disabled:translate-y-0 disabled:cursor-not-allowed disabled:opacity-40'
-                            }
-                            data-testid={`button-advance-${row.id}`}
-                          >
-                            {setAdvancePaid.isPending && (
-                              <Loader2 size={12} className="animate-spin" />
-                            )}
-                            {row.hold.state === 'paid'
-                              ? 'Not received after all'
-                              : 'Advance received'}
-                          </button>
-
-                          {/* The step that used to be re-typing the whole stay
-                              into the ledger. Creating the booking is what
-                              issues the RK- reference, and with it the arrival
-                              pack and the guest verification flow. */}
-                          {row.convertedBookingId ? (
-                            <span
-                              className="inline-flex items-center gap-1.5 rounded-lg border border-[#7A8065]/40 bg-[#7A8065]/10 px-3 py-2 text-[10px] font-bold uppercase tracking-[.07em] text-[#4b5340]"
-                              data-testid={`label-converted-${row.id}`}
-                            >
-                              <Check size={12} /> Booked
+                        <td className="px-4 py-3">
+                          <p className="font-medium text-foreground">{row.name}</p>
+                          <div className="mt-1 flex flex-wrap items-center gap-2">
+                            <span className={`rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase tracking-[.07em] ${STATUS_STYLE[row.status]}`}>
+                              {row.status}
                             </span>
+                            <span className="font-mono-ui text-[10px] text-muted-foreground">{row.phone}</span>
+                          </div>
+                        </td>
+                        <td className="px-4 py-3 text-xs text-muted-foreground">
+                          <p className="whitespace-nowrap text-sm text-foreground">
+                            {row.checkIn && row.checkOut
+                              ? `${format(parseISO(row.checkIn), 'd MMM')} → ${format(parseISO(row.checkOut), 'd MMM yyyy')}`
+                              : 'No dates given'}
+                          </p>
+                          {row.adults !== null && (
+                            <p className="mt-1">
+                              {row.adults} adult{row.adults === 1 ? '' : 's'}
+                              {row.children ? `, ${row.children} children` : ''}
+                              {row.pets ? `, ${row.pets} pets` : ''}
+                            </p>
+                          )}
+                        </td>
+                        <td className="whitespace-nowrap px-4 py-3 text-xs text-muted-foreground">
+                          {format(parseISO(row.createdAt), 'd MMM, h:mm a')}
+                        </td>
+                        <td className="whitespace-nowrap px-4 py-3">
+                          {row.datesTaken ? (
+                            <span className="rounded-full border border-[#A65E45]/40 bg-[#A65E45]/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-[.07em] text-[#A65E45]" data-testid={`badge-dates-taken-${row.id}`}>
+                              Dates taken
+                            </span>
+                          ) : row.quote.ok ? (
+                            <>
+                              <p className="font-bold text-primary">{formatRupees(row.quote.totalPaise)}</p>
+                              <p className="mt-0.5 text-[11px] text-muted-foreground">
+                                {formatRupees(row.quote.advancePaise)} advance · {row.quote.nights}N
+                                {row.quote.agreed ? ' · agreed' : ''}
+                              </p>
+                              {row.quoteSentAt && <div className="mt-1.5"><HoldBadge hold={row.hold} /></div>}
+                            </>
                           ) : (
+                            <span className="text-xs text-muted-foreground" title={row.quote.reason}>No quote</span>
+                          )}
+                        </td>
+                        <td className="w-[470px] px-4 py-3">
+                          <div className="flex flex-wrap items-center justify-end gap-1.5">
+                            {(row.status === 'new' || row.status === 'contacted') && (
+                              <a
+                                href={enquiryFollowUpUrl(row)}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                onClick={() => {
+                                  // Sending the first follow-up is what "contacted" means.
+                                  if (row.status === 'new') setStatus.mutate({ id: row.id, status: 'contacted' });
+                                }}
+                                title={
+                                  row.status === 'new'
+                                    ? 'Opens WhatsApp with a first reply and marks this enquiry Contacted'
+                                    : 'Opens WhatsApp with a short follow-up nudge — send as often as it is worth it'
+                                }
+                                className={ACT_PRIMARY}
+                                data-testid={`button-follow-up-${row.id}`}
+                              >
+                                <MessageCircle size={12} />
+                                {row.datesTaken ? 'Dates taken' : row.status === 'new' ? 'Reply' : 'Follow up'}
+                              </a>
+                            )}
+
+                            {quoted && !row.quoteSentAt && (
+                              <button
+                                type="button"
+                                onClick={() => sendQuote.mutate(row.id)}
+                                disabled={sendQuote.isPending || !quotingReady}
+                                title={
+                                  quotingReady
+                                    ? undefined
+                                    : 'RAJ_KUTHIR_UPI_ID and RAJ_KUTHIR_UPI_NAME are not set on the server, so there are no payment details to put in the quote.'
+                                }
+                                className={ACT_PRIMARY}
+                                data-testid={`button-send-quote-${row.id}`}
+                              >
+                                {sendQuote.isPending && sendQuote.variables === row.id ? <Loader2 size={12} className="animate-spin" /> : <Send size={12} />}
+                                Send quote
+                              </button>
+                            )}
+
+                            {/* A quote you can only ever send once is wrong:
+                                guests lose messages and holds lapse. */}
+                            {quoted && row.quoteSentAt && (
+                              <>
+                                <button
+                                  type="button"
+                                  onClick={() => sendQuote.mutate(row.id)}
+                                  disabled={sendQuote.isPending || !quotingReady}
+                                  className={ACT_BTN}
+                                  data-testid={`button-resend-quote-${row.id}`}
+                                >
+                                  {sendQuote.isPending && sendQuote.variables === row.id ? <Loader2 size={12} className="animate-spin" /> : <Send size={12} />}
+                                  Re-send
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => setAdvancePaid.mutate({ id: row.id, paid: row.hold.state !== 'paid' })}
+                                  disabled={setAdvancePaid.isPending}
+                                  className={row.hold.state === 'paid' ? ACT_BTN : ACT_PRIMARY}
+                                  data-testid={`button-advance-${row.id}`}
+                                >
+                                  {setAdvancePaid.isPending && setAdvancePaid.variables?.id === row.id && <Loader2 size={12} className="animate-spin" />}
+                                  {row.hold.state === 'paid' ? 'Not received' : 'Advance received'}
+                                </button>
+                                {/* Creating the booking issues the RK- reference,
+                                    the arrival pack and guest verification. */}
+                                {row.convertedBookingId ? (
+                                  <span className="inline-flex items-center gap-1 rounded-lg border border-[#7A8065]/40 bg-[#7A8065]/10 px-2.5 py-1.5 text-[10px] font-bold uppercase tracking-[.07em] text-[#4b5340]" data-testid={`label-converted-${row.id}`}>
+                                    <Check size={12} /> Booked
+                                  </span>
+                                ) : (
+                                  <button
+                                    type="button"
+                                    onClick={() => convertEnquiry.mutate(row.id)}
+                                    disabled={convertEnquiry.isPending}
+                                    title={
+                                      row.hold.state === 'paid'
+                                        ? 'Create the booking, issue the reference and open the calendar entry'
+                                        : 'Mark the advance received first — an unpaid enquiry stays an enquiry and its dates are released when the hold ends'
+                                    }
+                                    className={ACT_BTN}
+                                    data-testid={`button-convert-${row.id}`}
+                                  >
+                                    {convertEnquiry.isPending && convertEnquiry.variables === row.id ? <Loader2 size={12} className="animate-spin" /> : <CalendarPlus size={12} />}
+                                    Book
+                                  </button>
+                                )}
+                              </>
+                            )}
+
+                            <a href={`tel:${row.phone}`} className={ICON_BTN} aria-label={`Call ${row.name}`} title="Call">
+                              <Phone size={13} />
+                            </a>
+                            <a href={waLink(row.phone, row.name)} target="_blank" rel="noreferrer" className={ICON_BTN} aria-label={`WhatsApp ${row.name}`} title="WhatsApp">
+                              <MessageCircle size={13} />
+                            </a>
                             <button
                               type="button"
-                              onClick={() => convertEnquiry.mutate(row.id)}
-                              disabled={convertEnquiry.isPending}
-                              title={
-                                row.hold.state === 'paid'
-                                  ? 'Create the booking, issue the reference and open the calendar entry'
-                                  : 'Mark the advance received first — an unpaid enquiry stays an enquiry and its dates are released when the hold ends'
-                              }
-                              className="flex shrink-0 items-center justify-center gap-1.5 rounded-lg border border-primary px-3 py-2 text-[10px] font-bold uppercase tracking-[.07em] text-primary transition-colors hover:bg-primary hover:text-primary-foreground disabled:cursor-not-allowed disabled:opacity-40"
-                              data-testid={`button-convert-${row.id}`}
+                              onClick={() => setEditingEnquiry(editingEnquiry === row.id ? null : row.id)}
+                              className={ICON_BTN}
+                              aria-label={`Edit details and price for ${row.name}`}
+                              aria-pressed={editingEnquiry === row.id}
+                              title="Edit details & price"
+                              data-testid={`button-edit-enquiry-${row.id}`}
                             >
-                              {convertEnquiry.isPending &&
-                              convertEnquiry.variables === row.id ? (
-                                <Loader2 size={12} className="animate-spin" />
-                              ) : (
-                                <CalendarPlus size={12} />
-                              )}
-                              Create booking
+                              <Pencil size={13} />
                             </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (open) { setOpenEnquiry(null); setEditingEnquiry(null); } else setOpenEnquiry(row.id);
+                              }}
+                              className={ICON_BTN}
+                              aria-expanded={open}
+                              aria-label={`${open ? 'Hide' : 'Show'} details for ${row.name}`}
+                              title={open ? 'Hide details' : 'Details, notes & status'}
+                              data-testid={`button-details-enquiry-${row.id}`}
+                            >
+                              <ChevronDown size={14} className={`transition-transform ${open ? 'rotate-180' : ''}`} />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => removeEnquiry.mutate(row.id)}
+                              className={`${ICON_BTN} text-muted-foreground hover:border-[#A65E45] hover:text-[#A65E45]`}
+                              aria-label={`Delete enquiry from ${row.name}`}
+                              title="Delete"
+                            >
+                              <Trash2 size={13} />
+                            </button>
+                          </div>
+
+                          {sendQuote.isError && sendQuote.variables === row.id && (
+                            <p className="mt-2 text-right text-xs text-[#A65E45]" role="alert">
+                              {sendQuote.error instanceof Error ? sendQuote.error.message : 'The quote could not be sent.'}
+                            </p>
                           )}
-                        </div>
-                      ) : (
-                        <button
-                          type="button"
-                          onClick={() => sendQuote.mutate(row.id)}
-                          disabled={sendQuote.isPending || !quotingReady}
-                          title={
-                            quotingReady
-                              ? undefined
-                              : 'RAJ_KUTHIR_UPI_ID and RAJ_KUTHIR_UPI_NAME are not set on the server, so there are no payment details to put in the quote.'
-                          }
-                          className="flex shrink-0 items-center justify-center gap-1.5 rounded-lg bg-primary px-4 py-2.5 text-[11px] font-bold uppercase tracking-[.07em] text-primary-foreground transition-transform hover:-translate-y-0.5 disabled:translate-y-0 disabled:cursor-not-allowed disabled:opacity-40"
-                          data-testid={`button-send-quote-${row.id}`}
-                        >
-                          {sendQuote.isPending ? (
-                            <Loader2 size={13} className="animate-spin" />
-                          ) : (
-                            <Send size={13} />
+                          {/* A refused conversion is usually a clash with dates
+                              taken since; the owner decides, so it is shown. */}
+                          {convertEnquiry.isError && convertEnquiry.variables === row.id && (
+                            <p className="mt-2 text-right text-xs text-[#A65E45]" role="alert">
+                              {convertEnquiry.error instanceof Error ? convertEnquiry.error.message : 'The booking could not be created.'}
+                            </p>
                           )}
-                          Send quote
-                        </button>
+                          {convertEnquiry.isSuccess && convertEnquiry.variables === row.id && convertEnquiry.data?.booking && (
+                            <p className="mt-2 text-right text-xs text-muted-foreground">
+                              Booking created
+                              {convertEnquiry.data.booking.reference ? ` · ${convertEnquiry.data.booking.reference}` : ''}
+                              {convertEnquiry.data.booking.status === 'pending' ? ' · pending, so it is not holding the dates yet' : ''}
+                              . It is now in Guest check-in readiness below.
+                            </p>
+                          )}
+                          {/* Opening WhatsApp is not the same as delivering a
+                              message; the dates are held on that assumption. */}
+                          {sendQuote.isSuccess && sendQuote.variables === row.id && sendQuote.data?.delivery === 'manual_whatsapp' && !sendQuote.data?.opened && (
+                            <p className="mt-2 text-right text-xs text-[#A65E45]" role="alert">
+                              Your browser blocked the WhatsApp window, so nothing was sent.{' '}
+                              {sendQuote.data?.whatsappUrl && (
+                                <a href={sendQuote.data.whatsappUrl} target="_blank" rel="noreferrer" className="font-bold underline decoration-accent underline-offset-2 hover:text-primary" data-testid={`link-quote-whatsapp-${row.id}`}>
+                                  Open WhatsApp with the quote
+                                </a>
+                              )}
+                            </p>
+                          )}
+                          {sendQuote.isSuccess && sendQuote.variables === row.id && sendQuote.data?.delivery === 'manual_whatsapp' && sendQuote.data?.opened && (
+                            <p className="mt-2 text-right text-xs text-muted-foreground">
+                              WhatsApp opened with the quote. Send it there — the hold started just now.{' '}
+                              <button
+                                type="button"
+                                onClick={() => withdrawQuote.mutate(row.id)}
+                                disabled={withdrawQuote.isPending}
+                                className="underline decoration-accent underline-offset-2 hover:text-primary disabled:opacity-40"
+                                data-testid={`button-withdraw-quote-${row.id}`}
+                              >
+                                Didn&rsquo;t send it? Undo
+                              </button>
+                            </p>
+                          )}
+                        </td>
+                      </tr>
+
+                      {open && (
+                        <tr className="border-b border-border bg-muted/40" data-testid={`details-enquiry-${row.id}`}>
+                          <td colSpan={5} className="px-4 pb-5 pt-1">
+                            {row.requests && <p className="max-w-[720px] text-sm leading-6 text-foreground">“{row.requests}”</p>}
+                            {row.childrenAges && <p className="mt-1 text-xs text-muted-foreground">Children's ages: {row.childrenAges}</p>}
+                            {row.ownerNote && <p className="mt-1 max-w-[720px] text-xs italic text-muted-foreground">Note: {row.ownerNote}</p>}
+                            {row.quote.ok && row.quote.agreed && row.quote.priceNote && (
+                              <p className="mt-1 whitespace-pre-line text-xs text-muted-foreground">{row.quote.priceNote}</p>
+                            )}
+                            {!row.datesTaken && !row.quote.ok && (
+                              <p className="mt-1 text-xs text-muted-foreground">No quote — {row.quote.reason}</p>
+                            )}
+
+                            {row.datesTaken && (
+                              <div className="mt-2 rounded-xl border border-[#A65E45]/40 bg-[#A65E45]/[.07] px-4 py-3 text-[13px] leading-6 text-[#7a3f2c]" role="status" data-testid={`notice-dates-taken-${row.id}`}>
+                                <p className="font-semibold">
+                                  These dates are already taken ({row.datesTaken.label}, {format(parseISO(row.datesTaken.startDate), 'd MMM')} → {format(parseISO(row.datesTaken.endDate), 'd MMM yyyy')}).
+                                </p>
+                                <p className="mt-1">
+                                  No quote or booking is offered for them. If this is the guest who already booked, mark it Converted. Otherwise, offer other dates or mark it Closed.
+                                </p>
+                              </div>
+                            )}
+
+                            {editingEnquiry === row.id && (
+                              <EnquiryDetailsForm
+                                initial={detailsFrom(row)}
+                                submitLabel="Save"
+                                busy={editEnquiry.isPending}
+                                error={editEnquiry.isError ? (editEnquiry.error instanceof Error ? editEnquiry.error.message : 'Could not save the changes.') : null}
+                                onSubmit={(values) => editEnquiry.mutate({ id: row.id, values })}
+                                testId={`form-edit-enquiry-${row.id}`}
+                              />
+                            )}
+
+                            {/* Any enquiry not yet booked can be booked with the
+                                owner's own details: dates, party, price, advance. */}
+                            {!row.convertedBookingId && !row.datesTaken && (
+                              <EnquiryBookForm
+                                row={row}
+                                onBooked={() => {
+                                  refresh();
+                                  queryClient.invalidateQueries({ queryKey: GUEST_STAYS_KEY });
+                                }}
+                              />
+                            )}
+
+                            <div className="mt-3 flex flex-wrap items-center gap-1.5">
+                              <span className="mr-1 text-[10px] font-bold uppercase tracking-[.07em] text-muted-foreground">Status</span>
+                              {STATUSES.map((status) => (
+                                <button
+                                  key={status}
+                                  type="button"
+                                  onClick={() => setStatus.mutate({ id: row.id, status })}
+                                  disabled={row.status === status}
+                                  className={`rounded-full border px-3 py-1 text-[10px] font-bold uppercase tracking-[.07em] transition-colors ${row.status === status ? 'cursor-default border-primary bg-primary text-primary-foreground' : 'border-border text-muted-foreground hover:border-primary hover:text-primary'}`}
+                                  data-testid={`button-enquiry-${status}-${row.id}`}
+                                >
+                                  {status}
+                                </button>
+                              ))}
+                            </div>
+                          </td>
+                        </tr>
                       )}
-                    </div>
-                  ) : (
-                    <p className="text-[13px] leading-6 text-muted-foreground">
-                      No quote — {row.quote.reason}
-                    </p>
-                  )}
-
-                  {sendQuote.isError && sendQuote.variables === row.id && (
-                    <p className="mt-2 text-xs text-[#A65E45]" role="alert">
-                      {sendQuote.error instanceof Error
-                        ? sendQuote.error.message
-                        : 'The quote could not be sent.'}
-                    </p>
-                  )}
-
-                  {/* A refused conversion is usually a clash with dates taken
-                      since the enquiry arrived, and the server says which
-                      booking. That is the owner's decision to make, so it is
-                      shown rather than swallowed. */}
-                  {convertEnquiry.isError && convertEnquiry.variables === row.id && (
-                    <p className="mt-2 text-xs text-[#A65E45]" role="alert">
-                      {convertEnquiry.error instanceof Error
-                        ? convertEnquiry.error.message
-                        : 'The booking could not be created.'}
-                    </p>
-                  )}
-
-                  {convertEnquiry.isSuccess &&
-                    convertEnquiry.variables === row.id &&
-                    convertEnquiry.data?.booking && (
-                      <p className="mt-2 text-xs text-muted-foreground">
-                        Booking created
-                        {convertEnquiry.data.booking.reference
-                          ? ` · ${convertEnquiry.data.booking.reference}`
-                          : ''}
-                        {convertEnquiry.data.booking.status === 'pending'
-                          ? ' · pending, so it is not holding the dates yet'
-                          : ''}
-                        . It is now in Guest check-in readiness above, ready for Send info.
-                      </p>
-                    )}
-
-                  {/* Any enquiry not yet booked can be booked with the owner's
-                      own details: dates, party, agreed price, advance. */}
-                  {!row.convertedBookingId && !row.datesTaken && (
-                    <EnquiryBookForm
-                      row={row}
-                      onBooked={() => {
-                        refresh();
-                        queryClient.invalidateQueries({ queryKey: GUEST_STAYS_KEY });
-                      }}
-                    />
-                  )}
-
-                  {/* Says what actually happened. Opening WhatsApp is not the
-                      same as delivering a message, and the dates are now held
-                      on the assumption that the owner pressed send. */}
-                  {sendQuote.isSuccess &&
-                    sendQuote.variables === row.id &&
-                    sendQuote.data?.delivery === 'manual_whatsapp' &&
-                    !sendQuote.data?.opened && (
-                      <p className="mt-2 flex flex-wrap items-center gap-2 text-xs text-[#A65E45]" role="alert">
-                        <span>
-                          Your browser blocked the WhatsApp window, so nothing was sent.
-                        </span>
-                        {sendQuote.data?.whatsappUrl && (
-                          <a
-                            href={sendQuote.data.whatsappUrl}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="font-bold underline decoration-accent underline-offset-2 hover:text-primary"
-                            data-testid={`link-quote-whatsapp-${row.id}`}
-                          >
-                            Open WhatsApp with the quote
-                          </a>
-                        )}
-                      </p>
-                    )}
-
-                  {sendQuote.isSuccess &&
-                    sendQuote.variables === row.id &&
-                    sendQuote.data?.delivery === 'manual_whatsapp' &&
-                    sendQuote.data?.opened && (
-                      <p className="mt-2 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                        <span>
-                          WhatsApp opened with the quote. Send it there — the hold on these
-                          dates started just now, and the countdown is shown above.
-                        </span>
-                        <button
-                          type="button"
-                          onClick={() => withdrawQuote.mutate(row.id)}
-                          disabled={withdrawQuote.isPending}
-                          className="underline decoration-accent underline-offset-2 hover:text-primary disabled:opacity-40"
-                          data-testid={`button-withdraw-quote-${row.id}`}
-                        >
-                          Didn&rsquo;t send it? Undo
-                        </button>
-                      </p>
-                    )}
-                </div>
-
-                <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-border pt-4">
-                  <span className="text-[10px] font-bold uppercase tracking-[.07em] text-muted-foreground">
-                    {row.phone}
-                  </span>
-                  {(row.status === 'new' || row.status === 'contacted') && (
-                    <a
-                      href={enquiryFollowUpUrl(row)}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      onClick={() => {
-                        // Sending the first follow-up is what "contacted" means.
-                        if (row.status === 'new') setStatus.mutate({ id: row.id, status: 'contacted' });
-                      }}
-                      title={
-                        row.status === 'new'
-                          ? 'Opens WhatsApp with a first reply and marks this enquiry Contacted'
-                          : 'Opens WhatsApp with a short follow-up nudge — send as often as it is worth it'
-                      }
-                      className="flex items-center gap-1.5 rounded-lg bg-primary px-3 py-2 text-[10px] font-bold uppercase tracking-[.07em] text-primary-foreground transition-transform hover:-translate-y-0.5"
-                      data-testid={`button-follow-up-${row.id}`}
-                    >
-                      <MessageCircle size={12} />
-                      {row.datesTaken ? 'Tell them dates are taken' : row.status === 'new' ? 'Reply on WhatsApp' : 'Follow up'}
-                    </a>
-                  )}
-                  <span className="ml-auto flex flex-wrap gap-1.5">
-                    {STATUSES.map((status) => (
-                      <button
-                        key={status}
-                        type="button"
-                        onClick={() => setStatus.mutate({ id: row.id, status })}
-                        disabled={row.status === status}
-                        className={`rounded-full border px-3 py-1 text-[10px] font-bold uppercase tracking-[.07em] transition-colors ${row.status === status ? 'cursor-default border-primary bg-primary text-primary-foreground' : 'border-border text-muted-foreground hover:border-primary hover:text-primary'}`}
-                        data-testid={`button-enquiry-${status}-${row.id}`}
-                      >
-                        {status}
-                      </button>
-                    ))}
-                  </span>
-                </div>
-              </div>
-            ))}
+                    </Fragment>
+                  );
+                })}
+              </tbody>
+            </table>
+            {enquiries.isLoading && <p className="p-5 text-sm text-muted-foreground">Loading…</p>}
+            {!enquiries.isLoading && rows.length === 0 && (
+              <p className="p-5 text-sm text-muted-foreground">
+                No enquiries yet. They'll appear here the moment someone uses the form.
+              </p>
+            )}
           </div>
         </section>
 
@@ -1266,9 +1208,9 @@ export default function AdminGuests() {
             title="Guest check-in readiness"
             description="Pre-arrival verification, document status, guest confirmation and management handoff. Management messages never contain pricing or payment information."
           />
-          <div className="mt-4 overflow-x-auto rounded-2xl border border-border bg-card">
+          <div className={TABLE_SCROLL}>
             <table className="w-full min-w-[1180px] border-collapse text-sm">
-              <thead>
+              <thead className={TABLE_HEAD}>
                 <tr className="border-b border-border text-left text-[10px] uppercase tracking-[.08em] text-muted-foreground">
                   {STAY_COLUMNS.map((column) => (
                     <SortableHeader key={column.key} label={column.label} active={stayOrder.key === column.key} dir={stayOrder.dir} onSort={() => sortBy(column.key)} testId={`sort-stays-${column.key}`} />
@@ -1647,9 +1589,9 @@ export default function AdminGuests() {
             </p>
           </div>
 
-          <div className="mt-4 overflow-x-auto rounded-2xl border border-border bg-card">
+          <div className={TABLE_SCROLL}>
             <table className="w-full min-w-[720px] border-collapse text-sm">
-              <thead>
+              <thead className={TABLE_HEAD}>
                 <tr className="border-b border-border text-left text-[10px] uppercase tracking-[.08em] text-muted-foreground">
                   <th className="px-5 py-3 font-bold">Guest</th>
                   <th className="px-5 py-3 font-bold">Phone</th>
