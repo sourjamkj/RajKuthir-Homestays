@@ -344,6 +344,8 @@ export default function Pay() {
           currency: 'INR',
           name: 'Raj Kuthir Homestays',
           description: `Advance ${data?.reference ?? ''}`.trim(),
+          // The guest's own name and number from the booking, so the checkout opens on payment, not on "Contact details".
+          ...(body.razorpay.prefill ? { prefill: body.razorpay.prefill } : {}),
           // With a card convenience fee the guest chose UPI or card; the server already priced that choice.
           ...(only === 'upi'
             ? { method: { upi: true, card: false, netbanking: false, wallet: false, emi: false, paylater: false } }
