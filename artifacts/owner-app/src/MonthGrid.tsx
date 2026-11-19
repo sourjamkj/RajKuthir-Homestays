@@ -3,7 +3,7 @@ import { ActivityIndicator, Pressable, Text, View } from 'react-native';
 
 import { blockDates, getCalendarMonth, type CalendarDay } from './api';
 import { addDays, color, longDate, rupees, space } from './theme';
-import { Body, Button, Card, Chip, Heading, Notice, Row } from './ui';
+import { Body, Button, Card, Chip, Field, Heading, Notice, Row } from './ui';
 import { useLoad } from './useLoad';
 
 /**
@@ -62,6 +62,7 @@ export function MonthGrid({ onChanged }: { onChanged?: () => void }) {
   const cal = useLoad(() => getCalendarMonth(month));
   const [selected, setSelected] = useState<CalendarDay | null>(null);
   const [busy, setBusy] = useState(false);
+  const [reason, setReason] = useState('');
   const [notice, setNotice] = useState<{ text: string; tone: 'ok' | 'error' } | null>(null);
 
   useEffect(() => {
@@ -78,7 +79,8 @@ export function MonthGrid({ onChanged }: { onChanged?: () => void }) {
   const block = async (day: CalendarDay) => {
     setBusy(true);
     try {
-      await blockDates(day.date, addDays(day.date, 1));
+      await blockDates(day.date, addDays(day.date, 1), reason.trim());
+      setReason('');
       setNotice({ text: `${longDate(day.date)} is closed on every channel.`, tone: 'ok' });
       await cal.reload();
       setSelected(null);
@@ -186,7 +188,10 @@ export function MonthGrid({ onChanged }: { onChanged?: () => void }) {
           {selected.pricePaise !== null && <Body muted>{rupees(selected.pricePaise)} a night for 2 guests.</Body>}
           {selected.peak && <Body muted>{selected.peak}{selected.minNights ? ` · ${selected.minNights}-night minimum` : ''}</Body>}
           {selected.status === 'free' && (
-            <Button label="Block this night" kind="secondary" onPress={() => void block(selected)} busy={busy} style={{ marginTop: space(3) }} />
+            <>
+            <Field label="Reason (required)" value={reason} onChangeText={setReason} placeholder="e.g. Family visit, repairs" maxLength={120} />
+            <Button label="Block this night" kind="secondary" onPress={() => void block(selected)} busy={busy} disabled={reason.trim().length < 3} style={{ marginTop: space(3) }} />
+            </>
           )}
         </View>
       )}
