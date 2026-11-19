@@ -146,6 +146,81 @@
   --ring: 36 47% 79%;
 }
 
+/* Night at the villa: guest pages after Santiniketan's sunset (index.html sets
+   data-daylight before first paint; LightsSwitch flips it). Navy sky, cream
+   ink, lamp amber for accents. Admin and documents never get the attribute. */
+html[data-daylight="night"] {
+  color-scheme: dark;
+  --background: 219 48% 9%;
+  --foreground: 40 45% 93%;
+  --border: 218 25% 22%;
+  --input: 218 22% 30%;
+  --ring: 36 84% 65%;
+  --card: 218 41% 12%;
+  --card-foreground: 40 45% 93%;
+  --card-border: 218 25% 22%;
+  --popover: 218 41% 12%;
+  --popover-foreground: 40 45% 93%;
+  --popover-border: 218 25% 22%;
+  --primary: 40 45% 93%;
+  --primary-foreground: 219 48% 9%;
+  --secondary: 218 32% 17%;
+  --secondary-foreground: 40 45% 93%;
+  --muted: 218 30% 16%;
+  --muted-foreground: 40 16% 72%;
+  --accent: 36 84% 65%;
+  --accent-foreground: 219 48% 9%;
+  --destructive: 4 70% 62%;
+  --destructive-foreground: 219 48% 9%;
+  --button-outline: rgba(246, 241, 231, .16);
+  --badge-outline: rgba(246, 241, 231, .1);
+  --elevate-1: rgba(246, 241, 231, .04);
+  --elevate-2: rgba(246, 241, 231, .08);
+  --shadow-sm: 0 10px 25px hsl(219 60% 3% / 0.35);
+  --shadow: 0 16px 35px hsl(219 60% 3% / 0.4);
+  --shadow-md: 0 24px 55px hsl(219 60% 3% / 0.45);
+  --shadow-lg: 0 30px 70px hsl(219 60% 3% / 0.5);
+  --shadow-xl: 0 40px 90px hsl(219 60% 3% / 0.55);
+  --sand: #131d2e;
+  --terracotta: #e08a6c;
+  --forest: #070d17;
+  --footer-ink: #f5eadb;
+  --olive: #8d9478;
+  --olive-ink: #c3cbb0;
+  --amber: #f1b45b;
+  --sage: #5c4a2a;
+  --clay: #4a3238;
+  /* --pine stays: it is ink on the always-white UPI QR card */
+}
+/* Photo sections (.on-dark) were designed for a dark picture already: keep their daytime ink at night. */
+html[data-daylight="night"] .on-dark {
+  --primary: 163 30% 29%;
+  --primary-foreground: 42 43% 95%;
+  --secondary: 36 47% 79%;
+  --secondary-foreground: 153 25% 17%;
+  --accent: 13 43% 61%;
+  --accent-foreground: 42 43% 96%;
+}
+html { transition: background-color .6s ease; }
+
+/* Homepage cover: day and night photos of the same frame, chosen by data-daylight.
+   The lantern is the other light, masked to a soft circle at the cursor or finger. */
+@property --spot-r { syntax: '<length>'; inherits: true; initial-value: 0px; }
+.hero-lights { --x: -999px; --y: -999px; --spot-r: 0px; transition: --spot-r .5s ease; }
+.hero-lights.is-lit { --spot-r: 280px; }
+@media (hover: none) { .hero-lights.is-lit { --spot-r: 170px; } }
+.hero-photo { transition: opacity .9s ease; }
+html[data-daylight="night"] .hero-photo--day,
+html:not([data-daylight="night"]) .hero-photo--night { opacity: 0; }
+.hero-lantern {
+  pointer-events: none;
+  -webkit-mask-image: radial-gradient(circle var(--spot-r) at var(--x) var(--y), #000 0%, #000 40%, rgba(0,0,0,.75) 60%, rgba(0,0,0,.4) 75%, rgba(0,0,0,.12) 88%, transparent 100%);
+          mask-image: radial-gradient(circle var(--spot-r) at var(--x) var(--y), #000 0%, #000 40%, rgba(0,0,0,.75) 60%, rgba(0,0,0,.4) 75%, rgba(0,0,0,.12) 88%, transparent 100%);
+  -webkit-mask-repeat: no-repeat; mask-repeat: no-repeat;
+}
+html[data-daylight="night"] .hero-lantern--night,
+html:not([data-daylight="night"]) .hero-lantern--day { display: none; }
+
 @layer base {
   * { @apply border-border; }
   html { scroll-behavior: smooth; }

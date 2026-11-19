@@ -3,6 +3,7 @@ import { BackIcon, LeafIcon, PhoneIcon, WhatsappIcon } from '@/components/icons'
 
 import { CONFIG, NEIGHBOURHOOD, basePath, phoneHref, track } from '@/lib/site';
 import type { NeighbourhoodPlace } from '@/lib/site';
+import { LightsSwitch } from '@/components/LightsSwitch';
 
 /**
  * Planning page for the commonest trip anyone makes to Shantiniketan: two
@@ -61,6 +62,7 @@ export default function WeekendFromKolkata() {
               <span className="font-journal text-[19px] text-primary">Homestays</span>
             </span>
           </a>
+          <LightsSwitch className="ml-auto" />
           <a
             href={`${basePath}/`}
             className="flex items-center gap-2 text-[13px] font-medium text-muted-foreground transition-colors hover:text-primary"

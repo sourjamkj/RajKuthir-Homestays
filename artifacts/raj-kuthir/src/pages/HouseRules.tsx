@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { BackIcon, CalendarIcon, DownloadIcon, LeafIcon, PhoneIcon } from '@/components/icons';
 
 import { CONFIG, asset, basePath, phoneHref } from '@/lib/site';
+import { LightsSwitch } from '@/components/LightsSwitch';
 
 /**
  * The house rules, published before a guest books rather than discovered on a
@@ -112,6 +113,7 @@ export default function HouseRules() {
               <span className="font-journal text-[19px] text-primary">Homestays</span>
             </span>
           </a>
+          <LightsSwitch className="ml-auto" />
           <a
             href={`${basePath}/`}
             className="flex items-center gap-2 text-[13px] font-medium text-muted-foreground transition-colors hover:text-primary"
