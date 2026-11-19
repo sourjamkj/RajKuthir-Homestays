@@ -48,7 +48,8 @@ export type BookPaySettings = {
 
 export const DEFAULT_BOOK_PAY_SETTINGS: BookPaySettings = {
   advancePercent: 50,
-  holdMinutes: 30,
+  // Ten minutes on the payment page, like a cinema seat hold. The owner can change it in the console.
+  holdMinutes: 10,
   cardFeePercent: 0,
 };
 

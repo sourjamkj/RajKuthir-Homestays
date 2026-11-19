@@ -35,6 +35,7 @@ import { startHold, type StartInput } from "../lib/book-pay-start";
 import {
   findById,
   findByEnquiryId,
+  cancelByGuest,
   findByToken,
   getBookPaySettings,
   getScreenshot,
@@ -88,6 +89,7 @@ const quoteLimiter = createLimiter(120, HOUR);
 const startLimiter = createLimiter(20, HOUR);
 const payLimiter = createLimiter(60, HOUR);
 const utrLimiter = createLimiter(10, HOUR);
+const cancelLimiter = createLimiter(10, HOUR);
 
 function ipOf(req: Request): string {
   return req.ip ?? "unknown";
@@ -798,6 +800,35 @@ router.post("/book/pay/confirmation", async (req, res) => {
   } catch (error) {
     logger.error({ err: error }, "Could not build the confirmation PDF for the guest");
     res.status(500).json({ error: "Could not prepare the PDF just now. It has also been sent to you by WhatsApp or email." });
+  }
+});
+
+/** The guest cancels an unpaid hold from the payment page. Bearer token in the body. */
+router.post("/book/pay/cancel", async (req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  if (cancelLimiter(ipOf(req))) {
+    res.status(429).json({ error: "Too many attempts. Please call us." });
+    return;
+  }
+  const token = req.body?.token;
+  if (!looksLikePayToken(token)) {
+    res.status(404).json({ error: "This payment link is not valid." });
+    return;
+  }
+  try {
+    const found = await findByToken(token);
+    if (!found) {
+      res.status(404).json({ error: "This payment link is not valid." });
+      return;
+    }
+    if (!(await cancelByGuest(found.request.id, found.enquiry.id))) {
+      res.status(409).json({ error: "This booking can no longer be cancelled here: a payment is already on its way. Please call us." });
+      return;
+    }
+    res.json({ ok: true });
+  } catch (error) {
+    logger.error({ err: error }, "Guest cancel failed");
+    res.status(500).json({ error: "Could not cancel just now. Please try again, or call us." });
   }
 });
 

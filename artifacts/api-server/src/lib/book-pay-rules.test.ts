@@ -245,9 +245,12 @@ test("advance percentage is a setting, default 50, never above the total", () =>
   assert.equal(advanceOf(640_000, 100), 640_000);
 
   assert.equal(settingsProblem({ advancePercent: 50, holdMinutes: 30 }), null);
+  // The payment-page hold is ten minutes by default, and ten is allowed.
+  assert.equal(DEFAULT_BOOK_PAY_SETTINGS.holdMinutes, 10);
+  assert.equal(settingsProblem(DEFAULT_BOOK_PAY_SETTINGS), null);
   assert.match(settingsProblem({ advancePercent: 5, holdMinutes: 30 }) ?? "", /advance/);
   assert.match(settingsProblem({ advancePercent: 50, holdMinutes: 2 }) ?? "", /hold/);
-  assert.deepEqual(parseSettings('{"advancePercent":40}'), { advancePercent: 40, holdMinutes: 30, cardFeePercent: 0 });
+  assert.deepEqual(parseSettings('{"advancePercent":40}'), { advancePercent: 40, holdMinutes: 10, cardFeePercent: 0 });
   assert.deepEqual(parseSettings("garbage"), DEFAULT_BOOK_PAY_SETTINGS);
   assert.deepEqual(parseSettings('{"advancePercent":3}'), DEFAULT_BOOK_PAY_SETTINGS);
 });
