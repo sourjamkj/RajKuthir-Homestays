@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { BackIcon, LeafIcon, PhoneIcon, WhatsappIcon } from '@/components/icons';
 
 import { CONFIG, NEIGHBOURHOOD, basePath, phoneHref, track } from '@/lib/site';
+import { LightsSwitch } from '@/components/LightsSwitch';
 
 /**
  * Places to visit in Shantiniketan, measured from the doorstep.
@@ -64,6 +65,7 @@ export default function PlacesToVisit() {
               <span className="font-journal text-[19px] text-primary">Homestays</span>
             </span>
           </a>
+          <LightsSwitch className="ml-auto" />
           <a
             href={`${basePath}/`}
             className="flex items-center gap-2 text-[13px] font-medium text-muted-foreground transition-colors hover:text-primary"

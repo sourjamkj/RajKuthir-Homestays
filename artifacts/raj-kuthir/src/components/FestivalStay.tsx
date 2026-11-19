@@ -3,6 +3,7 @@ import { BackIcon, LeafIcon, PhoneIcon, WhatsappIcon } from '@/components/icons'
 
 import { formatRupees, rateForNight, useRatePlan, type PeakPeriod, type RatePlan } from '@/lib/rates';
 import { CONFIG, basePath, phoneHref, track } from '@/lib/site';
+import { LightsSwitch } from '@/components/LightsSwitch';
 
 /**
  * The frame shared by the festival landings (Poush Mela, Basanta Utsav).
@@ -127,6 +128,7 @@ export function FestivalStay(props: FestivalStayProps) {
               <span className="font-journal text-[19px] text-primary">Homestays</span>
             </span>
           </a>
+          <LightsSwitch className="ml-auto" />
           <a
             href={`${basePath}/`}
             className="flex items-center gap-2 text-[13px] font-medium text-muted-foreground transition-colors hover:text-primary"
