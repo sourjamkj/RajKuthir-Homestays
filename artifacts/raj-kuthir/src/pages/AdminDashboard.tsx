@@ -16,11 +16,13 @@ import {
   Link as LinkIcon,
   Loader2,
   Mail,
+  MessageCircle,
   RefreshCw,
 } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { AdminCalendar } from '@/components/AdminCalendar';
 import { AdminMailboxes } from '@/components/AdminMailboxes';
+import { AdminAutoSend } from '@/components/AdminAutoSend';
 import {
   adminFetch,
   formatDateTime,
@@ -222,6 +224,17 @@ export default function AdminDashboard() {
           site — and the owner should not have to know which channels publish
           a calendar and which only send mail in order to find the setting.
         */}
+        <section className="mt-8 pb-4" aria-label="Guest messages that send themselves">
+          <SectionHeading
+            icon={<MessageCircle size={15} />}
+            title="Guest messages that send themselves"
+            description="Choose which booking messages go to guests without waiting for you."
+          />
+          <div className="mt-4">
+            <AdminAutoSend />
+          </div>
+        </section>
+
         <section className="mt-8 pb-4" aria-label="Booking emails">
           <SectionHeading
             icon={<Mail size={15} />}

@@ -9,6 +9,7 @@ import {
   railwayStatus,
   resolveAlertEmail,
   resolveAutoreply,
+  resolveAutoSend,
   resolveCaretakerWhatsapp,
   resolveOwnerWhatsapp,
   resolveWhatsappMode,
@@ -122,4 +123,26 @@ test("Settings shows whether each Railway secret is set, and never its value", (
   const view = JSON.stringify(settingsView({}, env));
   assert.ok(!view.includes("secret-token") && !view.includes("very-secret"));
   assert.equal(Object.keys(settingsView({}, {}).alerts.push).length, OWNER_EVENTS.length);
+});
+
+test("auto-send: per message kind, falls back to the old Railway switch, sensitive to change", () => {
+  assert.deepEqual(resolveAutoSend({}, {}), { value: [], source: "default" });
+  assert.deepEqual(resolveAutoSend({}, { WHATSAPP_REQUIRE_APPROVAL: "false" }).value, ["booking_confirmed", "checkin_reminder", "checkout_today"]);
+  assert.deepEqual(resolveAutoSend({ whatsappAutoSend: [] }, { WHATSAPP_REQUIRE_APPROVAL: "false" }), { value: [], source: "console" }, "the console wins, even when empty");
+
+  const on = applySettingsPatch({}, { whatsappAutoSend: ["checkout_today", "checkin_reminder"] }, {});
+  assert.ok(on.ok && on.sensitive);
+  assert.deepEqual(on.ok && on.next.whatsappAutoSend, ["checkin_reminder", "checkout_today"], "kept in a fixed order");
+  for (const bad of [["review_request"], ["marketing"], "checkin_reminder", [1]]) {
+    assert.equal(applySettingsPatch({}, { whatsappAutoSend: bad }, {}).ok, false, JSON.stringify(bad));
+  }
+  const cleared = applySettingsPatch({ whatsappAutoSend: ["booking_confirmed"] }, { whatsappAutoSend: null }, {});
+  assert.ok(cleared.ok && cleared.next.whatsappAutoSend === null);
+
+  assert.deepEqual(parseStoredSettings(JSON.stringify({ whatsappAutoSend: ["checkin_reminder"] })).whatsappAutoSend, ["checkin_reminder"]);
+  assert.equal(parseStoredSettings(JSON.stringify({ whatsappAutoSend: ["review_request"] })).whatsappAutoSend, undefined);
+
+  const view = settingsView({ whatsappAutoSend: ["checkin_reminder"] }, {});
+  assert.equal(view.whatsapp.requireApproval, false);
+  assert.equal(view.whatsapp.autoSendOptions.length, 3);
 });

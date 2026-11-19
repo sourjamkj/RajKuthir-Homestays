@@ -109,6 +109,7 @@ export type OwnerEvent = (typeof OWNER_EVENTS)[number];
 export type SettingSource = 'console' | 'railway' | 'default';
 export type Resolved<T> = { value: T; source: SettingSource };
 export type WhatsappMode = 'manual' | 'api';
+export type AutoSendKind = 'booking_confirmed' | 'checkin_reminder' | 'checkout_today';
 
 export type SettingsView = {
   contacts: {
@@ -123,6 +124,9 @@ export type SettingsView = {
     autoreply: Resolved<boolean>;
     readiness: { ready: boolean; missing: string[]; warnings: string[] };
     requireApproval: boolean;
+    /** Booking messages that go out without approval; everything else waits. */
+    autoSend: Resolved<AutoSendKind[]>;
+    autoSendOptions: { kind: AutoSendKind; label: string; description: string }[];
   };
   alerts: {
     push: Record<OwnerEvent, boolean>;
@@ -145,6 +149,7 @@ export type SettingsPatch = Partial<{
   quietHours: { start: string; end: string } | null;
   whatsappAutoreply: boolean | null;
   whatsappMode: WhatsappMode;
+  whatsappAutoSend: AutoSendKind[] | null;
   pushEvents: Partial<Record<OwnerEvent, boolean>>;
   emailEvents: Partial<Record<OwnerEvent, boolean>>;
 }> & { confirmPassword?: string };
