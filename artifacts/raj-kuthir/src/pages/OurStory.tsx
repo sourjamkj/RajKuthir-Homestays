@@ -3,6 +3,7 @@ import { BackIcon, LeafIcon, PhoneIcon, WhatsappIcon } from '@/components/icons'
 
 import { CONFIG, asset, basePath, phoneHref, track } from '@/lib/site';
 import { ABOUT } from '@/content/about';
+import { LightsSwitch } from '@/components/LightsSwitch';
 
 /**
  * The story of the house, on a page of its own.
@@ -40,6 +41,7 @@ export default function OurStory() {
               <span className="font-journal text-[19px] text-primary">Homestays</span>
             </span>
           </a>
+          <LightsSwitch className="ml-auto" />
           <a
             href={`${basePath}/`}
             className="flex items-center gap-2 text-[13px] font-medium text-muted-foreground transition-colors hover:text-primary"

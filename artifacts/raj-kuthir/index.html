@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <script>
       // Day or night at the villa, set before first paint (src/lib/daylight.ts holds the same maths, and a test keeps them equal).
-      // Marks guest pages only; the owner's console and printable documents stay light. Nothing styles it yet.
+      // Marks guest pages only; the owner's console and printable documents stay light.
       (function () {
         if (/^\/(admin|invoice|management-documents)(\/|$)/.test(location.pathname)) return;
         var now = new Date(), r = Math.PI / 180, lat = 23.68, lon = 87.68;
@@ -16,7 +16,10 @@
         var ha = Math.acos(Math.cos(90.833 * r) / (Math.cos(lat * r) * Math.cos(dec)) - Math.tan(lat * r) * Math.tan(dec)) / r;
         var m = now.getUTCHours() * 60 + now.getUTCMinutes() + now.getUTCSeconds() / 60;
         var night = m < 720 - 4 * (lon + ha) - eq || m >= 720 - 4 * (lon - ha) - eq;
-        document.documentElement.setAttribute('data-daylight', night ? 'night' : 'day');
+        var mode = night ? 'night' : 'day';
+        // A visitor's Lights choice holds for the visit, until the sun changes state (LightsSwitch writes it).
+        try { var c = JSON.parse(sessionStorage.getItem('rk-lights') || 'null'); if (c && c.sun === mode && (c.mode === 'day' || c.mode === 'night')) mode = c.mode; } catch (e) {}
+        document.documentElement.setAttribute('data-daylight', mode);
       })();
     </script>
     <!--

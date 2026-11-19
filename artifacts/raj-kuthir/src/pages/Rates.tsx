@@ -4,6 +4,7 @@ import { BackIcon, CalendarIcon, LeafIcon, MapPinIcon, PhoneIcon, WhatsappIcon }
 import { formatRupees, petChargeText, securityDepositText, useRatePlan } from '@/lib/rates';
 import { BookAndPay } from '@/components/BookAndPay';
 import { CONFIG, basePath, phoneHref, track } from '@/lib/site';
+import { LightsSwitch } from '@/components/LightsSwitch';
 
 /**
  * The rate card, on a page a search engine can find.
@@ -80,6 +81,7 @@ export default function Rates() {
               <span className="font-journal text-[19px] text-primary">Homestays</span>
             </span>
           </a>
+          <LightsSwitch className="ml-auto" />
           <a
             href={`${basePath}/`}
             className="flex items-center gap-2 text-[13px] font-medium text-muted-foreground transition-colors hover:text-primary"

@@ -2,6 +2,7 @@ import { useEffect, useState, type FormEvent } from 'react';
 import { AlertIcon, BackIcon, CheckIcon, CopyIcon, DownloadIcon, LeafIcon, MapPinIcon, PhoneIcon, WhatsappIcon } from '@/components/icons';
 
 import { CONFIG, basePath, phoneHref } from '@/lib/site';
+import { LightsSwitch } from '@/components/LightsSwitch';
 
 /**
  * The arrival pack, unlocked with the reservation number from the guest's
@@ -197,6 +198,7 @@ export default function Welcome() {
               <span className="font-journal text-[19px] text-primary">Homestays</span>
             </span>
           </a>
+          <LightsSwitch className="ml-auto" />
           <a
             href={`${basePath}/`}
             className="flex items-center gap-2 text-[13px] font-medium text-muted-foreground transition-colors hover:text-primary"

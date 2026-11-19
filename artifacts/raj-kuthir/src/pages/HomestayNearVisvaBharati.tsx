@@ -3,6 +3,7 @@ import { BackIcon, LeafIcon, PhoneIcon, WhatsappIcon } from '@/components/icons'
 
 import { CONFIG, NEIGHBOURHOOD, basePath, phoneHref, track } from '@/lib/site';
 import type { NeighbourhoodPlace } from '@/lib/site';
+import { LightsSwitch } from '@/components/LightsSwitch';
 
 /**
  * A landing page for people whose reason for coming to Shantiniketan is the
@@ -57,6 +58,7 @@ export default function HomestayNearVisvaBharati() {
               <span className="font-journal text-[19px] text-primary">Homestays</span>
             </span>
           </a>
+          <LightsSwitch className="ml-auto" />
           <a
             href={`${basePath}/`}
             className="flex items-center gap-2 text-[13px] font-medium text-muted-foreground transition-colors hover:text-primary"

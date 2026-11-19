@@ -74,6 +74,7 @@ import {
   AdminApiError,
   markSessionExpired,
 } from '@/lib/admin-api';
+import { LightsSwitch } from '@/components/LightsSwitch';
 
 /**
  * A signed-out session used to look exactly like an empty business.
@@ -800,6 +801,8 @@ function Home() {
               </a>
             ))}
           </nav>
+
+          <LightsSwitch className="ml-auto" />
 
           <div className="hidden shrink-0 items-center gap-2 md:flex">
             <a

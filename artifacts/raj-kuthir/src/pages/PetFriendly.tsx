@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { BackIcon, CalendarIcon, LeafIcon, MapPinIcon, PhoneIcon, WhatsappIcon } from '@/components/icons';
 
 import { CONFIG, asset, basePath, phoneHref } from '@/lib/site';
+import { LightsSwitch } from '@/components/LightsSwitch';
 
 /**
  * Landing page for people searching for somewhere to stay in Shantiniketan
@@ -94,6 +95,7 @@ export default function PetFriendly() {
               <span className="font-journal text-[19px] text-primary">Homestays</span>
             </span>
           </a>
+          <LightsSwitch className="ml-auto" />
           <a
             href={`${basePath}/`}
             className="flex items-center gap-2 text-[13px] font-medium text-muted-foreground transition-colors hover:text-primary"

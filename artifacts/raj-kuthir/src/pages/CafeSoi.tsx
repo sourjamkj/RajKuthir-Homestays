@@ -3,6 +3,7 @@ import { BackIcon, LeafIcon, PhoneIcon } from '@/components/icons';
 
 import { CAFE_HOURS, CAFE_MENU, CAFE_PHONE, CAFE_PHONE_HREF, MENU_UPDATED } from '@/content/cafe-menu';
 import { basePath, track } from '@/lib/site';
+import { LightsSwitch } from '@/components/LightsSwitch';
 
 /**
  * Cafe Soi, the café on the grounds of Sobuj Potro, open to everyone.
@@ -45,6 +46,7 @@ export default function CafeSoi() {
               <span className="font-journal text-[19px] text-primary">Homestays</span>
             </span>
           </a>
+          <LightsSwitch className="ml-auto" />
           <a
             href={`${basePath}/`}
             className="flex items-center gap-2 text-[13px] font-medium text-muted-foreground transition-colors hover:text-primary"
