@@ -1503,18 +1503,17 @@ function Home() {
 
       </main>
 
-      {/* Two lines. The first is everything a guest might click — brand,
-          every page, and the ways to reach us, with Instagram and reviews as
-          icons so the row fits on a laptop. The second is the small print.
+      {/* Centred: brand, every page, then terms, privacy and contact on a
+          line of their own, the ways to reach us, and the small print.
           It scrolls with the page — only the header is pinned. */}
       <footer className="on-dark bg-forest py-6 pb-28 text-footer-ink md:pb-6" data-testid="site-footer">
         <div className="section-shell">
-          <div className="flex flex-wrap items-center justify-between gap-x-8 gap-y-4">
+          <div className="flex flex-col items-center gap-y-4 text-center">
             <div className="flex items-center gap-3">
               <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-sand text-forest"><LeafIcon /></span>
               <span className="font-journal text-lg leading-none">Raj Kuthir <span className="text-footer-ink/60">Homestays</span></span>
             </div>
-            <nav className="flex flex-wrap items-center gap-x-5 gap-y-2 text-sm text-footer-ink/70" aria-label="Footer navigation">
+            <nav className="flex max-w-4xl flex-wrap items-center justify-center gap-x-5 gap-y-2 text-sm text-footer-ink/70" aria-label="Footer navigation">
               <a href={`${basePath}/our-story`} className="transition-colors hover:text-sand" data-testid="link-footer-story">Our story</a>
               <a href={`${basePath}/places-to-visit-in-shantiniketan`} className="transition-colors hover:text-sand" data-testid="link-footer-places">Places to visit</a>
               <a href={`${basePath}/shantiniketan-weekend-trip-from-kolkata`} className="transition-colors hover:text-sand" data-testid="link-footer-weekend">Weekend from Kolkata</a>
@@ -1528,6 +1527,8 @@ function Home() {
               <a href={`${basePath}/rates`} className="transition-colors hover:text-sand" data-testid="link-footer-rates">Rates</a>
               <a href={`${basePath}/house-rules`} className="transition-colors hover:text-sand" data-testid="link-footer-house-rules">House rules</a>
               <a href={`${basePath}/welcome`} className="transition-colors hover:text-sand" data-testid="link-footer-welcome">Arriving guests</a>
+            </nav>
+            <nav className="flex flex-wrap items-center justify-center gap-x-5 gap-y-2 text-[13px] text-footer-ink/65" aria-label="Policies and contact">
               <a href={`${basePath}/cancellation-refund-policy`} className="transition-colors hover:text-sand" data-testid="link-footer-cancellation">Cancellation &amp; refunds</a>
               <a href={`${basePath}/terms`} className="transition-colors hover:text-sand" data-testid="link-footer-terms">Terms</a>
               <a href={`${basePath}/privacy-policy`} className="transition-colors hover:text-sand" data-testid="link-footer-privacy">Privacy</a>
@@ -1540,7 +1541,7 @@ function Home() {
             </div>
           </div>
 
-          <div className="mt-4 flex flex-col justify-between gap-1.5 border-t border-footer-ink/15 pt-3 text-[13px] text-footer-ink/40 sm:flex-row">
+          <div className="mt-5 flex flex-col items-center gap-1.5 border-t border-footer-ink/15 pt-3 text-center text-[13px] text-footer-ink/40 sm:flex-row sm:justify-center sm:gap-x-6">
             <p>© {new Date().getFullYear()} Raj Kuthir Homestays · Made for slower days</p>
             <p className="normal-case tracking-[.04em]" data-testid="text-footer-udyam">MSME Udyam: UDYAM-WB-04-0087351</p>
             <p className="normal-case tracking-[.04em] text-footer-ink/30" data-testid="text-footer-credit">Developed by Sourja Mukherjee</p>
