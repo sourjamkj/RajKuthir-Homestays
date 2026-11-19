@@ -11,7 +11,7 @@ import { saveTerms, termsOf } from "./enquiry-terms";
 import { datesProblem, NO_TERMS, parseEnquiryEdit, termsProblem, type EnquiryTerms } from "./enquiry-terms-rules";
 import { enquiryViews } from "./enquiry-view";
 import { createEnquiry, getEnquiry, listEnquiries, setAdvancePaid, setEnquiryStatus, updateEnquiryFields } from "./enquiries-repo";
-import { listAllEvents, releaseEvent } from "./calendar-repo";
+import { auditCalendar, listAllEvents, releaseEvent } from "./calendar-repo";
 import { createOrRefreshOnboarding, listAdminGuestStays } from "./guest-onboarding-repo";
 import { updateBooking, upsertImportedBooking } from "./ledger-repo";
 import { SITE_ORIGIN } from "./seo";
@@ -560,6 +560,25 @@ export function buildMcpServer(): McpServer {
       const saved = await upsertImportedBooking(booking);
       await logChange("booking.added_by_agent", { bookingId: saved.id, source: input.source, externalRef: input.externalRef, clash: clash.map((c) => c.reference) });
       return json({ saved: true, bookingId: saved.id, reference: saved.reference, ...(clash.length ? { doubleBookedWith: clash, warning: "DOUBLE BOOKING: tell the owner now." } : {}) });
+    },
+  );
+
+  server.registerTool(
+    "audit_calendar",
+    {
+      title: "Find unexplained blocked nights",
+      description:
+        "Upcoming blocked nights that nothing explains. no_booking: an OTA calendar shows the villa closed but no booking (from any channel) or owner block covers those nights: a reservation the site never recorded, or a closure made on the OTA itself. no_reason: an owner block with no reason. An empty list means every blocked night is a booking or an owner block with a reason.",
+      inputSchema: {},
+      annotations: { readOnlyHint: true },
+    },
+    async () => {
+      const { events, issues } = await auditCalendar();
+      return json(
+        events
+          .filter((e) => issues.has(e.id))
+          .map((e) => ({ id: e.id, issue: issues.get(e.id), source: e.source, title: e.title, startDate: e.startDate, endDate: e.endDate })),
+      );
     },
   );
 

@@ -8,7 +8,8 @@ export const BlockDatesBody = z
   .object({
     startDate: isoDate,
     endDate: isoDate,
-    title: z.string().trim().max(120).optional(),
+    title: z.string().trim().min(3, "Add a reason for blocking these dates (e.g. family visit, repairs).").max(120)
+      .refine((t) => t !== "Blocked by host", "Add a reason for blocking these dates (e.g. family visit, repairs)."),
     note: z.string().trim().max(500).optional(),
   })
   .refine((value) => value.startDate < value.endDate, {
@@ -24,6 +25,8 @@ export const CalendarEventDto = z.object({
   title: z.string().nullable(),
   note: z.string().nullable().optional(),
   editable: z.boolean(),
+  /** Set when nothing explains this block: no booking behind it, or an owner block without a reason. */
+  issue: z.enum(["no_booking", "no_reason"]).optional(),
 });
 
 export type CalendarEventDto = z.infer<typeof CalendarEventDto>;

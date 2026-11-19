@@ -16,6 +16,7 @@ import {
 import { readLiveHolds } from "./book-pay-repo";
 import { holdsAsEvents } from "./book-pay-rules";
 import { bookingsGoneFromFeed } from "./feed-cancel-rules.ts";
+import { auditCalendarRows, type AuditIssue } from "./calendar-audit-rules.ts";
 import { todayInIndia } from "./guest-lookup";
 import { logger } from "./logger";
 
@@ -33,6 +34,17 @@ export const OWNED_SOURCES: CalendarSource[] = ["manual", "direct"];
  * OTA feeds that label reservations "Not available" or "Closed" would cause
  * the dashboard to show 0 upcoming bookings.
  */
+/** Upcoming events with the reason each one is unexplained (no booking, or an owner block without a reason). */
+export async function auditCalendar(): Promise<{ events: MergedEvent[]; issues: Map<string, AuditIssue> }> {
+  const today = todayInIndia();
+  const [events, stays] = await Promise.all([
+    listAllEvents(),
+    db.select({ checkIn: bookings.checkIn, checkOut: bookings.checkOut }).from(bookings)
+      .where(and(eq(bookings.status, "confirmed"), gt(bookings.checkOut, today))),
+  ]);
+  return { events, issues: auditCalendarRows(events, stays, today) };
+}
+
 export async function listAllEvents(): Promise<MergedEvent[]> {
   const events = await db
     .select()

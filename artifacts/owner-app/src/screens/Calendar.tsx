@@ -37,12 +37,12 @@ export default function Calendar() {
     .filter((e) => e.endDate > today)
     .sort((a, b) => a.startDate.localeCompare(b.startDate));
 
-  const valid = ISO.test(from) && ISO.test(to) && to > from;
+  const valid = ISO.test(from) && ISO.test(to) && to > from && label.trim().length >= 3;
 
   const block = async () => {
     setBusy('block');
     try {
-      await blockDates(from, to, label.trim() || undefined);
+      await blockDates(from, to, label.trim());
       setMessage({ text: `Blocked ${longDate(from)} → ${longDate(to)}.`, tone: 'ok' });
       setLabel('');
       await cal.reload();
@@ -111,7 +111,7 @@ export default function Calendar() {
           <Button label="−1 day" kind="secondary" onPress={() => ISO.test(to) && setTo(addDays(to, -1))} />
           <Button label="+1 day" kind="secondary" onPress={() => ISO.test(to) && setTo(addDays(to, 1))} />
         </Row>
-        <Field label="Note (optional)" value={label} onChangeText={setLabel} placeholder="e.g. Family visit, repairs" maxLength={120} />
+        <Field label="Reason (required)" value={label} onChangeText={setLabel} placeholder="e.g. Family visit, repairs" maxLength={120} />
         <Body muted style={{ marginBottom: space(3) }}>
           {valid ? `${nights(from, to)} night${nights(from, to) === 1 ? '' : 's'}: ${longDate(from)} → ${longDate(to)}` : 'Check-out must be after the first night.'}
         </Body>

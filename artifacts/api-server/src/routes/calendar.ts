@@ -12,6 +12,7 @@ import {
 import {
   deleteOwnedEvent,
   createManualBlock,
+  auditCalendar,
   listAllEvents,
   listFeedEvents,
   listPublicBlocks,
@@ -76,7 +77,7 @@ function isCalendarSource(value: unknown): value is CalendarEventDtoType["source
   );
 }
 
-function toEventDto(event: Awaited<ReturnType<typeof listAllEvents>>[number]) {
+function toEventDto(event: Awaited<ReturnType<typeof listAllEvents>>[number], issue?: "no_booking" | "no_reason") {
   return CalendarEventDto.parse({
     id: event.id,
     source: event.source,
@@ -90,6 +91,7 @@ function toEventDto(event: Awaited<ReturnType<typeof listAllEvents>>[number]) {
     // An OTA row that is not a booking is that OTA's "not available" copy of
     // a block, and can be freed too (calendar-release-rules.ts).
     editable: event.origin === "event",
+    ...(issue ? { issue } : {}),
   });
 }
 
@@ -111,9 +113,9 @@ function isValidFeedToken(value: unknown): value is string {
 }
 
 router.get("/calendar/events", requireAdmin, async (_req, res) => {
-  const events = await listAllEvents();
+  const { events, issues } = await auditCalendar();
   res.setHeader("Cache-Control", "no-store");
-  res.json({ events: events.map(toEventDto) });
+  res.json({ events: events.map((e) => toEventDto(e, issues.get(e.id))) });
 });
 
 router.get("/calendar/public", async (_req, res) => {
@@ -168,7 +170,7 @@ router.post("/calendar/sync", requireAdmin, async (req, res) => {
   res.json({
     ...result,
     totalEvents: events.length,
-    events: events.map(toEventDto),
+    events: events.map((e) => toEventDto(e)),
   });
 });
 

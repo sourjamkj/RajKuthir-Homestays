@@ -14,6 +14,7 @@ type CalendarEventDto = {
   endDate: string;
   title: string | null;
   note?: string | null;
+  issue?: 'no_booking' | 'no_reason';
   editable: boolean;
 };
 
@@ -191,7 +192,7 @@ export function AdminCalendar() {
     blockMutation.mutate({
       startDate: format(range.from, "yyyy-MM-dd"),
       endDate: format(endExclusive, "yyyy-MM-dd"),
-      title: title.trim() || undefined,
+      title: title.trim(),
     });
   }
 
@@ -255,13 +256,15 @@ export function AdminCalendar() {
           <input
             value={title}
             onChange={(event) => setTitle(event.target.value)}
-            placeholder="Optional label (e.g. Family stay)"
+            placeholder="Reason (required), e.g. family visit, repairs"
+            aria-label="Reason for blocking"
+            required
             className="rounded-lg border border-border bg-background px-3 py-2 text-sm"
             maxLength={120}
           />
           <button
             type="button"
-            disabled={!range?.from || blockMutation.isPending}
+            disabled={!range?.from || title.trim().length < 3 || blockMutation.isPending}
             onClick={handleBlock}
             className="flex items-center justify-center gap-2 rounded-full bg-primary px-5 py-2.5 text-xs font-bold uppercase tracking-[.12em] text-primary-foreground disabled:opacity-50"
           >
@@ -328,6 +331,13 @@ export function AdminCalendar() {
                       {event.title ?? "Reserved"}
                     </span>
                   </div>
+                  {event.issue && (
+                    <p className="mt-1 text-xs font-semibold text-[#A65E45]" data-testid={`issue-${event.id}`}>
+                      {event.issue === 'no_booking'
+                        ? `${SOURCE_META[event.source].label} shows these nights closed, but no booking covers them. Add the booking, or reopen the dates on ${SOURCE_META[event.source].label}.`
+                        : 'No reason given. Unblock and block again with a reason.'}
+                    </p>
+                  )}
                   <p className="mt-1 text-xs text-muted-foreground">
                     {format(parseISO(event.startDate), "d MMM")} →{" "}
                     {format(parseISO(event.endDate), "d MMM yyyy")}
