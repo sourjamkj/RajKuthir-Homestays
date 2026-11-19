@@ -76,6 +76,7 @@ import {
 } from '@/lib/admin-api';
 import { LightsSwitch } from '@/components/LightsSwitch';
 import { HeroPhotos, SunsetLine } from '@/components/HeroLights';
+import { Evenings, FestivalsAndClose, VillaStack } from '@/components/HomeStory';
 
 /**
  * A signed-out session used to look exactly like an empty business.
@@ -921,6 +922,8 @@ function Home() {
           </div>
         </section>
 
+        <VillaStack />
+
         <section className="section-shell py-24 md:py-32" aria-labelledby="amenities-title">
           <div className="grid gap-12 lg:grid-cols-[.7fr_1.3fr] lg:gap-24">
             <div><h2 id="amenities-title" className="font-journal text-5xl leading-[.95] text-primary md:text-6xl">The small<br />comforts.</h2><p className="mt-7 max-w-[300px] text-sm leading-6 text-muted-foreground">The things that make a private stay feel easy, without turning it into a checklist.</p></div>
@@ -942,6 +945,8 @@ function Home() {
             </div>
           </div>
         </section>
+
+        <Evenings />
 
         <section id="pet-friendly" className="scroll-mt-24 bg-secondary/60 py-24 md:py-32" aria-labelledby="pet-title">
           <div className="section-shell grid items-center gap-12 lg:grid-cols-[1.1fr_.9fr] lg:gap-24">
@@ -1430,6 +1435,8 @@ function Home() {
             ))}
           </div>
         </section>
+
+        <FestivalsAndClose plan={ratePlan.data} />
 
         <section className="border-t border-border bg-card py-24 md:py-32" aria-labelledby="faq-title">
           {/* One centred column, not the wide two-column split this section
