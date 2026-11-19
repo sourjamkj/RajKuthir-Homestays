@@ -41,6 +41,7 @@ const ROBOTS_TXT = readFileSync(
 );
 
 const APP_TSX = readFileSync(path.join(clientRoot, "src/App.tsx"), "utf8");
+const HERO_TSX = readFileSync(path.join(clientRoot, "src/components/HeroLights.tsx"), "utf8");
 
 /** The rendered pet-friendly landing page, read so FAQ markup can be checked
  *  against copy a visitor can actually see. */
@@ -1306,7 +1307,7 @@ test("images · only the LCP image is fetched at high priority", () => {
     assert.ok(high <= 1, `${route}: ${high} images marked fetchPriority="high"`);
   }
   // The homepage hero is its largest contentful paint, so it keeps priority.
-  const hero = imgTags(APP_TSX).find((t) => t.includes("IMG.villaNight"));
+  const hero = imgTags(HERO_TSX).find((t) => t.includes("src={DAY}"));
   assert.ok(hero, "the homepage hero image is missing");
   assert.ok(/fetchPriority="high"/.test(hero!), "the hero lost fetchPriority");
   assert.ok(/loading="eager"/.test(hero!), "the hero is no longer eager");
@@ -1458,12 +1459,13 @@ test("preload · the homepage preloads its LCP image, and only the homepage", ()
 
   const home = preloads(render("/"));
   assert.equal(home.length, 1, "the homepage should preload exactly one image");
-  assert.equal(home[0]![1], "/villa-night.jpg");
+  assert.equal(home[0]![1], "/hero-day.jpg");
   assert.match(home[0]![0], /type="image\/jpeg"/);
   assert.match(home[0]![0], /fetchpriority="high"/);
 
   // It is the file the hero actually renders, eagerly and at high priority.
-  assert.match(APP_TSX, /villaNight: asset\('villa-night\.jpg'\)/);
+  assert.match(HERO_TSX, /const DAY = asset\("hero-day\.jpg"\)/);
+  assert.match(APP_TSX, /<HeroPhotos \/>/);
 
   for (const route of [...PUBLIC_ROUTES.filter((r) => r !== "/"), ...PRIVATE_ROUTES, ...UNKNOWN_ROUTES]) {
     assert.equal(preloads(render(route)).length, 0, `${route} preloads the homepage hero`);
