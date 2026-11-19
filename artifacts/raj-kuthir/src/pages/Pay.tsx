@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState, type ChangeEvent, type FormEvent } from 'react';
-import { AlertIcon, CheckCircleIcon, ClockIcon, CopyIcon, DownloadIcon, ShareIcon, SpinnerIcon, UploadIcon, WhatsappIcon } from '@/components/icons';
+import { AlertIcon, CheckCircleIcon, CheckIcon, ClockIcon, CopyIcon, DownloadIcon, LockIcon, ShareIcon, SpinnerIcon, UploadIcon, WhatsappIcon } from '@/components/icons';
 
 import { formatRupees } from '@/lib/rates';
 import { CONFIG, basePath, phoneHref } from '@/lib/site';
@@ -143,6 +143,8 @@ export default function Pay() {
   const [copied, setCopied] = useState(false);
   const [docBusy, setDocBusy] = useState<'download' | 'share' | null>(null);
   const [docError, setDocError] = useState<string | null>(null);
+  // The method the guest picked: Razorpay UPI, Razorpay card / net banking, or paying the UPI QR themselves.
+  const [method, setMethod] = useState<'upi' | 'card' | 'qr' | null>(null);
   const mobile = isMobile();
 
   useEffect(() => {
@@ -450,6 +452,11 @@ export default function Pay() {
 
   const payable = data?.status === 'awaiting_payment' && left > 0 && data.upiUrl;
   const online = data?.status === 'awaiting_payment' && left > 0 && data.onlinePay && !verifying;
+  const fee = data?.cardFee && data.cardFee.feePaise > 0 ? data.cardFee : null;
+  // Online first when it is switched on; the QR is the fallback, never the default.
+  const chosen = method ?? (online ? 'upi' : payable ? 'qr' : null);
+  const dueNow = data ? data.advancePaise + (chosen === 'card' && fee ? fee.feePaise : 0) : 0;
+  const holdTotal = data ? Math.max(left, data.secondsLeft) : 0;
 
   // The guest's own WhatsApp, opened on a chat with us, the booking already typed.
   const ownerWhatsappUrl = data
@@ -470,14 +477,44 @@ export default function Pay() {
       )}`
     : '';
 
-  return (
-    <div className="min-h-[100dvh] bg-background px-4 py-10 text-foreground">
-      <main className="mx-auto max-w-[560px]">
-        <a href={`${basePath}/`} className="eyebrow text-accent">Raj Kuthir Homestays – Sobuj Potro</a>
-        <h1 className="mt-3 font-journal text-4xl leading-tight text-primary">Complete your booking</h1>
+  const methodOptions: Array<{ id: 'upi' | 'card' | 'qr'; title: string; detail: string; badge: string; amount: number }> = data
+    ? [
+        ...(online
+          ? fee
+            ? [
+                { id: 'upi' as const, title: 'UPI', detail: 'GPay, PhonePe, Paytm, BHIM or any UPI app', badge: 'No fee', amount: data.advancePaise },
+                { id: 'card' as const, title: 'Card or net banking', detail: `Debit or credit card, or your bank. Includes a ${fee.percent}% convenience fee, not refundable.`, badge: `+${formatRupees(fee.feePaise)}`, amount: data.advancePaise + fee.feePaise },
+              ]
+            : [{ id: 'upi' as const, title: 'UPI, card or net banking', detail: 'Any UPI app, debit or credit card, or your bank', badge: 'Instant', amount: data.advancePaise }]
+          : []),
+        ...(payable
+          ? [{ id: 'qr' as const, title: mobile ? 'Pay from my UPI app' : 'Scan a UPI QR myself', detail: 'Pay us directly, then enter the 12-digit transaction ID. We confirm once we see it.', badge: 'Manual', amount: data.advancePaise }]
+          : []),
+      ]
+    : [];
 
+  const startPayment = () => {
+    if (chosen === 'qr') return;
+    void payOnline(fee ? (chosen === 'card' ? 'card' : 'upi') : undefined);
+  };
+
+  return (
+    <div className="min-h-[100dvh] bg-background text-foreground">
+      <header className="border-b border-border bg-card/70">
+        <div className="mx-auto flex max-w-[1080px] items-center justify-between gap-4 px-4 py-4">
+          <a href={`${basePath}/`} className="min-w-0">
+            <span className="block font-journal text-xl leading-none text-primary">Raj Kuthir Homestays</span>
+            <span className="eyebrow mt-1 block text-accent">Sobuj Potro · Shantiniketan</span>
+          </a>
+          <span className="flex shrink-0 items-center gap-1.5 text-xs font-semibold text-primary/80">
+            <LockIcon /> Secure checkout
+          </span>
+        </div>
+      </header>
+
+      <main className="mx-auto max-w-[1080px] px-4 pb-16 pt-8">
         {error && (
-          <p className="mt-6 flex items-start gap-2 rounded-xl border border-terracotta/40 bg-terracotta/5 p-4 text-sm text-terracotta" role="alert">
+          <p className="flex items-start gap-2 rounded-xl border border-terracotta/40 bg-terracotta/5 p-4 text-sm text-terracotta" role="alert">
             <AlertIcon className="mt-0.5 shrink-0" /> {error}
           </p>
         )}
@@ -488,212 +525,213 @@ export default function Pay() {
 
         {data && (
           <>
-            <section className="mt-6 rounded-2xl border border-border bg-card p-5" aria-label="Booking summary" data-testid="pay-summary">
-              <p className="text-sm text-primary/80">Hello {data.guestFirstName},</p>
-              <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 text-sm tabular-nums">
-                <dt className="text-muted-foreground">Check-in</dt><dd className="text-right text-primary">{pretty(data.checkIn)}</dd>
-                <dt className="text-muted-foreground">Check-out</dt><dd className="text-right text-primary">{pretty(data.checkOut)}</dd>
-                <dt className="text-muted-foreground">Stay</dt><dd className="text-right text-primary">{data.nights} night{data.nights === 1 ? '' : 's'} · {data.guests} guest{data.guests === 1 ? '' : 's'}{data.pets ? ` · ${data.pets} pet${data.pets === 1 ? '' : 's'}` : ''}</dd>
-                <dt className="text-muted-foreground">Total</dt><dd className="text-right text-primary">{formatRupees(data.totalPaise)}</dd>
-                <dt className="font-bold text-primary">{data.advancePercent >= 100 ? 'Peak dates, paid in full now' : `Advance now (${data.advancePercent}%)`}</dt><dd className="text-right text-lg font-bold text-primary" data-testid="text-pay-advance">{formatRupees(data.advancePaise)}</dd>
-                <dt className="text-muted-foreground">Balance at check-in</dt><dd className="text-right text-primary">{formatRupees(data.balancePaise)}</dd>
-                {data.securityDepositPaise ? (
-                  <>
-                    <dt className="text-muted-foreground">Security deposit (refundable)</dt><dd className="text-right text-primary">{formatRupees(data.securityDepositPaise)} at check-in</dd>
-                  </>
-                ) : null}
-                <dt className="text-muted-foreground">Reference</dt><dd className="text-right font-mono text-primary">{data.reference}</dd>
-              </dl>
-            </section>
+            <h1 className="font-journal text-4xl leading-tight text-primary md:text-5xl">
+              {data.status === 'confirmed' ? 'You are booked in.' : data.status === 'submitted' ? 'Payment received, checking now.' : 'Complete your booking'}
+            </h1>
+            <p className="mt-2 text-sm text-muted-foreground">Hello {data.guestFirstName}, booking <span className="font-mono text-primary">{data.reference}</span></p>
 
-            <p
-              className={`mt-5 flex items-start gap-2 rounded-xl p-4 text-sm ${data.status === 'confirmed' ? 'bg-primary text-primary-foreground' : data.status === 'submitted' ? 'bg-secondary text-primary' : data.status === 'awaiting_payment' && left > 0 ? 'bg-card text-primary' : 'border border-terracotta/40 bg-terracotta/5 text-terracotta'}`}
+            {/* The hold: the one deadline on this page, with the time it has left. */}
+            <div
+              className={`mt-6 rounded-2xl p-4 text-sm ${data.status === 'confirmed' ? 'bg-primary text-primary-foreground' : data.status === 'submitted' ? 'bg-secondary text-primary' : data.status === 'awaiting_payment' && left > 0 ? 'border border-border bg-card text-primary' : 'border border-terracotta/40 bg-terracotta/5 text-terracotta'}`}
               role="status"
               data-testid="text-pay-status"
             >
-              {data.status === 'awaiting_payment' && left > 0 ? <ClockIcon className="mt-0.5 shrink-0" /> : data.status === 'submitted' || data.status === 'confirmed' ? <CheckCircleIcon className="mt-0.5 shrink-0" /> : <AlertIcon className="mt-0.5 shrink-0" />}
-              <span>
-                {data.status === 'awaiting_payment' && left <= 0 ? 'This hold has expired and the dates have been released.' : data.statusText}
-                {data.status === 'awaiting_payment' && left > 0 && <strong className="ml-1 tabular-nums" data-testid="text-pay-countdown"> {clock(left)} left.</strong>}
-              </span>
-            </p>
-
-            {data.document && (
-              <section className="mt-5 rounded-2xl border border-border bg-card p-5" aria-label="Your booking document" data-testid="pay-document">
-                <p className="text-sm font-bold text-primary">
-                  {data.document === 'confirmation' ? 'Your booking confirmation' : 'Your booking summary'}
-                </p>
-                <p className="mt-1 text-xs text-muted-foreground">
-                  {data.document === 'confirmation'
-                    ? 'Your reference, what you have paid and the balance due at check-in.'
-                    : 'Your dates, the amount and a QR code to pay the advance. Payment pending: the booking is confirmed once the advance reaches us.'}
-                </p>
-                <div className="mt-4 grid gap-2 sm:grid-cols-2">
-                  <button
-                    type="button"
-                    onClick={downloadDocument}
-                    disabled={docBusy !== null}
-                    className="flex items-center justify-center gap-2 rounded-full bg-primary px-4 py-3 text-sm font-semibold text-primary-foreground disabled:opacity-60"
-                    data-testid="button-download-document"
-                  >
-                    {docBusy === 'download' ? <SpinnerIcon className="animate-spin" /> : <DownloadIcon />} Download PDF
-                  </button>
-                  <button
-                    type="button"
-                    onClick={shareDocument}
-                    disabled={docBusy !== null}
-                    className="flex items-center justify-center gap-2 rounded-full border border-primary/25 px-4 py-3 text-sm font-semibold text-primary disabled:opacity-60"
-                    data-testid="button-share-document"
-                  >
-                    {docBusy === 'share' ? <SpinnerIcon className="animate-spin" /> : <ShareIcon />} Share PDF
-                  </button>
+              <p className="flex items-start gap-2">
+                {data.status === 'awaiting_payment' && left > 0 ? <ClockIcon className="mt-0.5 shrink-0" /> : data.status === 'submitted' || data.status === 'confirmed' ? <CheckCircleIcon className="mt-0.5 shrink-0" /> : <AlertIcon className="mt-0.5 shrink-0" />}
+                <span className="flex-1">{data.status === 'awaiting_payment' && left <= 0 ? 'This hold has expired and the dates have been released.' : data.statusText}</span>
+                {data.status === 'awaiting_payment' && left > 0 && <strong className="shrink-0 tabular-nums" data-testid="text-pay-countdown">{clock(left)} left</strong>}
+              </p>
+              {data.status === 'awaiting_payment' && left > 0 && holdTotal > 0 && (
+                <div className="mt-3 h-1 overflow-hidden rounded-full bg-primary/10" aria-hidden="true">
+                  <div className="h-full rounded-full bg-primary transition-[width] duration-1000 ease-linear" style={{ width: `${Math.min(100, (left / holdTotal) * 100)}%` }} />
                 </div>
-                <a
-                  href={ownerWhatsappUrl}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="mt-2 flex items-center justify-center gap-2 rounded-full bg-[#1f7a4d] px-4 py-3 text-sm font-semibold text-white"
-                  data-testid="link-whatsapp-owner"
-                >
-                  <WhatsappIcon /> WhatsApp your booking to us
-                </a>
-                <p className="mt-2 text-center text-xs text-muted-foreground">
-                  Opens your WhatsApp with your booking details typed in. To send the PDF too, tap Share PDF and choose our chat ({CONFIG.hostPhone}).
+              )}
+            </div>
+
+            {/* Phone: summary, then payment, then the PDF. Wide screen: payment on the left, summary and PDF on the right. */}
+            <div className="mt-8 grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_380px] lg:grid-rows-[auto_1fr] lg:gap-x-8">
+                <section className="rounded-2xl border border-border bg-card p-5 lg:col-start-2 lg:row-start-1" aria-label="Booking summary" data-testid="pay-summary">
+                  <p className="eyebrow text-muted-foreground">Your stay</p>
+                  <p className="mt-2 font-journal text-2xl leading-tight text-primary">Sobuj Potro, the whole villa</p>
+                  <dl className="mt-4 grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-sm tabular-nums">
+                    <dt className="text-muted-foreground">Check-in</dt><dd className="text-right text-primary">{pretty(data.checkIn)}, 12 noon</dd>
+                    <dt className="text-muted-foreground">Check-out</dt><dd className="text-right text-primary">{pretty(data.checkOut)}, 11 am</dd>
+                    <dt className="text-muted-foreground">Stay</dt><dd className="text-right text-primary">{data.nights} night{data.nights === 1 ? '' : 's'} · {data.guests} guest{data.guests === 1 ? '' : 's'}{data.pets ? ` · ${data.pets} pet${data.pets === 1 ? '' : 's'}` : ''}</dd>
+                  </dl>
+                  <dl className="mt-4 grid grid-cols-[1fr_auto] gap-x-4 gap-y-2 border-t border-border pt-4 text-sm tabular-nums">
+                    <dt className="text-muted-foreground">Total for the stay</dt><dd className="text-right text-primary">{formatRupees(data.totalPaise)}</dd>
+                    <dt className="text-muted-foreground">{data.advancePercent >= 100 ? 'Peak dates, paid in full' : `Advance (${data.advancePercent}%)`}</dt><dd className="text-right text-primary">{formatRupees(data.advancePaise)}</dd>
+                    {chosen === 'card' && fee && data.status === 'awaiting_payment' && (
+                      <>
+                        <dt className="text-muted-foreground">Convenience fee ({fee.percent}%)</dt><dd className="text-right text-primary" data-testid="text-card-fee">{formatRupees(fee.feePaise)}</dd>
+                      </>
+                    )}
+                    <dt className="text-muted-foreground">Balance at check-in</dt><dd className="text-right text-primary">{formatRupees(data.balancePaise)}</dd>
+                    {data.securityDepositPaise ? (
+                      <>
+                        <dt className="text-muted-foreground">Security deposit, refundable</dt><dd className="text-right text-primary">{formatRupees(data.securityDepositPaise)} at check-in</dd>
+                      </>
+                    ) : null}
+                  </dl>
+                  {data.status === 'awaiting_payment' && (
+                    <div className="mt-4 flex items-baseline justify-between border-t border-border pt-4">
+                      <span className="text-sm font-bold text-primary">Pay now</span>
+                      <span className="text-2xl font-bold tabular-nums text-primary" data-testid="text-pay-advance">{formatRupees(dueNow)}</span>
+                    </div>
+                  )}
+                </section>
+
+              <div className="lg:col-start-1 lg:row-span-2 lg:row-start-1">
+                {verifying && (
+                  <p className="mb-5 flex items-center gap-2 rounded-xl bg-card p-4 text-sm text-primary" role="status" data-testid="text-pay-verifying">
+                    <SpinnerIcon className="animate-spin" /> {onlineNote ?? 'Checking your payment…'}
+                  </p>
+                )}
+                {!verifying && onlineNote && (
+                  <p className="mb-5 flex items-start gap-2 rounded-xl border border-border bg-card p-4 text-sm text-primary" role="status" data-testid="text-pay-online-note">
+                    <AlertIcon className="mt-0.5 shrink-0" /> {onlineNote}
+                  </p>
+                )}
+
+                {methodOptions.length > 0 && !verifying && (
+                  <section aria-labelledby="pay-method-title">
+                    <h2 id="pay-method-title" className="text-lg font-bold text-primary">How would you like to pay?</h2>
+                    <div className="mt-4 space-y-3" role="radiogroup" aria-labelledby="pay-method-title">
+                      {methodOptions.map((option) => {
+                        const active = chosen === option.id;
+                        return (
+                          <label
+                            key={option.id}
+                            className={`flex cursor-pointer items-start gap-4 rounded-2xl border bg-card p-4 transition-colors ${active ? 'border-primary ring-1 ring-primary' : 'border-border hover:border-primary/40'}`}
+                            data-testid={`pay-method-${option.id}`}
+                          >
+                            <input type="radio" name="pay-method" value={option.id} checked={active} onChange={() => setMethod(option.id)} className="sr-only" />
+                            <span className={`mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded-full border-2 ${active ? 'border-primary bg-primary text-primary-foreground' : 'border-border'}`} aria-hidden="true">
+                              {active && <CheckIcon />}
+                            </span>
+                            <span className="min-w-0 flex-1">
+                              <span className="flex flex-wrap items-center gap-2">
+                                <span className="font-semibold text-primary">{option.title}</span>
+                                <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-[.07em] ${option.badge.startsWith('+') ? 'bg-terracotta/10 text-terracotta' : 'bg-secondary text-primary'}`}>{option.badge}</span>
+                              </span>
+                              <span className="mt-1 block text-xs leading-5 text-muted-foreground">{option.detail}</span>
+                            </span>
+                            <span className="shrink-0 font-semibold tabular-nums text-primary">{formatRupees(option.amount)}</span>
+                          </label>
+                        );
+                      })}
+                    </div>
+
+                    {chosen !== 'qr' && (
+                      <>
+                        <button
+                          type="button"
+                          onClick={startPayment}
+                          disabled={opening !== null}
+                          className="mt-6 flex w-full items-center justify-center gap-2 rounded-full bg-primary px-5 py-4 text-base font-semibold text-primary-foreground transition-transform hover:-translate-y-0.5 disabled:translate-y-0 disabled:opacity-60"
+                          data-testid={fee ? `button-pay-online-${chosen === 'card' ? 'card' : 'upi'}` : 'button-pay-online'}
+                        >
+                          {opening ? <SpinnerIcon className="animate-spin" /> : <LockIcon />} Pay {formatRupees(dueNow)} securely
+                        </button>
+                        <p className="mt-3 text-center text-xs leading-5 text-muted-foreground">
+                          Payments are processed by Razorpay. We never see your card details or UPI PIN. Your booking is confirmed the moment the payment goes through.
+                        </p>
+                      </>
+                    )}
+                  </section>
+                )}
+
+                {payable && chosen === 'qr' && !verifying && (
+                  <section className="mt-6 space-y-5" aria-label="Pay by UPI">
+                    <a
+                      href={data.upiUrl!}
+                      className={`flex w-full items-center justify-center gap-2 rounded-full bg-primary px-5 py-4 text-sm font-semibold text-primary-foreground ${mobile ? '' : 'md:hidden'}`}
+                      data-testid="link-pay-upi"
+                    >
+                      Open my UPI app to pay {formatRupees(data.advancePaise)}
+                    </a>
+                    {data.qrSvg && (
+                      <div className={`${mobile ? 'hidden' : 'flex'} flex-col items-center rounded-2xl border border-border bg-white p-5`} data-testid="pay-qr">
+                        {/* Generated by the server from the same upi:// link; no external QR service. */}
+                        <div className="h-56 w-56" dangerouslySetInnerHTML={{ __html: data.qrSvg }} />
+                        <p className="mt-3 text-center text-xs text-pine">Scan with any UPI app (GPay, PhonePe, Paytm, BHIM). The amount fills itself.</p>
+                      </div>
+                    )}
+                    {data.payee && (
+                      <p className="text-center text-xs text-muted-foreground">
+                        Or pay {formatRupees(data.advancePaise)} to <span className="font-mono text-primary">{data.payee.upiId}</span> ({data.payee.name}) with note <span className="font-mono text-primary">{data.reference}</span>
+                        <button type="button" onClick={copyUpi} className="ml-2 inline-flex items-center gap-1 text-accent underline underline-offset-2"><CopyIcon /> {copied ? 'Copied' : 'Copy UPI ID'}</button>
+                      </p>
+                    )}
+
+                    <form onSubmit={submit} className="space-y-4 rounded-2xl border border-border bg-card p-5" data-testid="form-pay-utr">
+                      <p className="text-sm font-bold text-primary">Paid? Tell us the transaction ID</p>
+                      <label className="block">
+                        <span className="eyebrow text-muted-foreground">UPI transaction ID / UTR (12 digits) *</span>
+                        <input
+                          id="pay-utr"
+                          required
+                          inputMode="numeric"
+                          autoComplete="off"
+                          maxLength={16}
+                          value={utr}
+                          onChange={(event) => setUtr(event.target.value)}
+                          className="mt-2 w-full border-b border-border bg-transparent px-0 py-3 font-mono text-lg tracking-widest text-primary focus:border-primary"
+                          placeholder="412345678901"
+                          data-testid="input-pay-utr"
+                        />
+                      </label>
+                      <label className="flex cursor-pointer items-center gap-2 text-xs text-muted-foreground">
+                        <UploadIcon />
+                        <span>{file ? file.name : 'Add payment screenshot (optional, image up to 5 MB)'}</span>
+                        <input
+                          id="pay-screenshot"
+                          type="file"
+                          accept="image/jpeg,image/png,image/webp"
+                          className="sr-only"
+                          onChange={(event: ChangeEvent<HTMLInputElement>) => setFile(event.target.files?.[0] ?? null)}
+                          data-testid="input-pay-screenshot"
+                        />
+                      </label>
+                      {formError && <p className="text-[13px] text-terracotta" role="alert">{formError}</p>}
+                      <button
+                        type="submit"
+                        disabled={sending}
+                        className="flex w-full items-center justify-center gap-2 rounded-full border border-primary/25 px-5 py-3.5 text-sm font-semibold text-primary hover:bg-primary/5 disabled:opacity-40"
+                        data-testid="button-pay-submit"
+                      >
+                        {sending && <SpinnerIcon className="animate-spin" />} I have paid: submit
+                      </button>
+                    </form>
+                  </section>
+                )}
+
+                <p className="mt-8 text-center text-xs text-muted-foreground lg:text-left">
+                  Questions or a problem paying? Call or WhatsApp <a href={phoneHref(CONFIG.hostPhone)} className="text-primary underline">{CONFIG.hostPhone}</a>.
                 </p>
-                {docError && <p className="mt-2 text-center text-[13px] text-terracotta" role="alert">{docError}</p>}
-              </section>
-            )}
+              </div>
 
-            {verifying && (
-              <p className="mt-5 flex items-center gap-2 rounded-xl bg-card p-4 text-sm text-primary" role="status" data-testid="text-pay-verifying">
-                <SpinnerIcon className="animate-spin" /> {onlineNote ?? 'Checking your payment…'}
-              </p>
-            )}
-            {!verifying && onlineNote && (
-              <p className="mt-5 flex items-start gap-2 rounded-xl border border-border bg-card p-4 text-sm text-primary" role="status" data-testid="text-pay-online-note">
-                <AlertIcon className="mt-0.5 shrink-0" /> {onlineNote}
-              </p>
-            )}
-
-            {online && (
-              <section className="mt-6" aria-label="Pay online">
-                {data.cardFee && data.cardFee.feePaise > 0 ? (
-                  <>
-                    {/* With a convenience fee: UPI (free) and card / net banking
-                        (plus the fee, shown before the guest pays) are separate. */}
-                    <button
-                      type="button"
-                      onClick={() => payOnline('upi')}
-                      disabled={opening !== null}
-                      className="flex w-full items-center justify-center gap-2 rounded-full bg-primary px-5 py-4 text-sm font-semibold text-primary-foreground disabled:opacity-60"
-                      data-testid="button-pay-online-upi"
-                    >
-                      {opening === 'upi' && <SpinnerIcon className="animate-spin" />} Pay {formatRupees(data.advancePaise)} by UPI
-                    </button>
-                    <p className="mt-2 text-center text-xs text-muted-foreground">No convenience fee on UPI.</p>
-                    <button
-                      type="button"
-                      onClick={() => payOnline('card')}
-                      disabled={opening !== null}
-                      className="mt-4 flex w-full items-center justify-center gap-2 rounded-full border border-primary/25 px-5 py-4 text-sm font-semibold text-primary disabled:opacity-60"
-                      data-testid="button-pay-online-card"
-                    >
-                      {opening === 'card' && <SpinnerIcon className="animate-spin" />} Card or net banking: {formatRupees(data.advancePaise + data.cardFee.feePaise)}
-                    </button>
-                    <p className="mt-2 text-center text-xs text-muted-foreground" data-testid="text-card-fee">
-                      Includes a {formatRupees(data.cardFee.feePaise)} convenience fee ({data.cardFee.percent}% for card and net banking payments). The fee is not refundable.
+                {data.document && (
+                  <section className="rounded-2xl border border-border bg-card p-5 lg:col-start-2 lg:row-start-2" aria-label="Your booking document" data-testid="pay-document">
+                    <p className="text-sm font-bold text-primary">{data.document === 'confirmation' ? 'Your booking confirmation' : 'Your booking summary'}</p>
+                    <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                      {data.document === 'confirmation' ? 'Your reference, what you have paid and the balance due at check-in.' : 'Your dates and amount as a PDF. Payment pending until the advance reaches us.'}
                     </p>
-                  </>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={() => payOnline()}
-                    disabled={opening !== null}
-                    className="flex w-full items-center justify-center gap-2 rounded-full bg-primary px-5 py-4 text-sm font-semibold text-primary-foreground disabled:opacity-60"
-                    data-testid="button-pay-online"
-                  >
-                    {opening && <SpinnerIcon className="animate-spin" />} Pay {formatRupees(data.advancePaise)} online
-                  </button>
+                    <div className="mt-3 grid grid-cols-2 gap-2">
+                      <button type="button" onClick={downloadDocument} disabled={docBusy !== null} className="flex items-center justify-center gap-1.5 rounded-full border border-primary/25 px-3 py-2.5 text-xs font-semibold text-primary disabled:opacity-60" data-testid="button-download-document">
+                        {docBusy === 'download' ? <SpinnerIcon className="animate-spin" /> : <DownloadIcon />} Download
+                      </button>
+                      <button type="button" onClick={shareDocument} disabled={docBusy !== null} className="flex items-center justify-center gap-1.5 rounded-full border border-primary/25 px-3 py-2.5 text-xs font-semibold text-primary disabled:opacity-60" data-testid="button-share-document">
+                        {docBusy === 'share' ? <SpinnerIcon className="animate-spin" /> : <ShareIcon />} Share
+                      </button>
+                    </div>
+                    <a href={ownerWhatsappUrl} target="_blank" rel="noreferrer" className="mt-3 flex items-center justify-center gap-1.5 text-xs font-semibold text-[#1f7a4d] underline underline-offset-2" data-testid="link-whatsapp-owner">
+                      <WhatsappIcon /> WhatsApp your booking to us
+                    </a>
+                    {docError && <p className="mt-2 text-center text-[13px] text-terracotta" role="alert">{docError}</p>}
+                  </section>
                 )}
-                <p className="mt-3 flex items-center justify-center gap-1.5 text-center text-xs text-muted-foreground">
-                  {data.cardFee && data.cardFee.feePaise > 0 ? 'Secure checkout' : 'UPI, cards or net banking · secure checkout'} · booking confirmed instantly
-                </p>
-                {payable && (
-                  <p className="mt-6 flex items-center gap-3 text-xs text-muted-foreground">
-                    <span className="h-px flex-1 bg-border" /> or pay directly by UPI <span className="h-px flex-1 bg-border" />
-                  </p>
-                )}
-              </section>
-            )}
-
-            {payable && !verifying && (
-              <section className="mt-6 space-y-5" aria-label="Pay by UPI">
-                <a
-                  href={data.upiUrl!}
-                  className={`flex w-full items-center justify-center gap-2 rounded-full px-5 py-4 text-sm font-semibold ${data.onlinePay ? 'border border-primary/25 text-primary' : 'bg-primary text-primary-foreground'} ${mobile ? '' : 'md:hidden'}`}
-                  data-testid="link-pay-upi"
-                >
-                  Pay {formatRupees(data.advancePaise)} with UPI app
-                </a>
-                {data.qrSvg && (
-                  <div className={`${mobile ? 'hidden' : 'flex'} flex-col items-center rounded-2xl border border-border bg-white p-5`} data-testid="pay-qr">
-                    {/* Generated by the server from the same upi:// link; no external QR service. */}
-                    <div className="h-56 w-56" dangerouslySetInnerHTML={{ __html: data.qrSvg }} />
-                    <p className="mt-3 text-center text-xs text-pine">Scan with any UPI app (GPay, PhonePe, Paytm, BHIM). The amount fills itself.</p>
-                  </div>
-                )}
-                {data.payee && (
-                  <p className="text-center text-xs text-muted-foreground">
-                    Or pay {formatRupees(data.advancePaise)} to <span className="font-mono text-primary">{data.payee.upiId}</span> ({data.payee.name}) with note <span className="font-mono text-primary">{data.reference}</span>
-                    <button type="button" onClick={copyUpi} className="ml-2 inline-flex items-center gap-1 text-accent underline underline-offset-2"><CopyIcon /> {copied ? 'Copied' : 'Copy UPI ID'}</button>
-                  </p>
-                )}
-
-                <form onSubmit={submit} className="space-y-4 rounded-2xl border border-border bg-card p-5" data-testid="form-pay-utr">
-                  <p className="text-sm font-bold text-primary">Paid? Tell us the transaction ID</p>
-                  <label className="block">
-                    <span className="eyebrow text-muted-foreground">UPI transaction ID / UTR (12 digits) *</span>
-                    <input
-                      id="pay-utr"
-                      required
-                      inputMode="numeric"
-                      autoComplete="off"
-                      maxLength={16}
-                      value={utr}
-                      onChange={(event) => setUtr(event.target.value)}
-                      className="mt-2 w-full border-b border-border bg-transparent px-0 py-3 font-mono text-lg tracking-widest text-primary focus:border-primary"
-                      placeholder="412345678901"
-                      data-testid="input-pay-utr"
-                    />
-                  </label>
-                  <label className="flex cursor-pointer items-center gap-2 text-xs text-muted-foreground">
-                    <UploadIcon />
-                    <span>{file ? file.name : 'Add payment screenshot (optional, image up to 5 MB)'}</span>
-                    <input
-                      id="pay-screenshot"
-                      type="file"
-                      accept="image/jpeg,image/png,image/webp"
-                      className="sr-only"
-                      onChange={(event: ChangeEvent<HTMLInputElement>) => setFile(event.target.files?.[0] ?? null)}
-                      data-testid="input-pay-screenshot"
-                    />
-                  </label>
-                  {formError && <p className="text-[13px] text-terracotta" role="alert">{formError}</p>}
-                  <button
-                    type="submit"
-                    disabled={sending}
-                    className="flex w-full items-center justify-center gap-2 rounded-full border border-primary/25 px-5 py-3.5 text-sm font-semibold text-primary hover:bg-primary/5 disabled:opacity-40"
-                    data-testid="button-pay-submit"
-                  >
-                    {sending && <SpinnerIcon className="animate-spin" />} I have paid: submit
-                  </button>
-                </form>
-              </section>
-            )}
-
-            <p className="mt-8 text-center text-xs text-muted-foreground">
-              Questions or a problem paying? Call or WhatsApp <a href={phoneHref(CONFIG.hostPhone)} className="text-primary underline">{CONFIG.hostPhone}</a>.
-            </p>
+            </div>
           </>
         )}
       </main>
