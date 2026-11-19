@@ -1459,12 +1459,12 @@ test("preload · the homepage preloads its LCP image, and only the homepage", ()
 
   const home = preloads(render("/"));
   assert.equal(home.length, 1, "the homepage should preload exactly one image");
-  assert.equal(home[0]![1], "/hero-day-v2.jpg");
+  assert.equal(home[0]![1], "/hero-day-v3.jpg");
   assert.match(home[0]![0], /type="image\/jpeg"/);
   assert.match(home[0]![0], /fetchpriority="high"/);
 
   // It is the file the hero actually renders, eagerly and at high priority.
-  assert.match(HERO_TSX, /const DAY = asset\("hero-day-v2\.jpg"\)/);
+  assert.match(HERO_TSX, /const DAY = asset\("hero-day-v3\.jpg"\)/);
   assert.match(APP_TSX, /<HeroPhotos \/>/);
 
   for (const route of [...PUBLIC_ROUTES.filter((r) => r !== "/"), ...PRIVATE_ROUTES, ...UNKNOWN_ROUTES]) {
