@@ -219,7 +219,7 @@ export const PAGES: Record<string, PageMeta> = {
     lastmod: "2026-10-29",
     // The hero photograph is the homepage's LCP. Keep in step with DAY in
     // components/HeroLights.tsx — a test asserts the two name the same file.
-    preloadImage: { href: "/hero-day-v2.jpg", type: "image/jpeg" },
+    preloadImage: { href: "/hero-day-v3.jpg", type: "image/jpeg" },
     intent: {
       primary: "private villa in Shantiniketan",
       secondary: [

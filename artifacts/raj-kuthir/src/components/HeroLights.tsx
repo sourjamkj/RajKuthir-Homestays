@@ -11,8 +11,8 @@ import { sunsetLine } from "@/lib/daylight";
  * The day photo is the LCP the server preloads (seo.ts); the night one loads eagerly
  * at normal priority, so only one image competes for the first bytes.
  */
-const DAY = asset("hero-day-v2.jpg");
-const NIGHT = asset("hero-night-v2.jpg");
+const DAY = asset("hero-day-v3.jpg");
+const NIGHT = asset("hero-night-v3.jpg");
 const ALT = "Raj Kuthir Homestays, Sobuj Potro, a private villa in Bolpur, Shantiniketan";
 
 export function HeroPhotos() {
