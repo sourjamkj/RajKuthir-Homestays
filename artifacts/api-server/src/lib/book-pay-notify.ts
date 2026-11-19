@@ -1,3 +1,4 @@
+import { gmailConfig, mailFor, rawMessage, sendViaGmail, type Attachment } from "./gmail-api";
 import { listForSync } from "./mail-repo";
 import { logger } from "./logger";
 import { ownerAlertEmailSetting } from "./owner-settings-state";
@@ -7,7 +8,10 @@ import { guestApiSendingOn } from "./whatsapp-mode";
 /**
  * Getting Book & Pay messages out, over whatever is already set up.
  *
- * EMAIL goes through the mailbox the owner already connected in the console
+ * EMAIL goes out through the Gmail API over HTTPS when GMAIL_CLIENT_ID,
+ * GMAIL_CLIENT_SECRET and GMAIL_REFRESH_TOKEN are set (see gmail-api.ts:
+ * Railway blocks outbound SMTP below the Pro plan). Otherwise it goes
+ * through the mailbox the owner already connected in the console
  * for reading OTA emails (mail_accounts). An app password that can read over
  * IMAP can send over SMTP, so there is no new credential to manage; the SMTP
  * host is derived from the IMAP one (imap.gmail.com -> smtp.gmail.com).
@@ -34,34 +38,49 @@ export async function sendEmail(
   to: string | null,
   subject: string,
   text: string,
-  attachments?: Array<{ filename: string; content: Buffer | Uint8Array; contentType: string }>,
+  attachments?: Attachment[],
 ): Promise<boolean> {
   if (!to || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(to)) return false;
 
   try {
     const [account] = await listForSync();
+    const gmail = gmailConfig();
+
+    // Gmail API over HTTPS when it is set up: the only way out of Railway
+    // without a Pro plan (outbound SMTP is blocked). Sends as the authorised
+    // Gmail account; GMAIL_SENDER only sets the From line.
+    if (gmail) {
+      const from = process.env["GMAIL_SENDER"]?.trim() || account?.username || null;
+      const result = await sendViaGmail(gmail, await rawMessage(mailFor(from, to, subject, text, attachments)));
+      if (result.ok) {
+        logger.info({ provider: "gmail-api", messageId: result.id }, "Email sent");
+        return true;
+      }
+      // Never log the recipient or the body: both carry guest details.
+      logger.error({ provider: "gmail-api", err: result.error }, "Book & Pay email failed");
+      return false;
+    }
+
     if (!account) {
       logger.info("No mailbox connected; skipping Book & Pay email");
       return false;
     }
 
+    // SMTP through the connected mailbox: works locally and on Railway Pro.
+    // Short timeouts so a blocked port fails in seconds, not minutes.
     const nodemailer = await import("nodemailer");
     const transport = nodemailer.createTransport({
       host: smtpHostFor(account.host),
       port: 465,
       secure: true,
       auth: { user: account.username, pass: account.password },
+      connectionTimeout: 10_000,
+      greetingTimeout: 10_000,
+      socketTimeout: 30_000,
     });
 
-    await transport.sendMail({
-      from: `Raj Kuthir Homestays <${account.username}>`,
-      to,
-      subject,
-      text,
-      ...(attachments?.length
-        ? { attachments: attachments.map((file) => ({ ...file, content: Buffer.from(file.content) })) }
-        : {}),
-    });
+    const info = await transport.sendMail(mailFor(account.username, to, subject, text, attachments));
+    logger.info({ provider: "smtp", messageId: info.messageId }, "Email sent");
     return true;
   } catch (error) {
     // Never log the recipient or the body: both carry guest details.

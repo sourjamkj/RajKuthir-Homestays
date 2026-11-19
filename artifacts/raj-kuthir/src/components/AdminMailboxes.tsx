@@ -1,4 +1,5 @@
 import { useState, type ReactNode } from 'react';
+import { useMutation } from '@tanstack/react-query';
 import {
   AlertCircle,
   Check,
@@ -7,10 +8,12 @@ import {
   Plus,
   RefreshCw,
   RotateCcw,
+  Send,
   Trash2,
 } from 'lucide-react';
 
 import {
+  adminFetch,
   formatDateTime,
   useAddMailbox,
   useDeleteMailbox,
@@ -55,6 +58,10 @@ function errorText(error: unknown): string | null {
 export function AdminMailboxes() {
   const accounts = useMailAccounts(true);
   const runSync = useRunMailSync();
+  // One test email to the owner's own address, to prove outgoing mail works.
+  const testSend = useMutation({
+    mutationFn: () => adminFetch<{ ok: boolean; provider: string }>('/api/mail/test-send', { method: 'POST' }),
+  });
 
   const data = accounts.data;
   const rows = data?.accounts ?? [];
@@ -137,6 +144,22 @@ export function AdminMailboxes() {
           <p className="mt-3 text-xs text-[#A65E45]" role="alert">
             {syncError}
           </p>
+        )}
+
+        <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-border pt-4">
+          <p className="text-[13px] leading-6 text-muted-foreground">
+            Outgoing email (booking confirmations, invoices, alerts): send a test to your own address.
+          </p>
+          <button type="button" onClick={() => testSend.mutate()} disabled={testSend.isPending} className={PRIMARY_BUTTON} data-testid="button-mail-test-send">
+            {testSend.isPending ? <Loader2 size={13} className="animate-spin" /> : <Send size={13} />}
+            {testSend.isPending ? 'Sending' : 'Send test email'}
+          </button>
+        </div>
+        {testSend.isSuccess && (
+          <p className="mt-2 text-xs text-[#4b5340]" role="status">Sent via {testSend.data.provider === 'gmail-api' ? 'Gmail API' : 'SMTP'}. Check your inbox.</p>
+        )}
+        {testSend.isError && (
+          <p className="mt-2 text-xs text-[#A65E45]" role="alert">{errorText(testSend.error) ?? 'Not sent.'}</p>
         )}
 
         {lastResult && (
