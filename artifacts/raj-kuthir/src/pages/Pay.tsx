@@ -147,6 +147,7 @@ export default function Pay() {
   const [method, setMethod] = useState<'upi' | 'card' | 'qr' | null>(null);
   const [cancelStep, setCancelStep] = useState<'idle' | 'confirm' | 'busy' | 'done'>('idle');
   const [cancelError, setCancelError] = useState<string | null>(null);
+  const [homeIn, setHomeIn] = useState(30);
   const mobile = isMobile();
 
   useEffect(() => {
@@ -497,6 +498,17 @@ export default function Pay() {
       ]
     : [];
 
+  // After a cancel, count down and take the guest back to the homepage.
+  useEffect(() => {
+    if (cancelStep !== 'done') return;
+    if (homeIn <= 0) {
+      window.location.assign(`${basePath}/`);
+      return;
+    }
+    const t = window.setTimeout(() => setHomeIn((n) => n - 1), 1000);
+    return () => window.clearTimeout(t);
+  }, [cancelStep, homeIn]);
+
   const cancelBooking = async () => {
     setCancelStep('busy');
     setCancelError(null);
@@ -513,6 +525,7 @@ export default function Pay() {
         return;
       }
       setCancelStep('done');
+      setOnlineNote(null);
       void load();
     } catch {
       setCancelError('Could not reach the server. Please try again, or call us.');
@@ -568,6 +581,14 @@ export default function Pay() {
                 <span className="flex-1">{cancelStep === 'done' ? 'You cancelled this booking. Nothing was charged and the dates are free again.' : data.status === 'awaiting_payment' && left <= 0 ? 'This hold has expired and the dates have been released.' : data.statusText}</span>
                 {data.status === 'awaiting_payment' && left > 0 && <strong className="shrink-0 tabular-nums" data-testid="text-pay-countdown">{clock(left)} left</strong>}
               </p>
+              {cancelStep === 'done' && (
+                <p className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 pl-6">
+                  <a href={`${basePath}/`} className="rounded-full bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground" data-testid="link-pay-home">
+                    Back to the homepage
+                  </a>
+                  <span className="text-[13px] tabular-nums text-muted-foreground" aria-live="off">Taking you there in {homeIn}s</span>
+                </p>
+              )}
               {data.status === 'awaiting_payment' && left > 0 && holdTotal > 0 && (
                 <div className="mt-3 h-1 overflow-hidden rounded-full bg-primary/10" aria-hidden="true">
                   <div className="h-full rounded-full bg-primary transition-[width] duration-1000 ease-linear" style={{ width: `${Math.min(100, (left / holdTotal) * 100)}%` }} />
