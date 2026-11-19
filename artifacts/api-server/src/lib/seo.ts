@@ -217,9 +217,9 @@ export const PAGES: Record<string, PageMeta> = {
     description:
       "An entire 2-bedroom villa in Bolpur, Santiniketan \u2014 not a room in a homestay. Two AC bedrooms, private garden, parking, pet-friendly. Book direct.",
     lastmod: "2026-10-29",
-    // The hero photograph is the homepage's LCP. Keep in step with IMG.villaNight
-    // in App.tsx — a test asserts the two name the same file.
-    preloadImage: { href: "/villa-night.jpg", type: "image/jpeg" },
+    // The hero photograph is the homepage's LCP. Keep in step with DAY in
+    // components/HeroLights.tsx — a test asserts the two name the same file.
+    preloadImage: { href: "/hero-day.jpg", type: "image/jpeg" },
     intent: {
       primary: "private villa in Shantiniketan",
       secondary: [

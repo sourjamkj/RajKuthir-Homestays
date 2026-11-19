@@ -8,6 +8,8 @@ import { sunsetLine } from "@/lib/daylight";
  * cross-faded by html[data-daylight] (set before first paint, flipped by the
  * Lights switch), so the server render and the first paint already agree.
  * A soft "lantern" under the cursor or finger shows the other light.
+ * The day photo is the LCP the server preloads (seo.ts); the night one loads eagerly
+ * at normal priority, so only one image competes for the first bytes.
  */
 const DAY = asset("hero-day.jpg");
 const NIGHT = asset("hero-night.jpg");
@@ -68,7 +70,7 @@ export function HeroPhotos() {
   return (
     <div ref={ref} className="hero-lights absolute inset-0">
       <img src={DAY} alt={ALT} width={1536} height={928} loading="eager" fetchPriority="high" decoding="async" className={`hero-photo hero-photo--day ${img}`} />
-      <img src={NIGHT} alt="" aria-hidden="true" width={1536} height={928} loading="eager" fetchPriority="high" decoding="async" className={`hero-photo hero-photo--night ${img}`} />
+      <img src={NIGHT} alt="" aria-hidden="true" width={1536} height={928} loading="eager" decoding="async" className={`hero-photo hero-photo--night ${img}`} />
       <img src={NIGHT} alt="" aria-hidden="true" width={1536} height={928} decoding="async" className={`hero-lantern hero-lantern--night ${img}`} />
       <img src={DAY} alt="" aria-hidden="true" width={1536} height={928} decoding="async" className={`hero-lantern hero-lantern--day ${img}`} />
     </div>
