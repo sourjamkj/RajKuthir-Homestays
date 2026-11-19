@@ -9,7 +9,7 @@ import {
   getGetPublicCalendarQueryKey,
   useGetPublicCalendar,
 } from '@workspace/api-client-react';
-import { AlertIcon, CalendarIcon, CaretDownIcon, CaretLeftIcon, CaretRightIcon, CheckIcon, CloseIcon, ExternalIcon, InstagramIcon, LeafIcon, LockIcon, MapPinIcon, MenuIcon, PhoneIcon, StarIcon, WhatsappIcon } from '@/components/icons';
+import { AlertIcon, BathIcon, BedIcon, CalendarIcon, CarIcon, CookingPotIcon, DropIcon, InductionIcon, OvenIcon, SnowflakeIcon, WifiIcon, CaretDownIcon, CaretLeftIcon, CaretRightIcon, CheckIcon, CloseIcon, ExternalIcon, InstagramIcon, LeafIcon, LockIcon, MapPinIcon, MenuIcon, PhoneIcon, StarIcon, WhatsappIcon } from '@/components/icons';
 import {
   latestCheckOut,
   nextStaySelection,
@@ -932,16 +932,16 @@ function Home() {
                   (VERIFIED_AMENITIES in api-server/src/lib/seo.ts), and a test
                   fails if the markup claims one that is not written here. */}
               {[
-                { label: 'Two bedrooms, two king beds' },
-                { label: 'Air conditioning in both bedrooms' },
-                { label: 'Two bathrooms' },
-                { label: 'Basic cooking utensils' },
-                { label: 'Induction setup' },
-                { label: 'Microwave & refrigerator' },
-                { label: 'Water filter' },
-                { label: 'Wi-Fi' },
-                { label: 'On-premise parking' },
-              ].map(({ label }) => <div key={label} className="border-t border-border py-6"><p className="max-w-[145px] text-sm font-bold leading-5 text-primary">{label}</p></div>)}
+                { label: 'Two bedrooms, two king beds', Icon: BedIcon },
+                { label: 'Air conditioning in both bedrooms', Icon: SnowflakeIcon },
+                { label: 'Two bathrooms', Icon: BathIcon },
+                { label: 'Basic cooking utensils', Icon: CookingPotIcon },
+                { label: 'Induction setup', Icon: InductionIcon },
+                { label: 'Microwave & refrigerator', Icon: OvenIcon },
+                { label: 'Water filter', Icon: DropIcon },
+                { label: 'Wi-Fi', Icon: WifiIcon },
+                { label: 'On-premise parking', Icon: CarIcon },
+              ].map(({ label, Icon }) => <div key={label} className="flex items-start gap-3 border-t border-border py-6"><span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-secondary/60 text-primary"><Icon size="md" /></span><p className="max-w-[145px] pt-2 text-sm font-bold leading-5 text-primary">{label}</p></div>)}
             </div>
           </div>
         </section>

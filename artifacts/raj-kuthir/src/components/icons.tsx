@@ -2,8 +2,8 @@
  * The site's icons: Phosphor, light weight, two sizes.
  *
  * Icons are kept only where they do a job: call, WhatsApp, calendar, map,
- * chevrons, close, menu, download, copy, upload, share, status and the
- * busy spinner. Decoration is left to type and photographs.
+ * chevrons, close, menu, download, copy, upload, share, status, the busy
+ * spinner, and the amenity list (read at a glance). Decoration is left to type and photographs.
  *
  * Sizes: "sm" (16px) sits inline with button and body text; "md" (20px) is
  * for icon-only controls. Every icon is hidden from screen readers; the
@@ -12,6 +12,15 @@
 import type { ComponentType } from 'react';
 import {
   ArrowSquareOut,
+  Bathtub,
+  Bed,
+  Car,
+  CookingPot,
+  Drop,
+  Lightning,
+  Oven,
+  Snowflake,
+  WifiHigh,
   CalendarBlank,
   CaretDown,
   CaretLeft,
@@ -76,3 +85,14 @@ export const SpinnerIcon = make(CircleNotch, 'SpinnerIcon');
 export const StarIcon = make(Star, 'StarIcon');
 export const UploadIcon = make(UploadSimple, 'UploadIcon');
 export const WhatsappIcon = make(WhatsappLogo, 'WhatsappIcon');
+
+/* The homepage amenity list ("The small comforts"). */
+export const BedIcon = make(Bed, 'BedIcon');
+export const SnowflakeIcon = make(Snowflake, 'SnowflakeIcon');
+export const BathIcon = make(Bathtub, 'BathIcon');
+export const CookingPotIcon = make(CookingPot, 'CookingPotIcon');
+export const InductionIcon = make(Lightning, 'InductionIcon');
+export const OvenIcon = make(Oven, 'OvenIcon');
+export const DropIcon = make(Drop, 'DropIcon');
+export const WifiIcon = make(WifiHigh, 'WifiIcon');
+export const CarIcon = make(Car, 'CarIcon');
