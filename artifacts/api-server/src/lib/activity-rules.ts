@@ -119,6 +119,7 @@ const PAYMENT_TITLES: Record<string, string> = {
   confirmed: "Online booking confirmed",
   rejected: "Online payment rejected",
   expired: "Online hold expired",
+  guest_cancelled: "Guest cancelled before paying",
   expiry_notified: "Guest told their hold expired",
 };
 

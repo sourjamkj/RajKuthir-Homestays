@@ -352,7 +352,7 @@ export function AdminBookPay() {
           onClick={() => {
             setDraft({
               advancePercent: String(data?.settings.advancePercent ?? 50),
-              holdMinutes: String(data?.settings.holdMinutes ?? 30),
+              holdMinutes: String(data?.settings.holdMinutes ?? 10),
               cardFeePercent: String(data?.settings.cardFeePercent ?? 0),
             });
             setShowSettings((value) => !value);

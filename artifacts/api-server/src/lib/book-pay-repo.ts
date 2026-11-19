@@ -481,6 +481,23 @@ export async function setDecision(
   return updated ?? null;
 }
 
+/**
+ * The guest cancels from the payment page before paying: the dates go back on
+ * sale now rather than when the hold runs out. Only an unpaid hold can be
+ * cancelled; expiry_notified_at is set so no "your hold expired" message follows.
+ */
+export async function cancelByGuest(id: string, enquiryId: string, now = new Date()): Promise<boolean> {
+  const [closed] = await db
+    .update(paymentRequests)
+    .set({ status: "expired", decidedAt: now, expiryNotifiedAt: now, holdExpiresAt: now, updatedAt: now })
+    .where(and(eq(paymentRequests.id, id), eq(paymentRequests.status, "awaiting_payment")))
+    .returning({ id: paymentRequests.id });
+  if (!closed) return false;
+  await db.update(enquiries).set({ status: "closed" }).where(eq(enquiries.id, enquiryId));
+  await logPaymentEvent(id, "guest_cancelled", "Guest cancelled on the payment page before paying");
+  return true;
+}
+
 /** Closes every unpaid hold whose deadline has passed. Returns what it closed. */
 export async function expireDueHolds(now = new Date()): Promise<RequestWithEnquiry[]> {
   const closed = await db

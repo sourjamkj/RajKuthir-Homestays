@@ -145,6 +145,8 @@ export default function Pay() {
   const [docError, setDocError] = useState<string | null>(null);
   // The method the guest picked: Razorpay UPI, Razorpay card / net banking, or paying the UPI QR themselves.
   const [method, setMethod] = useState<'upi' | 'card' | 'qr' | null>(null);
+  const [cancelStep, setCancelStep] = useState<'idle' | 'confirm' | 'busy' | 'done'>('idle');
+  const [cancelError, setCancelError] = useState<string | null>(null);
   const mobile = isMobile();
 
   useEffect(() => {
@@ -355,6 +357,8 @@ export default function Pay() {
               ? { method: { upi: false } }
               : {}),
           theme: { color: '#2f5d3a' },
+          // The checkout closes itself when the hold ends, like a seat hold.
+          timeout: Math.max(60, left),
           handler: (response: RazorpaySuccess) => void verifyRazorpay(body.orderId, response),
           modal: { ondismiss: () => setOnlineNote('Payment cancelled. You can try again below, or pay by UPI.') },
         });
@@ -493,6 +497,29 @@ export default function Pay() {
       ]
     : [];
 
+  const cancelBooking = async () => {
+    setCancelStep('busy');
+    setCancelError(null);
+    try {
+      const response = await fetch('/api/book/pay/cancel', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token }),
+      });
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        setCancelError(body.error ?? 'Could not cancel just now. Please try again, or call us.');
+        setCancelStep('confirm');
+        return;
+      }
+      setCancelStep('done');
+      void load();
+    } catch {
+      setCancelError('Could not reach the server. Please try again, or call us.');
+      setCancelStep('confirm');
+    }
+  };
+
   const startPayment = () => {
     if (chosen === 'qr') return;
     void payOnline(fee ? (chosen === 'card' ? 'card' : 'upi') : undefined);
@@ -526,7 +553,7 @@ export default function Pay() {
         {data && (
           <>
             <h1 className="font-journal text-4xl leading-tight text-primary md:text-5xl">
-              {data.status === 'confirmed' ? 'You are booked in.' : data.status === 'submitted' ? 'Payment received, checking now.' : 'Complete your booking'}
+              {cancelStep === 'done' ? 'Booking cancelled.' : data.status === 'confirmed' ? 'You are booked in.' : data.status === 'submitted' ? 'Payment received, checking now.' : 'Complete your booking'}
             </h1>
             <p className="mt-2 text-sm text-muted-foreground">Hello {data.guestFirstName}, booking <span className="font-mono text-primary">{data.reference}</span></p>
 
@@ -538,7 +565,7 @@ export default function Pay() {
             >
               <p className="flex items-start gap-2">
                 {data.status === 'awaiting_payment' && left > 0 ? <ClockIcon className="mt-0.5 shrink-0" /> : data.status === 'submitted' || data.status === 'confirmed' ? <CheckCircleIcon className="mt-0.5 shrink-0" /> : <AlertIcon className="mt-0.5 shrink-0" />}
-                <span className="flex-1">{data.status === 'awaiting_payment' && left <= 0 ? 'This hold has expired and the dates have been released.' : data.statusText}</span>
+                <span className="flex-1">{cancelStep === 'done' ? 'You cancelled this booking. Nothing was charged and the dates are free again.' : data.status === 'awaiting_payment' && left <= 0 ? 'This hold has expired and the dates have been released.' : data.statusText}</span>
                 {data.status === 'awaiting_payment' && left > 0 && <strong className="shrink-0 tabular-nums" data-testid="text-pay-countdown">{clock(left)} left</strong>}
               </p>
               {data.status === 'awaiting_payment' && left > 0 && holdTotal > 0 && (
@@ -704,6 +731,29 @@ export default function Pay() {
                       </button>
                     </form>
                   </section>
+                )}
+
+                {data.status === 'awaiting_payment' && left > 0 && !verifying && (
+                  <div className="mt-8 border-t border-border pt-5 text-center lg:text-left" data-testid="pay-cancel">
+                    {cancelStep === 'idle' ? (
+                      <button type="button" onClick={() => setCancelStep('confirm')} className="text-sm font-semibold text-terracotta underline underline-offset-2" data-testid="button-pay-cancel">
+                        Cancel this booking
+                      </button>
+                    ) : (
+                      <div className="rounded-2xl border border-terracotta/40 bg-terracotta/5 p-4">
+                        <p className="text-sm text-primary">Cancel your booking for {pretty(data.checkIn)}? Nothing has been charged, and the dates will be released for other guests.</p>
+                        <div className="mt-3 flex flex-wrap justify-center gap-2 lg:justify-start">
+                          <button type="button" onClick={cancelBooking} disabled={cancelStep === 'busy'} className="flex items-center gap-2 rounded-full bg-terracotta px-4 py-2 text-sm font-semibold text-white disabled:opacity-60" data-testid="button-pay-cancel-confirm">
+                            {cancelStep === 'busy' && <SpinnerIcon className="animate-spin" />} Yes, cancel
+                          </button>
+                          <button type="button" onClick={() => setCancelStep('idle')} disabled={cancelStep === 'busy'} className="rounded-full border border-primary/25 px-4 py-2 text-sm font-semibold text-primary">
+                            Keep my booking
+                          </button>
+                        </div>
+                        {cancelError && <p className="mt-2 text-[13px] text-terracotta" role="alert">{cancelError}</p>}
+                      </div>
+                    )}
+                  </div>
                 )}
 
                 <p className="mt-8 text-center text-xs text-muted-foreground lg:text-left">

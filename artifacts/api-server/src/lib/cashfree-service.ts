@@ -130,8 +130,9 @@ export async function startCheckout(
   const phone = normaliseMobile(enquiry.phone ?? "");
   if (!phone) return { ok: false, status: 400, error: "We need a valid mobile number on the booking to take an online payment. Please call us." };
 
-  // Never send the guest into a checkout that outlives their hold.
-  const window = checkoutWindow(request.holdExpiresAt, now);
+  // Never send the guest into a checkout that outlives their hold. Cashfree orders need 20 minutes,
+  // so its hold stretches; Razorpay's checkout closes itself when the hold ends (Pay.tsx `timeout`).
+  const window = rzp ? { orderExpiresAt: request.holdExpiresAt, holdExpiresAt: request.holdExpiresAt } : checkoutWindow(request.holdExpiresAt, now);
   if (window.holdExpiresAt.getTime() > request.holdExpiresAt.getTime()) {
     const stretched = await stretchHold(request.id, window.holdExpiresAt, now);
     if (!stretched) return { ok: false, status: 410, error: "This hold has just expired. Please start the booking again." };
