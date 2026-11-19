@@ -14,10 +14,13 @@ import {
 import { adminFetch, useAdminSession, useLogout } from '@/lib/admin-api';
 import {
   formatRupees,
+  peakFor,
+  rateForNight,
   useRatePlan,
   RATES_KEY,
   type RateMode,
   type RateOverride,
+  type RatePlan,
 } from '@/lib/rates';
 import { AdminHeader } from '@/components/AdminHeader';
 import { PeakPeriodsSection, RateLadderSection } from '@/components/AdminPricingLadder';
@@ -197,6 +200,7 @@ export default function AdminRates() {
       <main className="mx-auto max-w-[1180px] px-5 py-8 md:px-8 md:py-10">
         <RateLadderSection plan={plan.data} />
         <PeakPeriodsSection plan={plan.data} />
+        <OneNightPrice plan={plan.data} onSaved={invalidate} />
 
         <section className="mt-8 pb-6" aria-label="Other price rules">
           <Heading
@@ -474,6 +478,79 @@ export default function AdminRates() {
         </section>
       </main>
     </div>
+  );
+}
+
+/**
+ * The price of one chosen night, for the whole villa. Saved as an exact-price
+ * rule for that single night (it shows under "Other price rules", where it
+ * can be edited or removed). Extra guests past the included ones keep the
+ * ladder's per-guest charge. Like every rule it skips peak nights and the
+ * floor still holds.
+ */
+function OneNightPrice({ plan, onSaved }: { plan: RatePlan | undefined; onSaved: () => void }) {
+  const [date, setDate] = useState('');
+  const [rupees, setRupees] = useState('');
+  const ladder = plan?.ladder;
+  const included = ladder?.includedGuests ?? 2;
+  const now = date && plan ? rateForNight(plan, date, included) : null;
+  const peak = date ? peakFor(plan, date) : null;
+  const price = Number(rupees);
+  const belowFloor = ladder && price > 0 && price * 100 < ladder.floorPaise;
+
+  const save = useMutation({
+    mutationFn: () => {
+      const next = format(new Date(parseISO(date).getTime() + 86_400_000), 'yyyy-MM-dd');
+      const amounts = Object.fromEntries(
+        Array.from({ length: plan?.maxGuests ?? 5 }, (_, i) => i + 1).map((guests) => [
+          String(guests),
+          price + (Math.max(0, guests - included) * (ladder?.extraGuestPaise ?? 0)) / 100,
+        ]),
+      );
+      return adminFetch('/api/rates/overrides', {
+        method: 'POST',
+        body: JSON.stringify({ startDate: date, endDate: next, label: `One night: ${format(parseISO(date), 'd MMM yyyy')}`, mode: 'fixed', amounts }),
+      });
+    },
+    onSuccess: () => {
+      setDate('');
+      setRupees('');
+      onSaved();
+    },
+  });
+
+  return (
+    <section className="mt-8" aria-label="Price for one night">
+      <Heading
+        icon={<CalendarRange size={15} />}
+        title="Price for one night"
+        description={`Set the price of a single date for the whole villa, for up to ${included} guests. Each extra guest adds ${ladder ? formatRupees(ladder.extraGuestPaise) : 'the usual charge'} as usual. It appears under “Other price rules”, where you can change or remove it.`}
+      />
+      <form
+        onSubmit={(event) => {
+          event.preventDefault();
+          save.mutate();
+        }}
+        className="mt-4 grid gap-4 rounded-2xl border border-border bg-card p-5 sm:grid-cols-[1fr_1fr_auto] sm:items-end md:p-6"
+        data-testid="form-one-night-price"
+      >
+        <Field label="Night (check-in date)">
+          <input type="date" required value={date} min={format(new Date(), 'yyyy-MM-dd')} onChange={(event) => setDate(event.target.value)} className="w-full rounded-lg border border-border bg-background px-3 py-2.5 text-sm outline-none focus:border-primary" data-testid="input-one-night-date" />
+        </Field>
+        <Field label={`Price for 1–${included} guests (₹)`}>
+          <input type="number" required min={1} step={1} inputMode="numeric" value={rupees} onChange={(event) => setRupees(event.target.value)} placeholder={now !== null ? String(now / 100) : ''} className="w-full rounded-lg border border-border bg-background px-3 py-2.5 text-sm outline-none focus:border-primary" data-testid="input-one-night-price" />
+        </Field>
+        <button type="submit" disabled={save.isPending || !date || !(price > 0) || Boolean(peak)} className="flex items-center justify-center gap-2 rounded-full bg-primary px-5 py-3 text-[11px] font-bold uppercase tracking-[.09em] text-primary-foreground disabled:opacity-40" data-testid="button-one-night-save">
+          {save.isPending ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />} Set price
+        </button>
+        <div className="text-[12px] leading-5 text-muted-foreground sm:col-span-3">
+          {date && now !== null && !peak && <p>Now: {formatRupees(now)} for {included} guests on {format(parseISO(date), 'EEE d MMM')}.</p>}
+          {peak && <p className="text-[#A65E45]">That night is in the peak period “{peak.label}”, which sets its own price. Change it in Peak periods above.</p>}
+          {belowFloor && ladder && <p className="text-[#A65E45]">Below your floor of {formatRupees(ladder.floorPaise)}: guests will still be charged the floor. Lower the floor in the ladder first.</p>}
+          {save.isError && <p className="text-[#A65E45]" role="alert">{save.error instanceof Error ? save.error.message : 'Could not save the price.'}</p>}
+        </div>
+      </form>
+    </section>
   );
 }
 

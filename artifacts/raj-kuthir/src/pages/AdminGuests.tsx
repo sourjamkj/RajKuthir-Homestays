@@ -589,6 +589,25 @@ export default function AdminGuests() {
     },
   });
 
+  /**
+   * Cancels a stay from the edit row: what the owner keeps after any refund,
+   * and a note. Cancelled stays stop blocking dates, so the nights reopen on
+   * every channel at the next calendar sync (same as the cancel_booking tool).
+   */
+  const [cancelling, setCancelling] = useState<{ id: string; kept: string; note: string } | null>(null);
+  const cancelStay = useMutation({
+    mutationFn: (draft: { id: string; kept: string; note: string }) =>
+      adminFetch(`/api/bookings/${draft.id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ status: 'cancelled', received: draft.kept || '0', note: draft.note }),
+      }),
+    onSuccess: () => {
+      setCancelling(null);
+      setEditingStay(null);
+      void queryClient.invalidateQueries();
+    },
+  });
+
   const documents = useQuery({
     queryKey: [...GUEST_STAYS_KEY, openDocuments, 'documents'],
     queryFn: () =>
@@ -1446,6 +1465,47 @@ export default function AdminGuests() {
                           <p className="mt-2 text-[11px] text-muted-foreground">
                             Changes the booking record. Dates, status and amounts are edited on the Earnings page.
                           </p>
+                          {stay.status !== 'cancelled' && (
+                            <div className="mt-5 border-t border-border pt-4" data-testid={`cancel-stay-${stay.bookingId}`}>
+                              {cancelling?.id !== stay.bookingId ? (
+                                <button type="button" onClick={() => setCancelling({ id: stay.bookingId, kept: '0', note: '' })} className="text-[11px] font-bold uppercase tracking-[.07em] text-[#A65E45] underline underline-offset-2" data-testid={`button-cancel-stay-${stay.bookingId}`}>
+                                  Cancel this booking
+                                </button>
+                              ) : (
+                                <form
+                                  onSubmit={(event) => {
+                                    event.preventDefault();
+                                    cancelStay.mutate(cancelling);
+                                  }}
+                                  className="grid gap-3 rounded-xl border border-[#A65E45]/40 bg-[#A65E45]/5 p-4 sm:grid-cols-[160px_1fr_auto_auto] sm:items-end"
+                                >
+                                  <p className="text-sm text-primary sm:col-span-4">
+                                    Cancel {stay.guestName ?? 'this booking'}, {stay.checkIn} to {stay.checkOut}? The nights open again on every channel at the next sync.
+                                    {stay.source !== 'direct' && stay.source !== 'manual' && ' Cancel it on the channel too.'}
+                                  </p>
+                                  <label className="block">
+                                    <span className="mb-1 block text-[10px] font-bold uppercase tracking-[.08em] text-muted-foreground">You keep (₹)</span>
+                                    <input type="number" min={0} value={cancelling.kept} onChange={(e) => setCancelling({ ...cancelling, kept: e.target.value })} className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary" data-testid={`input-cancel-kept-${stay.bookingId}`} />
+                                  </label>
+                                  <label className="block">
+                                    <span className="mb-1 block text-[10px] font-bold uppercase tracking-[.08em] text-muted-foreground">What happened (refund, reason)</span>
+                                    <input required minLength={3} maxLength={500} value={cancelling.note} onChange={(e) => setCancelling({ ...cancelling, note: e.target.value })} placeholder="Guest cancelled; advance refunded" className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary" data-testid={`input-cancel-note-${stay.bookingId}`} />
+                                  </label>
+                                  <button type="submit" disabled={cancelStay.isPending} className="flex items-center justify-center gap-1.5 rounded-lg bg-[#A65E45] px-4 py-2.5 text-[10px] font-bold uppercase tracking-[.07em] text-white disabled:opacity-40" data-testid={`button-cancel-confirm-${stay.bookingId}`}>
+                                    {cancelStay.isPending && <Loader2 size={12} className="animate-spin" />} Yes, cancel
+                                  </button>
+                                  <button type="button" onClick={() => setCancelling(null)} disabled={cancelStay.isPending} className="rounded-lg border border-border px-4 py-2.5 text-[10px] font-bold uppercase tracking-[.07em] text-primary">
+                                    Keep it
+                                  </button>
+                                  {cancelStay.isError && (
+                                    <p className="text-xs text-[#A65E45] sm:col-span-4" role="alert">
+                                      {cancelStay.error instanceof Error ? cancelStay.error.message : 'Could not cancel the booking.'}
+                                    </p>
+                                  )}
+                                </form>
+                              )}
+                            </div>
+                          )}
                         </td>
                       </tr>
                     )}
