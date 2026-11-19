@@ -2,6 +2,8 @@ import { Router, type IRouter } from "express";
 
 import { requireAdmin } from "../lib/admin-auth";
 import { logger } from "../lib/logger";
+import { ownerEmail, sendEmail } from "../lib/book-pay-notify";
+import { gmailConfig } from "../lib/gmail-api";
 import {
   createAccount,
   deleteAccount,
@@ -187,6 +189,22 @@ router.post("/mail/accounts/:id/rewind", async (req, res) => {
   }
 
   res.json({ rewound: true });
+});
+
+/**
+ * Sends one test email to the owner's own alert address (never anyone else),
+ * over whatever transport is live, so outgoing email can be checked after a
+ * change without touching a guest.
+ */
+router.post("/mail/test-send", async (_req, res) => {
+  const to = await ownerEmail();
+  if (!to) {
+    res.status(400).json({ error: "No owner email: set the alert email in Settings or connect a mailbox." });
+    return;
+  }
+  const provider = gmailConfig() ? "gmail-api" : "smtp";
+  const ok = await sendEmail(to, "Raj Kuthir test email", `Outgoing email works (${provider}). Sent ${new Date().toISOString()}.`);
+  res.status(ok ? 200 : 502).json({ ok, provider, error: ok ? undefined : "Not sent. The server log has the reason (\"Book & Pay email failed\")." });
 });
 
 /** Runs every enabled mailbox now rather than waiting for the two-hour cron. */

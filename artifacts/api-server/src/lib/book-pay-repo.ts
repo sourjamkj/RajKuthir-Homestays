@@ -529,7 +529,8 @@ export async function expiredNotNotified(): Promise<RequestWithEnquiry[]> {
       and(
         eq(paymentRequests.status, "expired"),
         sql`${paymentRequests.expiryNotifiedAt} is null`,
-        sql`${paymentRequests.decidedAt} > now() - interval '2 days'`,
+        // A "your hold expired" note hours later only confuses; also caps the backlog the day email starts working.
+        sql`${paymentRequests.decidedAt} > now() - interval '6 hours'`,
       ),
     );
 }
