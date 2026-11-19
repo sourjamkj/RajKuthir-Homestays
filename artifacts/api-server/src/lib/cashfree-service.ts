@@ -92,7 +92,13 @@ export type CheckoutResult =
       feePaise: number;
       amountPaise: number;
       /** Set for Razorpay: what the browser needs to open the checkout modal. */
-      razorpay?: { keyId: string; orderId: string; method: CheckoutMethod | null };
+      razorpay?: {
+        keyId: string;
+        orderId: string;
+        method: CheckoutMethod | null;
+        /** The guest's own details, so Razorpay does not ask for them again. */
+        prefill: { name: string; contact: string; email?: string };
+      };
     }
   | { ok: false; status: number; error: string };
 
@@ -165,7 +171,12 @@ export async function startCheckout(
       mode: rzp.env,
       feePaise: charge.feePaise,
       amountPaise: charge.totalPaise,
-      razorpay: { keyId: rzp.keyId, orderId: order.id, method: charge.feePaise ? method : null },
+      razorpay: {
+        keyId: rzp.keyId,
+        orderId: order.id,
+        method: charge.feePaise ? method : null,
+        prefill: { name: enquiry.name.slice(0, 100), contact: `+91${digits}`, ...(enquiry.email ? { email: enquiry.email } : {}) },
+      },
     };
   }
 
