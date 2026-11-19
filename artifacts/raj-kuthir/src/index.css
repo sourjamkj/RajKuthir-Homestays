@@ -334,3 +334,7 @@ html:not([data-daylight="night"]) .hero-lantern--day { display: none; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; transition-duration: .01ms !important; }
 }
+/* Release 4: room cards stack as you scroll on wide screens; on a phone they simply follow one another. */
+@media (min-width: 768px) {
+  .villa-card { position: sticky; top: calc(100px + var(--i, 0) * 22px); }
+}

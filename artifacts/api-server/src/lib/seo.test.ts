@@ -1087,7 +1087,7 @@ test("point 11 · the browser and the server agree on what a phone number is", (
  */
 /** A page's file, plus the shared component that renders its body when it has one. */
 const RENDERED_BY: Record<string, string | string[]> = {
-  "/": "src/App.tsx",
+  "/": ["src/App.tsx", "src/components/HomeStory.tsx"],
   "/gallery": "src/pages/Gallery.tsx",
   "/our-story": "src/pages/OurStory.tsx",
   "/places-to-visit-in-shantiniketan": "src/pages/PlacesToVisit.tsx",
