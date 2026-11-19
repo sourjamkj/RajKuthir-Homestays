@@ -19,23 +19,24 @@ import {
   queueMessage,
 } from "./notifications-repo";
 import { guestApiSendingOn } from "./whatsapp-mode";
+import { autoSendKinds } from "./owner-settings-state";
 
 /**
  * When each message goes out, and the rules about whether it goes out at all.
  *
- * Two settings shape the behaviour, both off-by-default so that turning this
+ * Two settings shape the behaviour, both off by default so that turning this
  * feature on is a deliberate act rather than a side effect of deploying:
  *
- *   WHATSAPP_ENABLED=true            actually talk to the provider
- *   WHATSAPP_REQUIRE_APPROVAL=false  queue as `pending` instead of `draft`
+ *   WHATSAPP_ENABLED=true   actually talk to the provider (Railway)
+ *   Auto-send (console)     which booking messages queue as `pending` instead
+ *                           of `draft`; see AUTO_SEND_KINDS. Unset follows the
+ *                           old WHATSAPP_REQUIRE_APPROVAL switch.
  *
- * With approval required (the default), everything lands as a draft and the
- * owner releases it from the admin console. That is the right default for a
- * one-property business: a scheduling bug costs an apology, not a thousand
- * messages to strangers.
+ * Anything not auto-sent lands as a draft and the owner releases it. That is
+ * the right default for a one-property business: a scheduling bug costs an
+ * apology, not a thousand messages to strangers.
  */
 
-const REQUIRE_APPROVAL = process.env["WHATSAPP_REQUIRE_APPROVAL"] !== "false";
 const MAX_ATTEMPTS = 4;
 const BATCH_SIZE = 20;
 
@@ -150,9 +151,8 @@ export async function scheduleForBooking(
       templateParams: spec.params,
       preview: spec.preview,
       sendAfter: respectQuietHours(at),
-      // Marketing always waits for a human, whatever the global setting says.
-      status:
-        REQUIRE_APPROVAL || spec.category === "marketing" ? "draft" : "pending",
+      // Marketing always waits for a human, whatever the owner allowed.
+      status: spec.category !== "marketing" && autoSendKinds().includes(kind) ? "pending" : "draft",
     });
 
     if (created) queued += 1;

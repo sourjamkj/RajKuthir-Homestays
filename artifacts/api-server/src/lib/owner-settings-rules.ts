@@ -60,8 +60,22 @@ export type StoredOwnerSettings = {
   quietHours?: { start: string; end: string } | null;
   whatsappAutoreply?: boolean | null;
   whatsappMode?: WhatsappMode | null;
+  /** Guest messages that go out by themselves; every other kind waits for approval. */
+  whatsappAutoSend?: AutoSendKind[] | null;
   pushEvents?: Partial<Record<OwnerEvent, boolean>>;
   emailEvents?: Partial<Record<OwnerEvent, boolean>>;
+};
+
+/**
+ * Fixed, template-only booking messages the owner may let go out without
+ * approval. Review requests, marketing and anything AI-written always wait.
+ */
+export const AUTO_SEND_KINDS = ["booking_confirmed", "checkin_reminder", "checkout_today"] as const;
+export type AutoSendKind = (typeof AUTO_SEND_KINDS)[number];
+export const AUTO_SEND_INFO: Record<AutoSendKind, { label: string; description: string }> = {
+  booking_confirmed: { label: "Booking confirmation", description: "As soon as a booking is confirmed (8 am to 9 pm)." },
+  checkin_reminder: { label: "Arrival pack", description: "The day before check-in at 10 am: directions, Wi-Fi and house details, with the arrival-pack PDF." },
+  checkout_today: { label: "Checkout reminder", description: "On check-out day at 8 am." },
 };
 
 /** Built-in defaults the code used before this console existed. */
@@ -150,6 +164,22 @@ export function resolveWhatsappMode(stored: StoredOwnerSettings, env: Env): Reso
   return { value: whatsappReadiness(env).ready ? "api" : "manual", source: "default" };
 }
 
+/**
+ * Which kinds send without approval. Unset keeps the old Railway switch:
+ * WHATSAPP_REQUIRE_APPROVAL=false meant all of them, anything else none.
+ */
+export function resolveAutoSend(stored: StoredOwnerSettings, env: Env): Resolved<AutoSendKind[]> {
+  if (Array.isArray(stored.whatsappAutoSend)) return { value: stored.whatsappAutoSend, source: "console" };
+  return env["WHATSAPP_REQUIRE_APPROVAL"] === "false"
+    ? { value: [...AUTO_SEND_KINDS], source: "railway" }
+    : { value: [], source: "default" };
+}
+
+function autoSendFrom(v: unknown): AutoSendKind[] | undefined {
+  if (!Array.isArray(v) || !v.every((k) => (AUTO_SEND_KINDS as readonly unknown[]).includes(k))) return undefined;
+  return AUTO_SEND_KINDS.filter((k) => v.includes(k));
+}
+
 export function eventEnabled(map: Partial<Record<OwnerEvent, boolean>> | undefined, event: OwnerEvent, channel: "push" | "email" = "push"): boolean {
   const saved = map?.[event];
   return typeof saved === "boolean" ? saved : OWNER_EVENT_INFO[event][channel];
@@ -221,6 +251,8 @@ export function parseStoredSettings(raw: string | null | undefined): StoredOwner
   if (quiet) out.quietHours = quiet;
   if (typeof data.whatsappAutoreply === "boolean") out.whatsappAutoreply = data.whatsappAutoreply;
   if (data.whatsappMode === "manual" || data.whatsappMode === "api") out.whatsappMode = data.whatsappMode;
+  const autoSend = autoSendFrom(data.whatsappAutoSend);
+  if (autoSend) out.whatsappAutoSend = autoSend;
   const push = eventMap(data.pushEvents);
   if (push) out.pushEvents = push;
   const email = eventMap(data.emailEvents);
@@ -229,7 +261,7 @@ export function parseStoredSettings(raw: string | null | undefined): StoredOwner
 }
 
 /** Fields whose change needs a fresh confirmation (fingerprint in the app, password on the web). */
-export const SENSITIVE_FIELDS = ["alertEmail", "ownerWhatsapp", "caretakerWhatsapp", "whatsappMode"] as const;
+export const SENSITIVE_FIELDS = ["alertEmail", "ownerWhatsapp", "caretakerWhatsapp", "whatsappMode", "whatsappAutoSend"] as const;
 
 export type SettingsPatchResult =
   | { ok: true; next: StoredOwnerSettings; changed: string[]; sensitive: boolean }
@@ -246,7 +278,7 @@ export function applySettingsPatch(current: StoredOwnerSettings, body: unknown, 
   }
   const input = { ...(body as Record<string, unknown>) };
   delete input.confirmPassword;
-  const allowed = new Set(["alertEmail", "ownerWhatsapp", "caretakerWhatsapp", "caretakerName", "ownerSignature", "quietHours", "whatsappAutoreply", "whatsappMode", "pushEvents", "emailEvents"]);
+  const allowed = new Set(["alertEmail", "ownerWhatsapp", "caretakerWhatsapp", "caretakerName", "ownerSignature", "quietHours", "whatsappAutoreply", "whatsappMode", "whatsappAutoSend", "pushEvents", "emailEvents"]);
   const unknown = Object.keys(input).filter((k) => !allowed.has(k));
   if (unknown.length) return { ok: false, status: 400, error: `Unknown setting: ${unknown.join(", ")}.` };
 
@@ -295,6 +327,15 @@ export function applySettingsPatch(current: StoredOwnerSettings, body: unknown, 
       }
     }
     next.whatsappMode = v;
+  }
+  if ("whatsappAutoSend" in input) {
+    const v = input.whatsappAutoSend;
+    if (v === null) next.whatsappAutoSend = null;
+    else {
+      const kinds = autoSendFrom(v);
+      if (!kinds) return { ok: false, status: 400, error: `Auto-send takes a list of: ${AUTO_SEND_KINDS.join(", ")}.` };
+      next.whatsappAutoSend = kinds;
+    }
   }
   for (const field of ["pushEvents", "emailEvents"] as const) {
     if (!(field in input)) continue;
@@ -368,7 +409,9 @@ export function settingsView(stored: StoredOwnerSettings, env: Env) {
       mode: resolveWhatsappMode(stored, env),
       autoreply: resolveAutoreply(stored, env),
       readiness: whatsappReadiness(env),
-      requireApproval: env["WHATSAPP_REQUIRE_APPROVAL"] !== "false",
+      requireApproval: resolveAutoSend(stored, env).value.length === 0,
+      autoSend: resolveAutoSend(stored, env),
+      autoSendOptions: AUTO_SEND_KINDS.map((kind) => ({ kind, ...AUTO_SEND_INFO[kind] })),
     },
     alerts: {
       push: events(stored.pushEvents, "push"),

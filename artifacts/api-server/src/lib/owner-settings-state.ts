@@ -8,6 +8,7 @@ import {
   resolveOwnerSignature,
   resolveOwnerWhatsapp,
   resolveWhatsappMode,
+  resolveAutoSend,
   type OwnerEvent,
   type StoredOwnerSettings,
   type WhatsappMode,
@@ -43,6 +44,7 @@ export const caretakerName = (): string | null => resolveCaretakerName(current).
 export const ownerSignature = (): string => resolveOwnerSignature(current).value;
 export const autoreplyEnabled = (): boolean => resolveAutoreply(current, process.env).value;
 export const whatsappMode = (): WhatsappMode => resolveWhatsappMode(current, process.env).value;
+export const autoSendKinds = (): readonly string[] => resolveAutoSend(current, process.env).value;
 export const pushEnabledFor = (event: OwnerEvent): boolean => eventEnabled(current.pushEvents, event, "push");
 export const emailEnabledFor = (event: OwnerEvent): boolean => eventEnabled(current.emailEvents, event, "email");
 export const quietHoursNow = (now: Date): boolean => inQuietHours(current.quietHours, now);
