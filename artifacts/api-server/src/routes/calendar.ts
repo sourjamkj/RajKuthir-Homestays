@@ -1,3 +1,4 @@
+import { logger } from "../lib/logger";
 import { renderIcsFeed } from "../lib/ics-export";
 import { Router, type IRouter } from "express";
 import crypto from "node:crypto";
@@ -368,6 +369,8 @@ router.get("/calendar/feed", async (req, res) => {
     ? excludeValue
     : undefined;
   const events = await listFeedEvents(excludeSource);
+  // Which OTA fetched (their own feed has their channel excluded), so a channel that stops reading us shows up.
+  logger.info({ exclude: excludeSource ?? "none", userAgent: req.get("user-agent")?.slice(0, 120), events: events.length }, "Calendar feed served");
 
   res.setHeader("Cache-Control", "no-cache, max-age=0");
   res.type("text/calendar").send(renderIcsFeed(events));
