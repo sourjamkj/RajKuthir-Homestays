@@ -76,7 +76,7 @@ export default function PetFriendly() {
   useEffect(() => {
     const previous = document.title;
     // Must match the server-rendered <title> in api-server/src/lib/seo.ts.
-    document.title = 'Pet-Friendly Homestay in Shantiniketan | Raj Kuthir';
+    document.title = 'Pet-Friendly Homestay in Santiniketan | Raj Kuthir';
     return () => {
       document.title = previous;
     };

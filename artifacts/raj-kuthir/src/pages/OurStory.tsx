@@ -22,7 +22,7 @@ import { LightsSwitch } from '@/components/LightsSwitch';
 export default function OurStory() {
   useEffect(() => {
     const previous = document.title;
-    document.title = 'Our Story | Raj Kuthir Homestays, Shantiniketan';
+    document.title = 'Our Story | Raj Kuthir Homestays, Santiniketan';
     return () => {
       document.title = previous;
     };

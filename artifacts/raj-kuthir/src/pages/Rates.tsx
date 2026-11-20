@@ -43,7 +43,7 @@ export default function Rates() {
   useEffect(() => {
     const previous = document.title;
     // Must match the server-rendered <title> in api-server/src/lib/seo.ts.
-    document.title = 'Shantiniketan Homestay Rates & Tariff | Raj Kuthir';
+    document.title = 'Santiniketan Homestay Rates & Tariff | Raj Kuthir';
     return () => {
       document.title = previous;
     };
