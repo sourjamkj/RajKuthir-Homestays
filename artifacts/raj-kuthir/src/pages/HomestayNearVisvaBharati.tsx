@@ -33,7 +33,7 @@ const distanceTo = (title: string) =>
 export default function HomestayNearVisvaBharati() {
   useEffect(() => {
     const previous = document.title;
-    document.title = 'Homestay near Visva-Bharati, Shantiniketan | Raj Kuthir';
+    document.title = 'Homestay near Visva-Bharati, Santiniketan | Raj Kuthir';
     return () => {
       document.title = previous;
     };

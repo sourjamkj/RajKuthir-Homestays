@@ -44,7 +44,7 @@ export const PLACES_FAQ = [
 export default function PlacesToVisit() {
   useEffect(() => {
     const previous = document.title;
-    document.title = 'Places to Visit in Shantiniketan | Raj Kuthir Homestays';
+    document.title = 'Places to Visit in Santiniketan | Raj Kuthir Homestays';
     return () => {
       document.title = previous;
     };

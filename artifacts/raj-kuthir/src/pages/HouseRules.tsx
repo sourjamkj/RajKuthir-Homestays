@@ -94,7 +94,7 @@ export default function HouseRules() {
   useEffect(() => {
     const previous = document.title;
     // Must match the server-rendered <title> in api-server/src/lib/seo.ts.
-    document.title = 'House Rules | Raj Kuthir Homestays, Shantiniketan';
+    document.title = 'House Rules | Raj Kuthir Homestays, Santiniketan';
     return () => {
       document.title = previous;
     };

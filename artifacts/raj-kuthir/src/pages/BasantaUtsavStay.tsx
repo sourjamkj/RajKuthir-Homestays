@@ -16,7 +16,7 @@ export default function BasantaUtsavStay() {
       slug="basanta-utsav"
       festival="Basanta Utsav"
       peakId="basanta-utsav"
-      documentTitle="Stay for Basanta Utsav in Shantiniketan | Raj Kuthir"
+      documentTitle="Stay for Basanta Utsav in Santiniketan | Raj Kuthir"
       breadcrumb="Basanta Utsav stay"
       heading={<>Spring in Shantiniketan:<br /><em>Basanta Utsav.</em></>}
       intro={

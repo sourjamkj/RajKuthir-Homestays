@@ -1377,7 +1377,7 @@ test("homepage · title, description and social tags are the approved ones", () 
   // Phase 3A: the query leads the title instead of the brand, and the
   // description says "entire villa" because that is the distinction guests are
   // actually shopping for.
-  const title = "Private 2-Bedroom Villa in Shantiniketan | Raj Kuthir";
+  const title = "Private Villa Homestay in Santiniketan | Raj Kuthir";
   const description =
     "An entire 2-bedroom villa in Bolpur, Santiniketan \u2014 not a room in a homestay. Two AC bedrooms, private garden, parking, pet-friendly. Book direct.";
 
@@ -1391,10 +1391,10 @@ test("homepage · title, description and social tags are the approved ones", () 
 });
 
 test("routes · titles match the approved wording", () => {
-  assert.equal(PAGES["/pet-friendly-homestay-shantiniketan"]!.title, "Pet-Friendly Homestay in Shantiniketan | Raj Kuthir");
-  assert.equal(PAGES["/places-to-visit-in-shantiniketan"]!.title, "Places to Visit in Shantiniketan | Raj Kuthir Homestays");
-  assert.equal(PAGES["/gallery"]!.title, "Villa Photos in Shantiniketan | Raj Kuthir Homestays");
-  assert.equal(PAGES["/our-story"]!.title, "Our Story | Raj Kuthir Homestays, Shantiniketan");
+  assert.equal(PAGES["/pet-friendly-homestay-shantiniketan"]!.title, "Pet-Friendly Homestay in Santiniketan | Raj Kuthir");
+  assert.equal(PAGES["/places-to-visit-in-shantiniketan"]!.title, "Places to Visit in Santiniketan | Raj Kuthir Homestays");
+  assert.equal(PAGES["/gallery"]!.title, "Villa Photos in Santiniketan | Raj Kuthir Homestays");
+  assert.equal(PAGES["/our-story"]!.title, "Our Story | Raj Kuthir Homestays, Santiniketan");
 });
 
 test("routes · every indexable page has its own self-referencing canonical", () => {

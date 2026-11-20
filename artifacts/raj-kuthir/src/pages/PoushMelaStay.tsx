@@ -15,7 +15,7 @@ export default function PoushMelaStay() {
       slug="poush-mela"
       festival="Poush Mela"
       peakId="poush-mela"
-      documentTitle="Stay for Poush Mela in Shantiniketan | Raj Kuthir"
+      documentTitle="Stay for Poush Mela in Santiniketan | Raj Kuthir"
       breadcrumb="Poush Mela stay"
       heading={<>A stay for<br /><em>Poush Mela.</em></>}
       intro={

@@ -189,7 +189,7 @@ export const GALLERY_TEASER: Photo[] = ['The terrace, evening', 'The living room
 export default function Gallery() {
   useEffect(() => {
     const previous = document.title;
-    document.title = 'Villa Photos in Shantiniketan | Raj Kuthir Homestays';
+    document.title = 'Villa Photos in Santiniketan | Raj Kuthir Homestays';
     return () => {
       document.title = previous;
     };
