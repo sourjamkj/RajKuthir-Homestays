@@ -22,6 +22,10 @@ import {
   MAX_TURNS,
   buildSystemPrompt,
   historyToMessages,
+  isGreeting,
+  isMenuId,
+  MENU_ROWS,
+  menuAnswer,
   parseStayArgs,
   shouldAgentReply,
   wantsHuman,
@@ -29,7 +33,7 @@ import {
 } from "./wa-agent-rules";
 import { getOrCreateConversation, storeOutbound } from "./wa-webhook";
 import type { InboundMessage } from "./wa-webhook-rules";
-import { sendText } from "./whatsapp-client";
+import { sendInteractive, sendText } from "./whatsapp-client";
 
 /**
  * The WhatsApp reply agent. The webhook stores each guest message and calls
@@ -114,6 +118,26 @@ async function handOff(phone: string, reason: string, now: Date): Promise<void> 
       href: "/admin/inbox",
       dedupeKey: `wa-handoff-${phone}-${now.toISOString().slice(0, 13)}`,
     },
+    now,
+  );
+}
+
+async function sendMenu(phone: string, body: string): Promise<void> {
+  const sent = await sendInteractive({
+    to: phone,
+    message: { type: "list", body, buttonText: "Menu", sections: [{ title: "Raj Kuthir Homestays", rows: MENU_ROWS.map((r) => ({ ...r })) }] },
+  });
+  if (!sent.ok) {
+    logger.warn({ phone, error: sent.error }, "WhatsApp menu was not sent");
+    return;
+  }
+  await storeOutbound({ waId: sent.providerMessageId, phone, type: "interactive", text: `${body}\n[Menu]` });
+}
+
+/** A message the assistant could not answer itself, without muting the chat. */
+async function alertOwner(phone: string, text: string, now: Date): Promise<void> {
+  await notifyOwner(
+    { event: "enquiry", title: "WhatsApp message", body: `+${phone}: ${text.slice(0, 140)}`, href: "/admin/inbox", dedupeKey: `wa-msg-${phone}-${now.toISOString().slice(0, 13)}` },
     now,
   );
 }
@@ -220,10 +244,24 @@ export async function handleInbound(msg: InboundMessage, now = new Date()): Prom
     }
     if (conversation.state === "human") await pool.query(`UPDATE wa_conversations SET state = 'bot' WHERE phone = $1`, [msg.phone]);
 
-    if (!process.env["ANTHROPIC_API_KEY"]?.trim() || wantsHuman(msg.text!)) {
-      await handOff(msg.phone, wantsHuman(msg.text!) ? "Asked to speak to the owner" : "New message (the assistant has no AI key yet)", now);
-      await reply(msg.phone, `Thank you for your message! ${HOST_NAME} will reply here shortly. For anything urgent, call ${HOST_PHONE}.`);
-      return;
+    const text = msg.text!.trim();
+
+    // Menu choices and plain openers are answered without the model.
+    if (isMenuId(text)) {
+      const answer = menuAnswer(text);
+      if (answer.kind === "text") return void (await reply(msg.phone, answer.text));
+    }
+    if (text === "menu_human" || wantsHuman(text)) {
+      await handOff(msg.phone, "Asked to speak to the owner", now);
+      return void (await reply(msg.phone, `${HOST_NAME} will reply here shortly. For anything urgent, call ${HOST_PHONE}.`));
+    }
+    if (isGreeting(text)) {
+      return void (await sendMenu(msg.phone, "Namaskar! 🌿 Welcome to Raj Kuthir Homestays – Sobuj Potro, a private two-bedroom villa in Santiniketan. How can we help? You can also just type your question."));
+    }
+    if (!process.env["ANTHROPIC_API_KEY"]?.trim()) {
+      // No AI yet: the menu still answers the common questions; the owner sees the rest in Inbox.
+      await alertOwner(msg.phone, text, now);
+      return void (await sendMenu(msg.phone, `Thank you! ${HOST_NAME} will reply to your message here soon. Meanwhile, these may help:`));
     }
 
     const answer = await askModel(historyToMessages(await history(msg.phone)), { phone: msg.phone, now });

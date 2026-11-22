@@ -43,3 +43,17 @@ test("asking for a person is recognised in English, Bengali and Hindi", () => {
   for (const text of ["Can I talk to the owner?", "call me please", "মালিকের সাথে কথা বলতে চাই", "मुझे बात करनी है"]) assert.ok(wantsHuman(text), text);
   assert.ok(!wantsHuman("Is the villa free on 17 Dec?"));
 });
+
+test("the menu: greetings open it, every row has an answer, ids read as titles for the model", async () => {
+  const { MENU_ROWS, isGreeting, isMenuId, menuAnswer, readableText } = await import("./wa-agent-rules.ts");
+  for (const text of ["Hi", "hii!", "Hello", "menu", "Good morning", "নমস্কার"]) assert.ok(isGreeting(text), text);
+  for (const text of ["Hi, is 17 Dec free?", "hello can I bring my dog"]) assert.ok(!isGreeting(text), text);
+  for (const row of MENU_ROWS) {
+    assert.ok(row.title.length <= 24 && row.description.length <= 72, row.id);
+    assert.ok(isMenuId(row.id));
+    const answer = menuAnswer(row.id);
+    assert.ok(answer.kind === "human" || answer.text.length > 20, row.id);
+  }
+  assert.equal(readableText("menu_photos"), '(chose "Photos of the villa" from the menu)');
+  assert.equal(readableText("plain text"), "plain text");
+});

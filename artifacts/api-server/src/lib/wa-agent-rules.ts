@@ -24,7 +24,7 @@ export type AgentMessage = { role: "user" | "assistant"; content: string };
 export function historyToMessages(rows: readonly HistoryRow[]): AgentMessage[] {
   const out: AgentMessage[] = [];
   for (const row of rows) {
-    const text = row.text?.trim();
+    const text = readableText(row.text?.trim() ?? null);
     if (!text) continue;
     const role = row.direction === "inbound" ? "user" : "assistant";
     const last = out[out.length - 1];
@@ -145,4 +145,49 @@ ${input.facts}
 
 HOUSE RULES (published)
 ${input.houseRules}`;
+}
+
+/* ------------------------------ the menu ------------------------------ */
+
+/** WhatsApp list menu. Row titles ≤ 24 characters, descriptions ≤ 72 (Meta's limits). */
+export const MENU_ROWS = [
+  { id: "menu_dates", title: "Check dates & price", description: "Is the villa free? What would it cost?" },
+  { id: "menu_photos", title: "Photos of the villa", description: "Every room and the garden" },
+  { id: "menu_rates", title: "Rates", description: "Tariff by number of guests, pets" },
+  { id: "menu_food", title: "Food", description: "Cafe Soi and home-cooked meals" },
+  { id: "menu_rules", title: "House rules", description: "Check-in, pets, smoking, deposit" },
+  { id: "menu_directions", title: "Directions", description: "Map and nearest stations" },
+  { id: "menu_human", title: "Talk to Sourja", description: "The owner replies here" },
+] as const;
+
+export type MenuId = (typeof MENU_ROWS)[number]["id"];
+export const isMenuId = (text: string): text is MenuId => MENU_ROWS.some((r) => r.id === text);
+
+const MENU_ANSWERS: Record<Exclude<MenuId, "menu_human">, string> = {
+  menu_dates:
+    "Please send your check-in and check-out dates and how many are coming, for example:\n• 17 to 19 Dec, 4 adults, 1 dog\n\nI'll check the live calendar and send you the price.",
+  menu_photos: "Here are the photos of Sobuj Potro, every room and the garden:\nhttps://rajkuthirhomestays.casa/gallery",
+  menu_rates:
+    "Our full tariff (by number of guests, plus pet and festival-week charges):\nhttps://rajkuthirhomestays.casa/rates\n\nSend me your dates and party size for the exact price.",
+  menu_food:
+    "• Cafe Soi in the villa grounds serves breakfast, Bengali home cooking, tea and snacks. Menu: https://rajkuthirhomestays.casa/cafe-soi-shantiniketan\n• Home-cooked meals can also be arranged with the caretaker.\n• The kitchen has an induction, microwave, fridge and basic utensils.",
+  menu_rules:
+    "The essentials:\n• Check-in 12 noon, check-out 11 am; photo ID needed for every guest\n• Pets welcome, smoking allowed with care (ashtrays provided)\n• Music low after 10 pm\n• Refundable security deposit ₹2,500, paid at check-in, returned at check-out\n\nFull rules: https://rajkuthirhomestays.casa/house-rules",
+  menu_directions:
+    "Map: https://maps.app.goo.gl/aEdaJaaeEy1DZ8Ps8\n\n• Prantik station is the nearest; Bolpur Shantiniketan is where the fast trains stop.\n• Our caretaker (+91 78726 85558) can guide you on the way.",
+};
+
+export function menuAnswer(id: MenuId): { kind: "text"; text: string } | { kind: "human" } {
+  return id === "menu_human" ? { kind: "human" } : { kind: "text", text: MENU_ANSWERS[id] };
+}
+
+/** "Hi", "Hello", "menu"… a short opener answered with the menu rather than the model. */
+const GREETING = /^(hi+|hello|hey|hlo|namaste|namaskar|good (morning|afternoon|evening)|menu|start|help|নমস্কার|হ্যালো|नमस्ते)[\s!.,]*$/i;
+export const isGreeting = (text: string): boolean => GREETING.test(text.trim());
+
+/** Menu ids are stored as the guest's text; the model sees the row title instead. */
+export function readableText(text: string | null): string | null {
+  if (!text) return text;
+  const row = MENU_ROWS.find((r) => r.id === text);
+  return row ? `(chose "${row.title}" from the menu)` : text;
 }
