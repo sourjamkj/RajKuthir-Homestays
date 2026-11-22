@@ -19,6 +19,7 @@ import {
   queueMessage,
 } from "./notifications-repo";
 import { guestApiSendingOn } from "./whatsapp-mode";
+import { pool } from "@workspace/db";
 import { autoSendKinds } from "./owner-settings-state";
 import { ensureReviewTables } from "./reviews-migrate";
 
@@ -167,6 +168,28 @@ export async function scheduleForBooking(
   return queued;
 }
 
+/**
+ * Messages queued as drafts while a kind was not ticked for auto-send (or
+ * WhatsApp was in manual mode) stay drafts forever, because each booking
+ * gets one message per kind. Once the owner ticks a kind, still-useful
+ * drafts of it go out too: reminders whose moment is still ahead, and a
+ * booking confirmation only for a booking made in the last day (a
+ * "your stay is confirmed" weeks later would confuse).
+ */
+async function promoteDrafts(now = new Date()): Promise<void> {
+  const kinds = autoSendKinds().filter((k) => (ALL_KINDS as readonly string[]).includes(k) && k !== "review_request");
+  if (!kinds.length) return;
+  const { rowCount } = await pool.query(
+    `UPDATE whatsapp_messages m SET status = 'pending', updated_at = now()
+     FROM bookings b
+     WHERE m.booking_id = b.id AND m.status = 'draft' AND m.kind::text = ANY($1)
+       AND m.send_after > $2::timestamptz - interval '1 hour'
+       AND (m.kind <> 'booking_confirmed' OR b.created_at > $2::timestamptz - interval '24 hours')`,
+    [kinds, now],
+  );
+  if (rowCount) logger.info({ promoted: rowCount }, "Auto-send now covers queued drafts");
+}
+
 /** Sweeps recent and upcoming bookings, queueing anything still missing. */
 export async function scheduleUpcoming(now = new Date()): Promise<number> {
   const today = istDateOf(now);
@@ -269,5 +292,6 @@ export async function runNotifications(): Promise<DrainResult> {
   // The outbox table and any message kinds added since it was created.
   await ensureReviewTables();
   await scheduleUpcoming();
+  await promoteDrafts();
   return drainOutbox();
 }
