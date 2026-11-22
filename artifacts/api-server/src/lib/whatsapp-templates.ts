@@ -161,8 +161,9 @@ export function buildTemplate(
         params: [guest, arrive],
         preview:
           `Hello ${guest}, your stay at Raj Kuthir Homestays – Sobuj Potro begins on ${arrive}. ` +
-          `We still need a photo ID for every guest before arrival. Tap Upload ID below — it takes two minutes. ` +
-          `Your arrival details and Wi-Fi pack follow as soon as the ID is verified.`,
+          `Please complete the mandatory guest information and ID document verification (Upload ID below) at least 48 hours before your check-in time. ` +
+          `⚠️ Failure to complete the mandatory verification within this timeframe may result in check-in being denied without refund, in accordance with the booking terms. ` +
+          `Your confirmation, arrival details and Wi-Fi pack follow once your ID is verified.`,
       };
 
     case "owner_new_booking": {

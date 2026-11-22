@@ -2,7 +2,7 @@
  * Caretaker alerts: what to send, to whom, and when. No database, no clock of
  * its own, no network — caretaker-alerts.ts does those and calls this.
  *
- *   new_booking   as soon as a booking appears (never 9 pm – 8 am IST)
+ *   new_booking   as soon as a booking appears, at any hour
  *   checkin_eve   10 am IST the day before check-in
  *   checkout_eve  10 am IST the day before check-out
  *   cancelled     when a booking the caretaker was told about is cancelled
@@ -32,8 +32,6 @@ export type DueAlert = { bookingId: string; kind: AlertKind; text: string };
 
 const IST_MS = 330 * 60_000;
 const HOUR = 3_600_000;
-const QUIET_START = 21;
-const QUIET_END = 8;
 const EVE_HOUR = 10;
 
 /** The UTC instant of hh:00 IST on an ISO date. */
@@ -46,19 +44,10 @@ export function istDate(at: Date): string {
   return new Date(at.getTime() + IST_MS).toISOString().slice(0, 10);
 }
 
-function istHour(at: Date): number {
-  return new Date(at.getTime() + IST_MS).getUTCHours();
-}
-
 function addDays(iso: string, days: number): string {
   const at = new Date(`${iso}T00:00:00Z`);
   at.setUTCDate(at.getUTCDate() + days);
   return at.toISOString().slice(0, 10);
-}
-
-export function isQuietHour(at: Date): boolean {
-  const hour = istHour(at);
-  return hour >= QUIET_START || hour < QUIET_END;
 }
 
 const SOURCE_LABEL: Record<string, string> = {
@@ -139,7 +128,6 @@ export function alertText(kind: AlertKind, b: AlertBooking): string {
  *
  * `sent` holds "bookingId:kind" for alerts already delivered to everyone.
  * Rules that keep this quiet rather than noisy:
- *  - nothing during quiet hours; it goes at 8 am instead
  *  - a "new booking" only for a booking created in the last 24 hours that
  *    has not ended — a bulk import of old bookings must not page anyone
  *  - an eve reminder only between 10 am the day before and the moment
@@ -155,11 +143,10 @@ export function dueAlerts(
   now: Date,
   options: { manual?: boolean } = {},
 ): DueAlert[] {
-  // Manual mode is the owner's own queue in the console: no quiet hours (they
-  // choose when to tap send) and a new booking stays listed for a week, not a
-  // day, in case the console is not opened for a while.
+  // No quiet hours: the caretaker hears about a booking whatever the hour.
+  // Manual mode is the owner's own queue in the console: a new booking stays
+  // listed for a week, not a day, in case the console is not opened for a while.
   const manual = options.manual === true;
-  if (!manual && isQuietHour(now)) return [];
   const newWindow = (manual ? 7 * 24 : 24) * HOUR;
   const today = istDate(now);
   const due: DueAlert[] = [];
