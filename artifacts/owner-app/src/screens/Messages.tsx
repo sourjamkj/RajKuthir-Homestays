@@ -9,6 +9,7 @@ import { useLoad } from '../useLoad';
 const KIND: Record<OutboxMessage['kind'], string> = {
   booking_confirmed: 'Booking confirmed',
   checkin_reminder: 'Check-in reminder',
+  checkin_welcome: 'Check-in welcome (Wi-Fi poster)',
   checkout_today: 'Check-out today',
   review_request: 'Review request',
 };

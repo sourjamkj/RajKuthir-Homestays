@@ -5,6 +5,7 @@ import { logger } from "./logger";
 import { sendEmail } from "./book-pay-notify";
 import QRCode from "qrcode";
 import { renderInvoicePdf } from "./invoice-pdf";
+import { withHouseRules } from "./house-rules";
 import { upiIntentUrl } from "./book-pay-rules";
 import { upiDetails } from "./whatsapp-templates";
 import { documentsForRefs, type OtaDocumentMeta } from "./ota-documents";
@@ -238,7 +239,7 @@ export async function buildConfirmation(
           utr: source.utr,
         })
       : null;
-  const pdf = await renderInvoicePdf(content, { kind: "confirmation", payment, receipt });
+  const pdf = await withHouseRules(await renderInvoicePdf(content, { kind: "confirmation", payment, receipt }));
   return { ok: true, invoice: { content, pdf, filename: `Booking-Confirmation-${reference.replace(/[^\w-]+/g, "-")}.pdf` } };
 }
 

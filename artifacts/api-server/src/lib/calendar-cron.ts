@@ -1,5 +1,6 @@
 import { logger } from "./logger";
 import { syncCalendarSources } from "./calendar-sync";
+import { notifyFreedDates } from "./dates-freed";
 
 let started = false;
 // Every 15 minutes: a last-minute OTA booking must reach the calendar before
@@ -11,9 +12,12 @@ export function startCalendarCron(): void {
   started = true;
 
   const poll = () => {
-    syncCalendarSources().catch((error) => {
-      logger.error({ err: error }, "Calendar polling failed unexpectedly");
-    });
+    syncCalendarSources()
+      .catch((error) => {
+        logger.error({ err: error }, "Calendar polling failed unexpectedly");
+      })
+      // After the sync, so an OTA cancellation just imported counts as free.
+      .then(() => notifyFreedDates());
   };
 
   const interval = setInterval(poll, POLL_INTERVAL_MS);

@@ -33,7 +33,16 @@ const refuse = (status: number, error: string): ActionResult<never> => ({ ok: fa
  * The order matters: price it, send it, and only then record it. The quote is
  * the owner's agreed price when he set one, else the rate card.
  */
-export async function sendEnquiryQuote(id: string) {
+export async function sendEnquiryQuote(
+  id: string,
+  /**
+   * The "your dates are free again" message (dates-freed.ts): the same nine
+   * figures under another approved template, whose "Book these dates" button
+   * ends in the offer token. Only ever sent through the Business API.
+   */
+  options: { templateName?: string } = {},
+) {
+  if (options.templateName && !guestApiSendingOn()) return refuse(409, "The WhatsApp Business API is not switched on.");
   const enquiry = await getEnquiry(id);
   if (!enquiry) return refuse(404, "That enquiry no longer exists.");
 
@@ -58,11 +67,22 @@ export async function sendEnquiryQuote(id: string) {
     holdExpiresAt: holdExpiryOf(sentAt),
     offerUrl: token ? offerUrl(SITE, token) : null,
   });
+  if (options.templateName) {
+    // Its button needs the offer link; without one Meta would reject the send.
+    if (!token) return refuse(503, "Could not make the guest's booking link.");
+    template.name = options.templateName;
+  }
 
   // With the Business API on, Meta delivers it; otherwise the owner sends the
   // wa.me link from his own WhatsApp. `delivery` says which, honestly.
   const auto = guestApiSendingOn()
-    ? await sendTemplate({ to, templateName: template.name, languageCode: template.languageCode, params: template.params })
+    ? await sendTemplate({
+        to,
+        templateName: template.name,
+        languageCode: template.languageCode,
+        params: template.params,
+        urlButtonParam: options.templateName ? (token ?? undefined) : undefined,
+      })
     : null;
 
   if (auto && !auto.ok) {

@@ -1,4 +1,5 @@
 import { and, desc, eq, gte, inArray, isNull, lte, ne } from "drizzle-orm";
+import { autoSendKinds } from "./owner-settings-state";
 import {
   bookingIssues,
   bookings,
@@ -146,8 +147,9 @@ async function considerBooking(booking: Booking, issues: Set<string>, now: Date,
     .values({
       bookingId: booking.id,
       kind: "review_request",
-      // Always a draft: marketing, and OTA guests above all, wait for the owner.
-      status: "draft",
+      // A draft unless the owner ticked review requests in auto-send, and
+      // OTA guests' always wait for the owner.
+      status: booking.source === "direct" && autoSendKinds().includes("review_request") ? "pending" : "draft",
       toPhone: to!,
       templateName: spec.name,
       templateParams: spec.params,

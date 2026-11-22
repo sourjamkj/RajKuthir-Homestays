@@ -20,6 +20,7 @@ import {
 } from "./notifications-repo";
 import { guestApiSendingOn } from "./whatsapp-mode";
 import { autoSendKinds } from "./owner-settings-state";
+import { ensureReviewTables } from "./reviews-migrate";
 
 /**
  * When each message goes out, and the rules about whether it goes out at all.
@@ -94,6 +95,10 @@ function scheduleFor(kind: MessageKind, booking: Booking, now: Date): Date | nul
     case "checkin_reminder":
       return istMoment(addDays(booking.checkIn, -1), 10);
 
+    case "checkin_welcome":
+      // Check-in time, so the Wi-Fi poster is at hand when they walk in.
+      return istMoment(booking.checkIn, 12);
+
     case "checkout_today":
       return istMoment(booking.checkOut, 8);
 
@@ -108,6 +113,7 @@ function scheduleFor(kind: MessageKind, booking: Booking, now: Date): Date | nul
 const ALL_KINDS: MessageKind[] = [
   "booking_confirmed",
   "checkin_reminder",
+  "checkin_welcome",
   "checkout_today",
 ];
 
@@ -209,9 +215,9 @@ export async function drainOutbox(now = new Date()): Promise<DrainResult> {
     result.attempted += 1;
 
     const outcome =
-      (message.kind === "checkin_reminder" &&
-        (await sendWithArrivalPack(message.toPhone, message.templateParams))) ||
-      (await sendTemplate({
+      message.kind === "checkin_welcome"
+        ? await sendWithPoster(message.toPhone, message.templateName, message.templateParams)
+        : await sendTemplate({
         to: message.toPhone,
         templateName:
           message.kind === "review_request"
@@ -219,7 +225,7 @@ export async function drainOutbox(now = new Date()): Promise<DrainResult> {
             : message.templateName,
         languageCode: "en",
         params: message.templateParams,
-      }));
+      });
 
     if (outcome.ok) {
       await markSent(message.id, outcome.providerMessageId);
@@ -244,27 +250,24 @@ export async function drainOutbox(now = new Date()): Promise<DrainResult> {
 }
 
 /**
- * The day-before reminder with the arrival pack PDF (Wi-Fi QR, contacts)
- * attached, when WHATSAPP_ARRIVAL_PACK_TEMPLATE names an approved template
- * with a Document header and the same three body params as
- * rk_checkin_reminder. Returns null when not set up or refused, so the
- * caller falls back to the plain reminder and the guest still hears from us.
+ * The check-in welcome, with the Wi-Fi poster (assets/arrival-pack.pdf: Wi-Fi
+ * QR and contact numbers) as the template's Document header. Without the file
+ * the send is refused rather than sent bare: the approved template needs it.
  */
-async function sendWithArrivalPack(to: string, params: string[]): Promise<SendResult | null> {
-  const templateName = process.env["WHATSAPP_ARRIVAL_PACK_TEMPLATE"]?.trim();
-  const file = templateName ? findPackPdf() : null;
-  if (!templateName || !file) return null;
+async function sendWithPoster(to: string, templateName: string, params: string[]): Promise<SendResult> {
+  const file = findPackPdf();
+  if (!file) return { ok: false, error: "The Wi-Fi poster PDF (assets/arrival-pack.pdf) is missing.", retryable: false };
 
-  const filename = "raj-kuthir-arrival-pack.pdf";
+  const filename = "raj-kuthir-wifi-and-contacts.pdf";
   const media = await uploadMedia({ bytes: await readFile(file), mimeType: "application/pdf", filename });
-  if (!media.ok) return null;
+  if (!media.ok) return { ok: false, error: `Poster upload refused: ${media.error}`, retryable: true };
 
-  const sent = await sendTemplate({ to, templateName, params, headerDocument: { mediaId: media.mediaId, filename } });
-  if (!sent.ok) logger.warn({ error: sent.error }, "Arrival pack reminder refused; sending the plain reminder");
-  return sent.ok ? sent : null;
+  return sendTemplate({ to, templateName, params, headerDocument: { mediaId: media.mediaId, filename } });
 }
 
 export async function runNotifications(): Promise<DrainResult> {
+  // The outbox table and any message kinds added since it was created.
+  await ensureReviewTables();
   await scheduleUpcoming();
   return drainOutbox();
 }

@@ -6,10 +6,10 @@ import { adminFetch } from '@/lib/admin-api';
 import type { AutoSendKind, SettingsView } from '@workspace/admin-client';
 
 /**
- * Which booking messages go to guests by themselves. Each is a fixed,
- * Meta-approved template filled from the booking, so it needs no review;
- * everything else (reviews, offers, anything AI-written) still waits for the
- * owner. Changing this asks for the admin password.
+ * Which guest messages go out by themselves. Each is a fixed, Meta-approved
+ * template filled from the booking or enquiry; OTA guests' review requests
+ * and anything AI-written still wait for the owner. Changing this asks for
+ * the admin password.
  */
 const SETTINGS_KEY = ['/api/admin/settings'];
 
@@ -65,7 +65,7 @@ export function AdminAutoSend() {
         ))}
       </ul>
       <p className="mt-4 text-[12px] leading-5 text-muted-foreground">
-        Ticked messages go out by themselves once WhatsApp is on the Business API. Unticked ones wait for you as drafts. Review requests, offers and
+        Ticked messages go out by themselves once WhatsApp is on the Business API. Unticked ones wait for you as drafts. OTA guests' review requests and
         anything not from an approved template always wait. No message goes out between 9 pm and 8 am.
         {w.mode.value !== 'api' && ' WhatsApp is in manual mode right now, so every message waits for you to send it from your phone.'}
       </p>

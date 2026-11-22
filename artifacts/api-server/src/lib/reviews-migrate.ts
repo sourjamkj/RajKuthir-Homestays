@@ -109,6 +109,9 @@ export function ensureReviewTables(): Promise<boolean> {
   if (!applied) {
     applied = pool
       .query(REVIEWS_MIGRATION_SQL)
+      // Values added to message_kind after the table was first created. ADD VALUE
+      // cannot share a transaction with statements that use the new value, so it runs on its own.
+      .then(() => pool.query("ALTER TYPE message_kind ADD VALUE IF NOT EXISTS 'checkin_welcome'"))
       .then(() => {
         logger.info("Review tables are in place");
         return true;

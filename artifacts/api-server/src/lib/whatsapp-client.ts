@@ -259,6 +259,8 @@ export async function sendTemplate(input: {
   params: string[];
   /** A document header (e.g. the invoice PDF), from uploadMedia. The template must have a Document header. */
   headerDocument?: { mediaId: string; filename: string };
+  /** The variable end of the template's first (dynamic) URL button, e.g. an offer token. */
+  urlButtonParam?: string;
 }): Promise<SendResult> {
   if (!isWhatsappEnabled()) {
     return {
@@ -312,6 +314,9 @@ export async function sendTemplate(input: {
                     })),
                   },
                 ]
+              : []),
+            ...(input.urlButtonParam
+              ? [{ type: "button", sub_type: "url", index: "0", parameters: [{ type: "text", text: input.urlButtonParam }] }]
               : []),
           ],
         },
