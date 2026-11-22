@@ -70,12 +70,27 @@ export type StoredOwnerSettings = {
  * Fixed, template-only booking messages the owner may let go out without
  * approval. Review requests, marketing and anything AI-written always wait.
  */
-export const AUTO_SEND_KINDS = ["booking_confirmed", "checkin_reminder", "checkout_today"] as const;
+export const AUTO_SEND_KINDS = ["booking_confirmed", "checkin_reminder", "checkin_welcome", "checkout_today", "dates_available", "enquiry_quote", "review_request"] as const;
 export type AutoSendKind = (typeof AUTO_SEND_KINDS)[number];
+/** What the old WHATSAPP_REQUIRE_APPROVAL=false switch covered. Kinds added later go out by themselves only once ticked in the console. */
+const RAILWAY_AUTO_SEND_KINDS: readonly AutoSendKind[] = ["booking_confirmed", "checkin_reminder", "checkout_today"];
 export const AUTO_SEND_INFO: Record<AutoSendKind, { label: string; description: string }> = {
   booking_confirmed: { label: "Booking confirmation", description: "As soon as a booking is confirmed (8 am to 9 pm)." },
-  checkin_reminder: { label: "Arrival pack", description: "The day before check-in at 10 am: directions, Wi-Fi and house details, with the arrival-pack PDF." },
+  checkin_reminder: { label: "Arrival reminder", description: "The day before check-in at 10 am: directions and the caretaker's number." },
+  checkin_welcome: { label: "Check-in welcome", description: "Check-in day at 12 noon, with the Wi-Fi poster PDF (Wi-Fi QR code and contact numbers)." },
   checkout_today: { label: "Checkout reminder", description: "On check-out day at 8 am." },
+  enquiry_quote: {
+    label: "Enquiry quote",
+    description: "The moment a website enquiry arrives with dates and party size: the rate-card price, the booking link and UPI, and the dates held 24 hours. Agreed prices and discounts still come from you.",
+  },
+  review_request: {
+    label: "Google review request",
+    description: "Direct guests only, on check-out day at 2 pm. OTA guests' requests still wait for you.",
+  },
+  dates_available: {
+    label: "Dates free again",
+    description: "When dates an enquiry asked for come free (a cancellation, a released block), the first guest who asked gets the price and a Book button, and the dates are held 24 hours (8 am to 9 pm).",
+  },
 };
 
 /** Built-in defaults the code used before this console existed. */
@@ -171,7 +186,7 @@ export function resolveWhatsappMode(stored: StoredOwnerSettings, env: Env): Reso
 export function resolveAutoSend(stored: StoredOwnerSettings, env: Env): Resolved<AutoSendKind[]> {
   if (Array.isArray(stored.whatsappAutoSend)) return { value: stored.whatsappAutoSend, source: "console" };
   return env["WHATSAPP_REQUIRE_APPROVAL"] === "false"
-    ? { value: [...AUTO_SEND_KINDS], source: "railway" }
+    ? { value: [...RAILWAY_AUTO_SEND_KINDS], source: "railway" }
     : { value: [], source: "default" };
 }
 

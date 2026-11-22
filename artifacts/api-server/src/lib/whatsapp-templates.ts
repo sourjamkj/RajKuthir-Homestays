@@ -27,6 +27,7 @@ import {
 export type MessageKind =
   | "booking_confirmed"
   | "checkin_reminder"
+  | "checkin_welcome"
   | "checkout_today"
   | "review_request";
 
@@ -105,6 +106,19 @@ export function buildTemplate(
           `Hello ${guest}, we are looking forward to seeing you tomorrow, ${arrive}. ` +
           `Check-in is from 12 noon. Directions: ${CONTACT.mapsUrl} — ` +
           `our caretaker is on ${CONTACT.caretakerPhone} if anything comes up on the way.`,
+      };
+
+    case "checkin_welcome":
+      // Sent with the Wi-Fi poster PDF as its Document header (notifications.ts).
+      return {
+        name: "rk_checkin_welcome",
+        category: "utility",
+        languageCode: "en",
+        params: [guest, CONTACT.caretakerPhone],
+        preview:
+          `Hello ${guest} 🌿 Welcome to Raj Kuthir Homestays – Sobuj Potro! The villa is ready for you from 12 noon today. ` +
+          `The attached poster has the Wi-Fi QR code (open your phone camera and scan it to connect) and our important contact numbers. ` +
+          `Caretaker (arrival, meals, local help): ${CONTACT.caretakerPhone}.`,
       };
 
     case "checkout_today":

@@ -34,6 +34,7 @@ import {
 } from "../lib/whatsapp-templates";
 import { sendTemplate, toWhatsappNumber } from "../lib/whatsapp-client";
 import { guestApiSendingOn } from "../lib/whatsapp-mode";
+import { autoSendKinds } from "../lib/owner-settings-state";
 
 const router: IRouter = Router();
 
@@ -197,6 +198,17 @@ router.post("/enquiries", async (req, res) => {
 
     logger.info({ enquiryId: created.id }, "Enquiry received");
     res.status(201).json({ received: true });
+
+    // Auto-send "Enquiry quote": price, booking link and UPI straight back on
+    // WhatsApp. sendEnquiryQuote refuses (and the owner quotes by hand) when
+    // the stay cannot be priced from the rate card, e.g. no party size.
+    if (created.checkIn && created.checkOut && created.adults && guestApiSendingOn() && autoSendKinds().includes("enquiry_quote")) {
+      sendEnquiryQuote(created.id)
+        .then((sent) => {
+          if (!sent.ok) logger.info({ enquiryId: created.id, error: sent.body["error"] }, "Enquiry not quoted automatically");
+        })
+        .catch((error) => logger.error({ err: error, enquiryId: created.id }, "Automatic enquiry quote failed"));
+    }
   } catch (error) {
     logger.error({ err: error }, "Could not save enquiry");
     // The guest has done nothing wrong; do not surface our storage problem.

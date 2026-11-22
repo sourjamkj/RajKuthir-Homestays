@@ -133,16 +133,17 @@ test("auto-send: per message kind, falls back to the old Railway switch, sensiti
   const on = applySettingsPatch({}, { whatsappAutoSend: ["checkout_today", "checkin_reminder"] }, {});
   assert.ok(on.ok && on.sensitive);
   assert.deepEqual(on.ok && on.next.whatsappAutoSend, ["checkin_reminder", "checkout_today"], "kept in a fixed order");
-  for (const bad of [["review_request"], ["marketing"], "checkin_reminder", [1]]) {
+  for (const bad of [["marketing"], "checkin_reminder", [1]]) {
     assert.equal(applySettingsPatch({}, { whatsappAutoSend: bad }, {}).ok, false, JSON.stringify(bad));
   }
   const cleared = applySettingsPatch({ whatsappAutoSend: ["booking_confirmed"] }, { whatsappAutoSend: null }, {});
   assert.ok(cleared.ok && cleared.next.whatsappAutoSend === null);
 
   assert.deepEqual(parseStoredSettings(JSON.stringify({ whatsappAutoSend: ["checkin_reminder"] })).whatsappAutoSend, ["checkin_reminder"]);
-  assert.equal(parseStoredSettings(JSON.stringify({ whatsappAutoSend: ["review_request"] })).whatsappAutoSend, undefined);
+  assert.equal(parseStoredSettings(JSON.stringify({ whatsappAutoSend: ["marketing"] })).whatsappAutoSend, undefined);
 
   const view = settingsView({ whatsappAutoSend: ["checkin_reminder"] }, {});
   assert.equal(view.whatsapp.requireApproval, false);
-  assert.equal(view.whatsapp.autoSendOptions.length, 3);
+  assert.equal(view.whatsapp.autoSendOptions.length, 7);
+  assert.ok(!resolveAutoSend({}, { WHATSAPP_REQUIRE_APPROVAL: "false" }).value.includes("checkin_welcome"), "a new kind never switches itself on");
 });

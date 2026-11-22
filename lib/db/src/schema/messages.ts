@@ -34,6 +34,8 @@ export const messageKindEnum = pgEnum("message_kind", [
   "checkout_today",
   /** Marketing: asks for a Google review a day after checkout. */
   "review_request",
+  /** Utility: check-in day at noon, with the Wi-Fi poster PDF (Wi-Fi QR, contacts). */
+  "checkin_welcome",
 ]);
 
 export const messageStatusEnum = pgEnum("message_status", [
