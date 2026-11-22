@@ -163,8 +163,8 @@ export async function confirmPaymentRequest(
       templateName: PAYMENT_RECEIVED_TEMPLATE,
       params: [
         enquiry.name.trim().split(/\s+/)[0] || "there",
-        prettyDate(booking.checkIn),
-        prettyDate(booking.checkOut),
+        prettyDate(enquiry.checkIn ?? ""),
+        prettyDate(enquiry.checkOut ?? ""),
         booking.reference ?? request.reference,
         rupees(request.advancePaise),
         rupees(request.totalPaise - request.advancePaise),
