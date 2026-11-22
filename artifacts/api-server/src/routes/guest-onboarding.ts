@@ -17,6 +17,9 @@ import {
   verifyGuestDocuments,
 } from "../lib/guest-onboarding-repo";
 import { documentDownloadHeaders } from "../lib/document-security";
+import { logger } from "../lib/logger";
+import { runNotifications } from "../lib/notifications";
+import { isWhatsappConfigured } from "../lib/whatsapp-client";
 import { rejectionReasonProblem } from "../lib/document-rejection-rules";
 import { maxCards, MAX_FILES_PER_SUBMIT, PDF_BOTH_SIDES, RATE_LADDER_MAX, type GuestAge } from "../lib/guest-id-rules";
 import { getLadder } from "../lib/rates-repo";
@@ -325,6 +328,8 @@ router.post("/admin/guest-stays/:bookingId/verify", requireAdmin, async (req, re
   }
   await verifyGuestDocuments(bookingId, req.body?.verified === true, "admin");
   res.json({ saved: true });
+  // Arrival messages held for this check go now rather than at the next 15-minute run.
+  if (req.body?.verified === true && isWhatsappConfigured()) void runNotifications().catch((err) => logger.warn({ err }, "Post-verification send failed"));
 });
 
 export default router;

@@ -17,7 +17,9 @@ import {
   markFailed,
   markSent,
   queueMessage,
+  setMessageStatus,
 } from "./notifications-repo";
+import { createOrRefreshOnboarding } from "./guest-onboarding-repo";
 import { guestApiSendingOn } from "./whatsapp-mode";
 import { pool } from "@workspace/db";
 import { autoSendKinds } from "./owner-settings-state";
@@ -103,6 +105,13 @@ function scheduleFor(kind: MessageKind, booking: Booking, now: Date): Date | nul
     case "checkout_today":
       return istMoment(booking.checkOut, 8);
 
+    case "verification_reminder": {
+      // A day before the 48-hour ID deadline; a booking made later gets it now.
+      if (booking.checkIn < istDateOf(now)) return null;
+      const at = istMoment(addDays(booking.checkIn, -3), 10);
+      return at > now ? at : now;
+    }
+
     case "review_request":
       // Queued by review-requests.ts instead: it has its own timing (14:00
       // IST on check-out day, 3-day cut-off) and eligibility rules.
@@ -116,6 +125,7 @@ const ALL_KINDS: MessageKind[] = [
   "checkin_reminder",
   "checkin_welcome",
   "checkout_today",
+  "verification_reminder",
 ];
 
 /**
@@ -172,22 +182,55 @@ export async function scheduleForBooking(
  * Messages queued as drafts while a kind was not ticked for auto-send (or
  * WhatsApp was in manual mode) stay drafts forever, because each booking
  * gets one message per kind. Once the owner ticks a kind, still-useful
- * drafts of it go out too: reminders whose moment is still ahead, and a
- * booking confirmation only for a booking made in the last day (a
- * "your stay is confirmed" weeks later would confuse).
+ * drafts of it go out too: anything whose moment is still ahead; a
+ * booking confirmation only for a booking made in the last day whose stay
+ * has not begun; and the arrival messages while they are still useful
+ * (see expireArrivalMessages), since they may have waited on ID checks.
  */
 async function promoteDrafts(now = new Date()): Promise<void> {
-  const kinds = autoSendKinds().filter((k) => (ALL_KINDS as readonly string[]).includes(k) && k !== "review_request");
+  const kinds = autoSendKinds().filter((k) => (ALL_KINDS as readonly string[]).includes(k));
   if (!kinds.length) return;
   const { rowCount } = await pool.query(
     `UPDATE whatsapp_messages m SET status = 'pending', updated_at = now()
      FROM bookings b
      WHERE m.booking_id = b.id AND m.status = 'draft' AND m.kind::text = ANY($1)
-       AND m.send_after > $2::timestamptz - interval '1 hour'
-       AND (m.kind <> 'booking_confirmed' OR b.created_at > $2::timestamptz - interval '24 hours')`,
+       AND b.status = 'confirmed' AND b.check_out >= ($2::timestamptz AT TIME ZONE 'Asia/Kolkata')::date
+       AND (m.send_after > $2::timestamptz - interval '1 hour' OR m.kind IN ('checkin_reminder', 'checkin_welcome'))
+       AND (m.kind <> 'booking_confirmed' OR (b.created_at > $2::timestamptz - interval '24 hours'
+            AND b.check_in > ($2::timestamptz AT TIME ZONE 'Asia/Kolkata')::date))`,
     [kinds, now],
   );
   if (rowCount) logger.info({ promoted: rowCount }, "Auto-send now covers queued drafts");
+}
+
+/**
+ * Arrival messages held back for ID verification go out once it is done,
+ * but not after they stop making sense: the arrival reminder by noon on
+ * check-in day, the check-in welcome by 11 am check-out.
+ */
+async function expireArrivalMessages(now = new Date()): Promise<void> {
+  await pool.query(
+    `UPDATE whatsapp_messages m SET status = 'cancelled', error = 'Not sent: the moment had passed', updated_at = now()
+     FROM bookings b
+     WHERE m.booking_id = b.id AND m.status = 'pending'
+       AND ((m.kind = 'checkin_reminder' AND $1::timestamptz > (b.check_in + time '12:00') AT TIME ZONE 'Asia/Kolkata')
+         OR (m.kind = 'checkin_welcome' AND $1::timestamptz > (b.check_out + time '11:00') AT TIME ZONE 'Asia/Kolkata'))`,
+    [now],
+  );
+}
+
+/**
+ * A fresh pre-arrival link token while the booking's guests are not yet
+ * verified; null once they are (or for a booking that no longer exists).
+ * Issuing a new link replaces any older one, as the console does.
+ */
+async function issueIdLinkIfUnverified(bookingId: string): Promise<string | null> {
+  const { rows } = await pool.query<{ status: string }>(
+    "SELECT status FROM guest_onboarding WHERE booking_id = $1",
+    [bookingId],
+  );
+  if (rows[0]?.status === "verified") return null;
+  return (await createOrRefreshOnboarding(bookingId))?.token ?? null;
 }
 
 /** Sweeps recent and upcoming bookings, queueing anything still missing. */
@@ -235,6 +278,17 @@ export async function drainOutbox(now = new Date()): Promise<DrainResult> {
       }
     }
 
+    // Sent only while the ID is still unverified, with a freshly issued link.
+    let idLinkToken: string | undefined;
+    if (message.kind === "verification_reminder") {
+      const issued = message.bookingId ? await issueIdLinkIfUnverified(message.bookingId) : null;
+      if (!issued) {
+        await setMessageStatus(message.id, "cancelled");
+        continue;
+      }
+      idLinkToken = issued;
+    }
+
     result.attempted += 1;
 
     const outcome =
@@ -248,6 +302,7 @@ export async function drainOutbox(now = new Date()): Promise<DrainResult> {
             : message.templateName,
         languageCode: "en",
         params: message.templateParams,
+        urlButtonParam: idLinkToken,
       });
 
     if (outcome.ok) {
@@ -293,5 +348,6 @@ export async function runNotifications(): Promise<DrainResult> {
   await ensureReviewTables();
   await scheduleUpcoming();
   await promoteDrafts();
+  await expireArrivalMessages();
   return drainOutbox();
 }

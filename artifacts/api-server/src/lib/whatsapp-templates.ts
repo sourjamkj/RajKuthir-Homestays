@@ -29,7 +29,8 @@ export type MessageKind =
   | "checkin_reminder"
   | "checkin_welcome"
   | "checkout_today"
-  | "review_request";
+  | "review_request"
+  | "verification_reminder";
 
 export type TemplateSpec = {
   name: string;
@@ -131,6 +132,20 @@ export function buildTemplate(
           `Good morning ${guest}. Check-out is by 11 am today. ` +
           `Please leave the keys with the caretaker (${CONTACT.caretakerPhone}). ` +
           `Thank you for staying with us — travel safely.`,
+      };
+
+    case "verification_reminder":
+      // The "Upload ID" button's URL ends in a fresh pre-arrival token, added at
+      // send time (notifications.ts), so no token is ever stored in the outbox.
+      return {
+        name: "rk_verification_reminder",
+        category: "utility",
+        languageCode: "en",
+        params: [guest, arrive],
+        preview:
+          `Hello ${guest}, your stay at Raj Kuthir Homestays – Sobuj Potro begins on ${arrive}. ` +
+          `We still need a photo ID for every guest before arrival. Tap Upload ID below — it takes two minutes. ` +
+          `Your arrival details and Wi-Fi pack follow as soon as the ID is verified.`,
       };
 
     case "review_request":

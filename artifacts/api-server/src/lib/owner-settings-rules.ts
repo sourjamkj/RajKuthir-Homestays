@@ -70,7 +70,7 @@ export type StoredOwnerSettings = {
  * Fixed, template-only booking messages the owner may let go out without
  * approval. Review requests, marketing and anything AI-written always wait.
  */
-export const AUTO_SEND_KINDS = ["booking_confirmed", "checkin_reminder", "checkin_welcome", "checkout_today", "dates_available", "enquiry_quote", "review_request"] as const;
+export const AUTO_SEND_KINDS = ["booking_confirmed", "checkin_reminder", "checkin_welcome", "checkout_today", "dates_available", "enquiry_quote", "review_request", "verification_reminder"] as const;
 export type AutoSendKind = (typeof AUTO_SEND_KINDS)[number];
 /** What the old WHATSAPP_REQUIRE_APPROVAL=false switch covered. Kinds added later go out by themselves only once ticked in the console. */
 const RAILWAY_AUTO_SEND_KINDS: readonly AutoSendKind[] = ["booking_confirmed", "checkin_reminder", "checkout_today"];
@@ -79,6 +79,10 @@ export const AUTO_SEND_INFO: Record<AutoSendKind, { label: string; description: 
   checkin_reminder: { label: "Arrival reminder", description: "The day before check-in at 10 am: directions and the caretaker's number." },
   checkin_welcome: { label: "Check-in welcome", description: "Check-in day at 12 noon, with the Wi-Fi poster PDF (Wi-Fi QR code and contact numbers)." },
   checkout_today: { label: "Checkout reminder", description: "On check-out day at 8 am." },
+  verification_reminder: {
+    label: "ID verification reminder",
+    description: "3 days before check-in at 10 am (or at booking, if later) while the guests' ID is not yet verified, with a fresh upload link. The arrival reminder and check-in welcome wait until you verify the ID, then go out by themselves.",
+  },
   enquiry_quote: {
     label: "Enquiry quote",
     description: "The moment a website enquiry arrives with dates and party size: the rate-card price, the booking link and UPI, and the dates held 24 hours. Agreed prices and discounts still come from you.",

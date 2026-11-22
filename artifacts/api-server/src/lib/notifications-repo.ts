@@ -38,7 +38,11 @@ export async function queueMessage(input: QueueInput): Promise<boolean> {
   return inserted.length > 0;
 }
 
-/** Messages that are ready to go out right now, oldest first. */
+/**
+ * Messages that are ready to go out right now, oldest first. The arrival
+ * reminder and check-in welcome wait while the stay has an ID check that is
+ * not yet verified; they go on the first run after the owner verifies.
+ */
 export async function claimDueMessages(
   limit: number,
   now = new Date(),
@@ -50,6 +54,8 @@ export async function claimDueMessages(
       and(
         eq(whatsappMessages.status, "pending"),
         lte(whatsappMessages.sendAfter, now),
+        sql`not (${whatsappMessages.kind} in ('checkin_reminder', 'checkin_welcome') and exists (
+          select 1 from guest_onboarding o where o.booking_id = ${whatsappMessages.bookingId} and o.status <> 'verified'))`,
       ),
     )
     .orderBy(asc(whatsappMessages.sendAfter))
