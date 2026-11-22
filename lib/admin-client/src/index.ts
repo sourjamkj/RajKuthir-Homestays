@@ -166,7 +166,7 @@ export const getAudit = () => adminFetch<{ entries: AuditEntry[] }>('/api/admin/
 export type OutboxMessage = {
   id: string;
   bookingId: string | null;
-  kind: 'booking_confirmed' | 'checkin_reminder' | 'checkin_welcome' | 'checkout_today' | 'review_request' | 'verification_reminder';
+  kind: 'booking_confirmed' | 'checkin_reminder' | 'checkin_welcome' | 'checkout_today' | 'review_request' | 'verification_reminder' | 'owner_new_booking';
   status: 'draft' | 'pending' | 'sent' | 'failed' | 'cancelled';
   toPhone: string;
   preview: string;

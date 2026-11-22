@@ -46,6 +46,7 @@ export async function queueMessage(input: QueueInput): Promise<boolean> {
 export async function claimDueMessages(
   limit: number,
   now = new Date(),
+  onlyKinds?: WhatsappMessage["kind"][],
 ): Promise<WhatsappMessage[]> {
   return db
     .select()
@@ -54,6 +55,7 @@ export async function claimDueMessages(
       and(
         eq(whatsappMessages.status, "pending"),
         lte(whatsappMessages.sendAfter, now),
+        onlyKinds ? inArray(whatsappMessages.kind, onlyKinds) : undefined,
         sql`not (${whatsappMessages.kind} in ('checkin_reminder', 'checkin_welcome') and exists (
           select 1 from guest_onboarding o where o.booking_id = ${whatsappMessages.bookingId} and o.status <> 'verified'))`,
       ),
@@ -84,6 +86,14 @@ export async function markSent(
  * exponential backoff; anything else, or too many tries, is terminal so the
  * queue cannot spin forever on a number that will never accept a message.
  */
+/** A repeating message (ID reminder, review reminder) goes back in the queue after a send. */
+export async function requeueMessage(id: string, sendAfter: Date, templateName?: string): Promise<void> {
+  await db
+    .update(whatsappMessages)
+    .set({ status: "pending", sendAfter, ...(templateName ? { templateName } : {}), updatedAt: new Date() })
+    .where(eq(whatsappMessages.id, id));
+}
+
 export async function markFailed(
   id: string,
   error: string,

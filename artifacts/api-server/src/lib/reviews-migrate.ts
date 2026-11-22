@@ -113,6 +113,7 @@ export function ensureReviewTables(): Promise<boolean> {
       // cannot share a transaction with statements that use the new value, so it runs on its own.
       .then(() => pool.query("ALTER TYPE message_kind ADD VALUE IF NOT EXISTS 'checkin_welcome'"))
       .then(() => pool.query("ALTER TYPE message_kind ADD VALUE IF NOT EXISTS 'verification_reminder'"))
+      .then(() => pool.query("ALTER TYPE message_kind ADD VALUE IF NOT EXISTS 'owner_new_booking'"))
       .then(() => {
         logger.info("Review tables are in place");
         return true;

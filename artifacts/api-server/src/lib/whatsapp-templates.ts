@@ -30,7 +30,8 @@ export type MessageKind =
   | "checkin_welcome"
   | "checkout_today"
   | "review_request"
-  | "verification_reminder";
+  | "verification_reminder"
+  | "owner_new_booking";
 
 export type TemplateSpec = {
   name: string;
@@ -66,6 +67,22 @@ function nightsBetween(checkIn: string, checkOut: string): number {
   const end = Date.parse(`${checkOut}T00:00:00Z`);
   if (!Number.isFinite(start) || !Number.isFinite(end)) return 0;
   return Math.max(0, Math.round((end - start) / 86_400_000));
+}
+
+const SOURCE_LABEL: Record<string, string> = {
+  direct: "website",
+  bookingCom: "Booking.com",
+  airbnb: "Airbnb",
+  makeMyTrip: "MakeMyTrip",
+};
+
+/**
+ * The checkout template handed to Meta: rk_checkout_deposit (call the
+ * caretaker, deposit refund) once WHATSAPP_CHECKOUT_TEMPLATE names it, the
+ * approved rk_checkout_today until then. Same two params either way.
+ */
+export function checkoutTemplateName(): string {
+  return process.env["WHATSAPP_CHECKOUT_TEMPLATE"]?.trim() || "rk_checkout_today";
 }
 
 /** First name only — "Dear Mr Sourja Mukherjee" reads like a bank letter. */
@@ -129,9 +146,9 @@ export function buildTemplate(
         languageCode: "en",
         params: [guest, CONTACT.caretakerPhone],
         preview:
-          `Good morning ${guest}. Check-out is by 11 am today. ` +
-          `Please leave the keys with the caretaker (${CONTACT.caretakerPhone}). ` +
-          `Thank you for staying with us — travel safely.`,
+          `Good morning ${guest}! Check-out is by 11 am today. Before you leave, please call our caretaker on ${CONTACT.caretakerPhone} ` +
+          `so the villa can be checked together — that lets us refund your security deposit quickly and smoothly. ` +
+          `Thank you for staying with us, travel safely.`,
       };
 
     case "verification_reminder":
@@ -147,6 +164,19 @@ export function buildTemplate(
           `We still need a photo ID for every guest before arrival. Tap Upload ID below — it takes two minutes. ` +
           `Your arrival details and Wi-Fi pack follow as soon as the ID is verified.`,
       };
+
+    case "owner_new_booking": {
+      const via = SOURCE_LABEL[booking.source] ?? booking.source;
+      const party = booking.guests ? String(booking.guests) : "?";
+      const ref = booking.reference ?? "no ref";
+      return {
+        name: "rk_owner_new_booking",
+        category: "utility",
+        languageCode: "en",
+        params: [booking.guestName?.trim() || "Guest", arrive, depart, party, via, ref],
+        preview: `New booking: ${booking.guestName ?? "Guest"}, ${arrive} to ${depart}, ${party} guests, via ${via}. Ref ${ref}.`,
+      };
+    }
 
     case "review_request":
       // Three variants since Oct 2026 — see review-rules.ts for the choice.

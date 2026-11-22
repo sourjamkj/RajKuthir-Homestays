@@ -77,11 +77,11 @@ const RAILWAY_AUTO_SEND_KINDS: readonly AutoSendKind[] = ["booking_confirmed", "
 export const AUTO_SEND_INFO: Record<AutoSendKind, { label: string; description: string }> = {
   booking_confirmed: { label: "Booking confirmation", description: "As soon as a booking is confirmed (8 am to 9 pm)." },
   checkin_reminder: { label: "Arrival reminder", description: "The day before check-in at 10 am: directions and the caretaker's number." },
-  checkin_welcome: { label: "Check-in welcome", description: "Check-in day at 12 noon, with the Wi-Fi poster PDF (Wi-Fi QR code and contact numbers)." },
-  checkout_today: { label: "Checkout reminder", description: "On check-out day at 8 am." },
+  checkin_welcome: { label: "Check-in welcome", description: "Check-in day at 12 noon, with the Wi-Fi poster PDF (Wi-Fi QR code, contact numbers) and the house rules. Waits for ID verification." },
+  checkout_today: { label: "Checkout reminder", description: "On check-out day at 10 am: call the caretaker so the villa is checked and the security deposit refunded smoothly." },
   verification_reminder: {
     label: "ID verification reminder",
-    description: "3 days before check-in at 10 am (or at booking, if later) while the guests' ID is not yet verified, with a fresh upload link. The arrival reminder and check-in welcome wait until you verify the ID, then go out by themselves.",
+    description: "Right after booking, then every 24 hours until the day before check-in, while the guests' ID is not yet verified, with a fresh upload link. The arrival reminder and check-in welcome wait until you verify the ID, then go out by themselves.",
   },
   enquiry_quote: {
     label: "Enquiry quote",
@@ -89,7 +89,7 @@ export const AUTO_SEND_INFO: Record<AutoSendKind, { label: string; description: 
   },
   review_request: {
     label: "Google review request",
-    description: "Direct guests only, on check-out day at 2 pm. OTA guests' requests still wait for you.",
+    description: "Direct guests only, on check-out day at 2 pm, and one reminder at 6 pm the next day. OTA guests' requests still wait for you.",
   },
   dates_available: {
     label: "Dates free again",
