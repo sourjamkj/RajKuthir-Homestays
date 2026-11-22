@@ -11,7 +11,7 @@ import { upiDetails } from "./whatsapp-templates";
 import { documentsForRefs, type OtaDocumentMeta } from "./ota-documents";
 import { createHash, randomBytes } from "node:crypto";
 import { SITE_ORIGIN } from "./seo";
-import { sendTemplate, toWhatsappNumber, uploadMedia } from "./whatsapp-client";
+import { sendTemplate, toWhatsappNumber, uploadMedia, type SendResult } from "./whatsapp-client";
 import { paymentSourceForBooking, recordDelivery, recentUndelivered } from "./cashfree-repo";
 import { methodLabel } from "./cashfree-rules";
 import {
@@ -387,7 +387,7 @@ export async function whatsappInvoice(
  */
 export async function deliverConfirmation(
   bookingId: string,
-  options: { emailMessage?: { subject: string; text: string }; paymentRequestId?: string | null } = {},
+  options: { emailMessage?: { subject: string; text: string }; paymentRequestId?: string | null; whatsapp?: boolean } = {},
   now = new Date(),
 ): Promise<ConfirmationDelivery & { built: BuiltInvoice | null }> {
   try {
@@ -402,24 +402,10 @@ export async function deliverConfirmation(
 
     const result = await deliverOnChannels(content.billedTo.email, {
       sendEmail: (to) => sendEmail(to, message.subject, message.text, [attachment]),
+      // whatsapp: false — Book & Pay sends its own WhatsApp message; the PDF follows ID verification.
       whatsapp:
-        guestApiSendingOn() && template
-          ? {
-              to: toWhatsappNumber(content.billedTo.phone),
-              send: async (to) => {
-                const media = await uploadMedia({ bytes: pdf, mimeType: "application/pdf", filename });
-                if (!media.ok) return { ok: false, error: `PDF upload refused: ${media.error}` };
-                const sent = await sendTemplate({
-                  to,
-                  templateName: template,
-                  // The booking reference, not the invoice number: it is what
-                  // the guest types into /welcome and the pre-arrival form.
-                  params: [content.billedTo.name.split(/\s+/)[0] || "there", content.stay.reference ?? content.number],
-                  headerDocument: { mediaId: media.mediaId, filename },
-                });
-                return sent.ok ? { ok: true } : { ok: false, error: sent.error };
-              },
-            }
+        options.whatsapp !== false && guestApiSendingOn() && template
+          ? { to: toWhatsappNumber(content.billedTo.phone), send: (to) => sendPdfTemplate(to, template, built.invoice) }
           : null,
     });
 
@@ -431,6 +417,39 @@ export async function deliverConfirmation(
     logger.error({ err: error, bookingId }, "Sending the booking confirmation failed");
     return { email: "failed", whatsapp: "failed", emailTo: null, whatsappTo: null, notes: ["Could not send the confirmation."], built: null };
   }
+}
+
+/** The confirmation PDF as the Document header of the confirmation template. */
+async function sendPdfTemplate(to: string, template: string, invoice: BuiltInvoice): Promise<SendResult> {
+  const { content, pdf, filename } = invoice;
+  const media = await uploadMedia({ bytes: pdf, mimeType: "application/pdf", filename });
+  if (!media.ok) return { ok: false, error: `PDF upload refused: ${media.error}`, retryable: true };
+  const sent = await sendTemplate({
+    to,
+    templateName: template,
+    // The booking reference, not the invoice number: it is what
+    // the guest types into /welcome and the pre-arrival form.
+    params: [content.billedTo.name.split(/\s+/)[0] || "there", content.stay.reference ?? content.number],
+    headerDocument: { mediaId: media.mediaId, filename },
+  });
+  return sent;
+}
+
+/**
+ * The confirmation PDF (with the house rules) on WhatsApp only, for the
+ * outbox: it goes once the guests' ID is verified. A booking the PDF cannot
+ * be built for (no total yet, say) is "not sendable", not a retry.
+ */
+export async function sendConfirmationOnWhatsapp(
+  bookingId: string,
+  to: string,
+  now = new Date(),
+): Promise<SendResult> {
+  const template = process.env["WHATSAPP_CONFIRMATION_TEMPLATE"]?.trim();
+  if (!template) return { ok: false, error: "WHATSAPP_CONFIRMATION_TEMPLATE is not set", retryable: false };
+  const built = await buildConfirmation(bookingId, now);
+  if (!built.ok) return { ok: false, error: `Not sent: ${built.error}`, retryable: false };
+  return sendPdfTemplate(to, template, built.invoice);
 }
 
 /** The older single-answer shape, for the enquiry routes. Sends on every channel. */

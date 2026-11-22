@@ -1,6 +1,10 @@
 import { logger } from "./logger";
 import type { Booking } from "@workspace/db";
-import { buildTemplate, type MessageKind } from "./whatsapp-templates";
+import { buildTemplate, checkoutTemplateName, type MessageKind } from "./whatsapp-templates";
+import { withHouseRules } from "./house-rules";
+import { sendConfirmationOnWhatsapp } from "./invoices";
+import { REVIEW_TEMPLATE_NAMES } from "./review-rules";
+import { nextRepeat } from "./notifications-repeat";
 import { readFile } from "node:fs/promises";
 import {
   sendTemplate,
@@ -17,9 +21,13 @@ import {
   markFailed,
   markSent,
   queueMessage,
+  requeueMessage,
+  setMessageStatus,
 } from "./notifications-repo";
+import { createOrRefreshOnboarding } from "./guest-onboarding-repo";
 import { guestApiSendingOn } from "./whatsapp-mode";
-import { autoSendKinds } from "./owner-settings-state";
+import { pool } from "@workspace/db";
+import { autoSendKinds, ownerWhatsappNumber } from "./owner-settings-state";
 import { ensureReviewTables } from "./reviews-migrate";
 
 /**
@@ -45,7 +53,7 @@ const BATCH_SIZE = 20;
 const IST_OFFSET_MIN = 5 * 60 + 30;
 
 /** Nothing reaches a guest's phone between these hours, local time. */
-const QUIET_START_HOUR = 21;
+const QUIET_START_HOUR = 23;
 const QUIET_END_HOUR = 8;
 
 /** The UTC instant of `hour:00` IST on the given yyyy-mm-dd. */
@@ -89,8 +97,9 @@ function respectQuietHours(at: Date): Date {
 function scheduleFor(kind: MessageKind, booking: Booking, now: Date): Date | null {
   switch (kind) {
     case "booking_confirmed":
-      // Only worth sending while the stay is still ahead of them.
-      return booking.checkIn > istDateOf(now) ? now : null;
+      // The confirmation PDF with the house rules. Held until the guests' ID
+      // is verified (claimDueMessages), so "now" means "as soon as verified".
+      return booking.checkOut >= istDateOf(now) ? now : null;
 
     case "checkin_reminder":
       return istMoment(addDays(booking.checkIn, -1), 10);
@@ -100,7 +109,20 @@ function scheduleFor(kind: MessageKind, booking: Booking, now: Date): Date | nul
       return istMoment(booking.checkIn, 12);
 
     case "checkout_today":
-      return istMoment(booking.checkOut, 8);
+      // An hour before the 11 am check-out: time to call the caretaker for the deposit check.
+      return istMoment(booking.checkOut, 10);
+
+    case "verification_reminder": {
+      // Every 24 hours (nextSendOf) while the ID is unverified. A website
+      // booking's payment message already carried the upload link, so its
+      // first reminder is a day later; a channel booking's goes now.
+      if (booking.checkIn < istDateOf(now)) return null;
+      const dayAfterBooking = new Date(booking.createdAt.getTime() + 24 * 60 * 60 * 1000);
+      return booking.source === "direct" && dayAfterBooking > now ? dayAfterBooking : now;
+    }
+
+    case "owner_new_booking":
+      return null; // queued by queueOwnerAlert, to the owner's number
 
     case "review_request":
       // Queued by review-requests.ts instead: it has its own timing (14:00
@@ -115,6 +137,7 @@ const ALL_KINDS: MessageKind[] = [
   "checkin_reminder",
   "checkin_welcome",
   "checkout_today",
+  "verification_reminder",
 ];
 
 /**
@@ -125,15 +148,14 @@ export async function scheduleForBooking(
   booking: Booking,
   now = new Date(),
 ): Promise<number> {
+  let queued = (await queueOwnerAlert(booking, now)) ? 1 : 0;
   const to = toWhatsappNumber(booking.guestPhone);
 
   if (!to) {
     // Common for OTA bookings, where the channel masks the guest's number.
     // Not an error, just nothing we can do.
-    return 0;
+    return queued;
   }
-
-  let queued = 0;
 
   for (const kind of ALL_KINDS) {
     const at = scheduleFor(kind, booking, now);
@@ -167,6 +189,95 @@ export async function scheduleForBooking(
   return queued;
 }
 
+/**
+ * Messages queued as drafts while a kind was not ticked for auto-send (or
+ * WhatsApp was in manual mode) stay drafts forever, because each booking
+ * gets one message per kind. Once the owner ticks a kind, still-useful
+ * drafts of it go out too: anything whose moment is still ahead, and the
+ * confirmation PDF and arrival messages while they are still useful (see
+ * expireArrivalMessages), since they wait on ID checks.
+ */
+async function promoteDrafts(now = new Date()): Promise<void> {
+  const kinds = autoSendKinds().filter((k) => (ALL_KINDS as readonly string[]).includes(k));
+  if (!kinds.length) return;
+  const { rowCount } = await pool.query(
+    `UPDATE whatsapp_messages m SET status = 'pending', updated_at = now()
+     FROM bookings b
+     WHERE m.booking_id = b.id AND m.status = 'draft' AND m.kind::text = ANY($1)
+       AND b.status = 'confirmed' AND b.check_out >= ($2::timestamptz AT TIME ZONE 'Asia/Kolkata')::date
+       AND (m.send_after > $2::timestamptz - interval '1 hour' OR m.kind IN ('booking_confirmed', 'checkin_reminder', 'checkin_welcome'))`,
+    [kinds, now],
+  );
+  if (rowCount) logger.info({ promoted: rowCount }, "Auto-send now covers queued drafts");
+}
+
+/**
+ * Arrival messages held back for ID verification go out once it is done,
+ * but not after they stop making sense: the arrival reminder by noon on
+ * check-in day, the check-in welcome by 11 am check-out.
+ */
+async function expireArrivalMessages(now = new Date()): Promise<void> {
+  await pool.query(
+    `UPDATE whatsapp_messages m SET status = 'cancelled', error = 'Not sent: the moment had passed', updated_at = now()
+     FROM bookings b
+     WHERE m.booking_id = b.id AND m.status = 'pending'
+       AND ((m.kind = 'checkin_reminder' AND $1::timestamptz > (b.check_in + time '12:00') AT TIME ZONE 'Asia/Kolkata')
+         OR (m.kind IN ('booking_confirmed', 'checkin_welcome') AND $1::timestamptz > (b.check_out + time '11:00') AT TIME ZONE 'Asia/Kolkata'))`,
+    [now],
+  );
+}
+
+/**
+ * A fresh pre-arrival link token while the booking's guests are not yet
+ * verified; null once they are (or for a booking that no longer exists).
+ * Issuing a new link replaces any older one, as the console does.
+ */
+async function issueIdLinkIfUnverified(bookingId: string): Promise<string | null> {
+  const { rows } = await pool.query<{ status: string }>(
+    "SELECT status FROM guest_onboarding WHERE booking_id = $1",
+    [bookingId],
+  );
+  if (rows[0]?.status === "verified") return null;
+  return (await createOrRefreshOnboarding(bookingId))?.token ?? null;
+}
+
+/**
+ * "New booking" to the owner's own WhatsApp, for a booking from any channel
+ * made in the last day. Always auto-sent and not held for quiet hours: it
+ * goes to the owner, never a guest.
+ */
+async function queueOwnerAlert(booking: Booking, now: Date): Promise<boolean> {
+  const owner = toWhatsappNumber(ownerWhatsappNumber());
+  if (!owner || booking.createdAt.getTime() < now.getTime() - 24 * 60 * 60 * 1000) return false;
+  const spec = buildTemplate("owner_new_booking", booking);
+  return queueMessage({
+    bookingId: booking.id,
+    kind: "owner_new_booking",
+    toPhone: owner,
+    templateName: spec.name,
+    templateParams: spec.params,
+    preview: spec.preview,
+    sendAfter: now,
+    status: "pending",
+  });
+}
+
+/**
+ * When a message that repeats goes out again, or null when it is done.
+ *  - ID reminder: every 24 hours, the last one on the day before check-in.
+ *    (Verification stops it sooner: the send is cancelled once verified.)
+ *  - Review request: one reminder at 6 pm the day after check-out, only
+ *    after the first ask on check-out day.
+ */
+async function nextSendOf(message: { kind: string; bookingId: string | null }, now: Date): Promise<Date | null> {
+  if (!message.bookingId || (message.kind !== "verification_reminder" && message.kind !== "review_request")) return null;
+  const { rows } = await pool.query<{ check_in: string; check_out: string }>(
+    "SELECT check_in::text, check_out::text FROM bookings WHERE id = $1",
+    [message.bookingId],
+  );
+  return rows[0] ? nextRepeat(message.kind, rows[0].check_in, rows[0].check_out, now) : null;
+}
+
 /** Sweeps recent and upcoming bookings, queueing anything still missing. */
 export async function scheduleUpcoming(now = new Date()): Promise<number> {
   const today = istDateOf(now);
@@ -195,11 +306,10 @@ export async function drainOutbox(now = new Date()): Promise<DrainResult> {
 
   // Manual mode: drafts wait for the owner to send them from their own WhatsApp.
   if (!guestApiSendingOn()) return result;
-  if (istHourOf(now) >= QUIET_START_HOUR || istHourOf(now) < QUIET_END_HOUR) {
-    return result;
-  }
+  // Quiet hours hold every guest message; only the owner's own alerts go.
+  const quiet = istHourOf(now) >= QUIET_START_HOUR || istHourOf(now) < QUIET_END_HOUR;
 
-  const due = await claimDueMessages(BATCH_SIZE, now);
+  const due = await claimDueMessages(BATCH_SIZE, now, quiet ? ["owner_new_booking"] : undefined);
 
   for (const message of due) {
     // A review ask may have been approved days after it was queued, or the
@@ -212,23 +322,44 @@ export async function drainOutbox(now = new Date()): Promise<DrainResult> {
       }
     }
 
+    // Sent only while the ID is still unverified, with a freshly issued link.
+    let idLinkToken: string | undefined;
+    if (message.kind === "verification_reminder") {
+      const issued = message.bookingId ? await issueIdLinkIfUnverified(message.bookingId) : null;
+      if (!issued) {
+        await setMessageStatus(message.id, "cancelled");
+        continue;
+      }
+      idLinkToken = issued;
+    }
+
     result.attempted += 1;
 
     const outcome =
       message.kind === "checkin_welcome"
         ? await sendWithPoster(message.toPhone, message.templateName, message.templateParams)
-        : await sendTemplate({
+        : message.kind === "booking_confirmed" && message.bookingId
+          ? await sendConfirmationOnWhatsapp(message.bookingId, message.toPhone, now)
+          : await sendTemplate({
         to: message.toPhone,
         templateName:
           message.kind === "review_request"
             ? reviewTemplateForSend(message.templateName)
-            : message.templateName,
+            : message.kind === "checkout_today"
+              ? checkoutTemplateName()
+              : message.templateName,
         languageCode: "en",
         params: message.templateParams,
+        urlButtonParam: idLinkToken,
       });
 
     if (outcome.ok) {
       await markSent(message.id, outcome.providerMessageId);
+      const next = await nextSendOf(message, now);
+      // The review reminder is the short variant; never to a guest who has opted out.
+      if (next && !(message.kind === "review_request" && (await hasOptedOutOfMarketing(message.toPhone)))) {
+        await requeueMessage(message.id, next, message.kind === "review_request" ? REVIEW_TEMPLATE_NAMES.short : undefined);
+      }
       result.sent += 1;
       logger.info(
         { messageId: message.id, kind: message.kind },
@@ -259,7 +390,8 @@ async function sendWithPoster(to: string, templateName: string, params: string[]
   if (!file) return { ok: false, error: "The Wi-Fi poster PDF (assets/arrival-pack.pdf) is missing.", retryable: false };
 
   const filename = "raj-kuthir-wifi-and-contacts.pdf";
-  const media = await uploadMedia({ bytes: await readFile(file), mimeType: "application/pdf", filename });
+  // The house rules ride along as the last pages, so they are at hand on arrival too.
+  const media = await uploadMedia({ bytes: await withHouseRules(await readFile(file)), mimeType: "application/pdf", filename });
   if (!media.ok) return { ok: false, error: `Poster upload refused: ${media.error}`, retryable: true };
 
   return sendTemplate({ to, templateName, params, headerDocument: { mediaId: media.mediaId, filename } });
@@ -269,5 +401,7 @@ export async function runNotifications(): Promise<DrainResult> {
   // The outbox table and any message kinds added since it was created.
   await ensureReviewTables();
   await scheduleUpcoming();
+  await promoteDrafts();
+  await expireArrivalMessages();
   return drainOutbox();
 }

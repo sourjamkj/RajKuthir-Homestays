@@ -29,7 +29,9 @@ export type MessageKind =
   | "checkin_reminder"
   | "checkin_welcome"
   | "checkout_today"
-  | "review_request";
+  | "review_request"
+  | "verification_reminder"
+  | "owner_new_booking";
 
 export type TemplateSpec = {
   name: string;
@@ -49,7 +51,7 @@ const CONTACT = {
 };
 
 /** "2026-09-14" -> "14 Sep 2026", which is how a guest reads a date. */
-function prettyDate(iso: string): string {
+export function prettyDate(iso: string): string {
   const [year, month, day] = iso.split("-").map(Number);
   if (!year || !month || !day) return iso;
   return new Intl.DateTimeFormat("en-IN", {
@@ -65,6 +67,22 @@ function nightsBetween(checkIn: string, checkOut: string): number {
   const end = Date.parse(`${checkOut}T00:00:00Z`);
   if (!Number.isFinite(start) || !Number.isFinite(end)) return 0;
   return Math.max(0, Math.round((end - start) / 86_400_000));
+}
+
+const SOURCE_LABEL: Record<string, string> = {
+  direct: "website",
+  bookingCom: "Booking.com",
+  airbnb: "Airbnb",
+  makeMyTrip: "MakeMyTrip",
+};
+
+/**
+ * The checkout template handed to Meta: rk_checkout_deposit (call the
+ * caretaker, deposit refund) once WHATSAPP_CHECKOUT_TEMPLATE names it, the
+ * approved rk_checkout_today until then. Same two params either way.
+ */
+export function checkoutTemplateName(): string {
+  return process.env["WHATSAPP_CHECKOUT_TEMPLATE"]?.trim() || "rk_checkout_today";
 }
 
 /** First name only — "Dear Mr Sourja Mukherjee" reads like a bank letter. */
@@ -84,16 +102,16 @@ export function buildTemplate(
 
   switch (kind) {
     case "booking_confirmed":
+      // The confirmation PDF with the house rules, after ID verification. Sent
+      // by invoices.ts as WHATSAPP_CONFIRMATION_TEMPLATE with the PDF header.
       return {
-        name: "rk_booking_confirmed",
+        name: "rk_booking_confirmation_pdf",
         category: "utility",
         languageCode: "en",
-        params: [guest, arrive, depart, String(nights)],
+        params: [guest, booking.reference ?? ""],
         preview:
-          `Hello ${guest}, your stay at Raj Kuthir Homestays (Sobuj Potro) is confirmed — ` +
-          `${arrive} to ${depart}, ${nights} night${nights === 1 ? "" : "s"}. ` +
-          `We will send directions the day before you arrive. ` +
-          `Any questions, reply here or call ${CONTACT.hostPhone}.`,
+          `Hello ${guest}, thank you — your ID is verified. Your booking confirmation for ${arrive} to ${depart} ` +
+          `is attached, with the house rules. See you soon!`,
       };
 
     case "checkin_reminder":
@@ -128,10 +146,38 @@ export function buildTemplate(
         languageCode: "en",
         params: [guest, CONTACT.caretakerPhone],
         preview:
-          `Good morning ${guest}. Check-out is by 11 am today. ` +
-          `Please leave the keys with the caretaker (${CONTACT.caretakerPhone}). ` +
-          `Thank you for staying with us — travel safely.`,
+          `Good morning ${guest}! Check-out is by 11 am today. Before you leave, please call our caretaker on ${CONTACT.caretakerPhone} ` +
+          `so the villa can be checked together — that lets us refund your security deposit quickly and smoothly. ` +
+          `Thank you for staying with us, travel safely.`,
       };
+
+    case "verification_reminder":
+      // The "Upload ID" button's URL ends in a fresh pre-arrival token, added at
+      // send time (notifications.ts), so no token is ever stored in the outbox.
+      return {
+        name: "rk_verification_reminder",
+        category: "utility",
+        languageCode: "en",
+        params: [guest, arrive],
+        preview:
+          `Hello ${guest}, your stay at Raj Kuthir Homestays – Sobuj Potro begins on ${arrive}. ` +
+          `Please complete the mandatory guest information and ID document verification (Upload ID below) at least 48 hours before your check-in time. ` +
+          `⚠️ Failure to complete the mandatory verification within this timeframe may result in check-in being denied without refund, in accordance with the booking terms. ` +
+          `Your confirmation, arrival details and Wi-Fi pack follow once your ID is verified.`,
+      };
+
+    case "owner_new_booking": {
+      const via = SOURCE_LABEL[booking.source] ?? booking.source;
+      const party = booking.guests ? String(booking.guests) : "?";
+      const ref = booking.reference ?? "no ref";
+      return {
+        name: "rk_owner_new_booking",
+        category: "utility",
+        languageCode: "en",
+        params: [booking.guestName?.trim() || "Guest", arrive, depart, party, via, ref],
+        preview: `New booking: ${booking.guestName ?? "Guest"}, ${arrive} to ${depart}, ${party} guests, via ${via}. Ref ${ref}.`,
+      };
+    }
 
     case "review_request":
       // Three variants since Oct 2026 — see review-rules.ts for the choice.

@@ -144,6 +144,6 @@ test("auto-send: per message kind, falls back to the old Railway switch, sensiti
 
   const view = settingsView({ whatsappAutoSend: ["checkin_reminder"] }, {});
   assert.equal(view.whatsapp.requireApproval, false);
-  assert.equal(view.whatsapp.autoSendOptions.length, 7);
+  assert.equal(view.whatsapp.autoSendOptions.length, 8);
   assert.ok(!resolveAutoSend({}, { WHATSAPP_REQUIRE_APPROVAL: "false" }).value.includes("checkin_welcome"), "a new kind never switches itself on");
 });

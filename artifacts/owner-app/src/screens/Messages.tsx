@@ -12,6 +12,8 @@ const KIND: Record<OutboxMessage['kind'], string> = {
   checkin_welcome: 'Check-in welcome (Wi-Fi poster)',
   checkout_today: 'Check-out today',
   review_request: 'Review request',
+  verification_reminder: 'ID verification reminder',
+  owner_new_booking: 'New booking alert (to you)',
 };
 
 /**

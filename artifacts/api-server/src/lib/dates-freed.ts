@@ -50,7 +50,7 @@ export async function notifyFreedDates(now = new Date()): Promise<number> {
 
     if (!guestApiSendingOn() || !autoSendKinds().includes("dates_available")) return 0;
     const hour = istHour(now);
-    if (hour < 8 || hour >= 21) return 0;
+    if (hour < 8 || hour >= 23) return 0;
 
     let sent = 0;
     for (const id of plan.notify) {

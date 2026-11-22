@@ -49,9 +49,8 @@ test("caretaker · day-before reminders at 10 am IST, not before, not after the 
   assert.deepEqual(kinds(dueAlerts([b], none, new Date(istAt("2026-11-07", 11).getTime() + 60_000))), []);
 });
 
-test("caretaker · nothing during quiet hours (9 pm – 8 am IST)", () => {
-  assert.deepEqual(dueAlerts([booking({ createdAt: istAt("2026-10-22", 22) })], none, istAt("2026-10-22", 23)), []);
-  assert.deepEqual(kinds(dueAlerts([booking({ createdAt: istAt("2026-10-22", 22) })], none, istAt("2026-10-23", 8))), ["new_booking"]);
+test("caretaker · no quiet hours: a late-night booking is sent at once", () => {
+  assert.deepEqual(kinds(dueAlerts([booking({ createdAt: istAt("2026-10-22", 22) })], none, istAt("2026-10-22", 23))), ["new_booking"]);
 });
 
 test("caretaker · old or imported bookings never page anyone as 'new'", () => {

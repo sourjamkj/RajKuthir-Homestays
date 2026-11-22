@@ -36,6 +36,10 @@ export const messageKindEnum = pgEnum("message_kind", [
   "review_request",
   /** Utility: check-in day at noon, with the Wi-Fi poster PDF (Wi-Fi QR, contacts). */
   "checkin_welcome",
+  /** Utility: 3 days before arrival while the guests' ID is still not verified, with a fresh upload link. */
+  "verification_reminder",
+  /** Utility, to the OWNER's own number: a new booking from any channel, at any hour. */
+  "owner_new_booking",
 ]);
 
 export const messageStatusEnum = pgEnum("message_status", [

@@ -70,26 +70,30 @@ export type StoredOwnerSettings = {
  * Fixed, template-only booking messages the owner may let go out without
  * approval. Review requests, marketing and anything AI-written always wait.
  */
-export const AUTO_SEND_KINDS = ["booking_confirmed", "checkin_reminder", "checkin_welcome", "checkout_today", "dates_available", "enquiry_quote", "review_request"] as const;
+export const AUTO_SEND_KINDS = ["booking_confirmed", "checkin_reminder", "checkin_welcome", "checkout_today", "dates_available", "enquiry_quote", "review_request", "verification_reminder"] as const;
 export type AutoSendKind = (typeof AUTO_SEND_KINDS)[number];
 /** What the old WHATSAPP_REQUIRE_APPROVAL=false switch covered. Kinds added later go out by themselves only once ticked in the console. */
 const RAILWAY_AUTO_SEND_KINDS: readonly AutoSendKind[] = ["booking_confirmed", "checkin_reminder", "checkout_today"];
 export const AUTO_SEND_INFO: Record<AutoSendKind, { label: string; description: string }> = {
-  booking_confirmed: { label: "Booking confirmation", description: "As soon as a booking is confirmed (8 am to 9 pm)." },
+  booking_confirmed: { label: "Confirmation PDF", description: "Once you verify the guests' ID: the booking confirmation PDF with the house rules (8 am to 11 pm). Website guests already got a payment confirmation with an Upload ID button the moment they paid." },
   checkin_reminder: { label: "Arrival reminder", description: "The day before check-in at 10 am: directions and the caretaker's number." },
-  checkin_welcome: { label: "Check-in welcome", description: "Check-in day at 12 noon, with the Wi-Fi poster PDF (Wi-Fi QR code and contact numbers)." },
-  checkout_today: { label: "Checkout reminder", description: "On check-out day at 8 am." },
+  checkin_welcome: { label: "Check-in welcome", description: "Check-in day at 12 noon, with the Wi-Fi poster PDF (Wi-Fi QR code, contact numbers) and the house rules. Waits for ID verification." },
+  checkout_today: { label: "Checkout reminder", description: "On check-out day at 10 am: call the caretaker so the villa is checked and the security deposit refunded smoothly." },
+  verification_reminder: {
+    label: "ID verification reminder",
+    description: "Right after booking, then every 24 hours until the day before check-in, while the guests' ID is not yet verified, with a fresh upload link. The arrival reminder and check-in welcome wait until you verify the ID, then go out by themselves.",
+  },
   enquiry_quote: {
     label: "Enquiry quote",
     description: "The moment a website enquiry arrives with dates and party size: the rate-card price, the booking link and UPI, and the dates held 24 hours. Agreed prices and discounts still come from you.",
   },
   review_request: {
     label: "Google review request",
-    description: "Direct guests only, on check-out day at 2 pm. OTA guests' requests still wait for you.",
+    description: "Direct guests only, on check-out day at 2 pm, and one reminder at 6 pm the next day. OTA guests' requests still wait for you.",
   },
   dates_available: {
     label: "Dates free again",
-    description: "When dates an enquiry asked for come free (a cancellation, a released block), the first guest who asked gets the price and a Book button, and the dates are held 24 hours (8 am to 9 pm).",
+    description: "When dates an enquiry asked for come free (a cancellation, a released block), the first guest who asked gets the price and a Book button, and the dates are held 24 hours (8 am to 11 pm).",
   },
 };
 

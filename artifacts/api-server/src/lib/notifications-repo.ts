@@ -38,10 +38,16 @@ export async function queueMessage(input: QueueInput): Promise<boolean> {
   return inserted.length > 0;
 }
 
-/** Messages that are ready to go out right now, oldest first. */
+/**
+ * Messages that are ready to go out right now, oldest first. The arrival
+ * reminder and check-in welcome wait while the stay has an ID check that is
+ * not yet verified, and the confirmation PDF until there is a verified one;
+ * they go on the first run after the owner verifies.
+ */
 export async function claimDueMessages(
   limit: number,
   now = new Date(),
+  onlyKinds?: WhatsappMessage["kind"][],
 ): Promise<WhatsappMessage[]> {
   return db
     .select()
@@ -50,6 +56,12 @@ export async function claimDueMessages(
       and(
         eq(whatsappMessages.status, "pending"),
         lte(whatsappMessages.sendAfter, now),
+        onlyKinds ? inArray(whatsappMessages.kind, onlyKinds) : undefined,
+        sql`not (${whatsappMessages.kind} in ('checkin_reminder', 'checkin_welcome') and exists (
+          select 1 from guest_onboarding o where o.booking_id = ${whatsappMessages.bookingId} and o.status <> 'verified'))`,
+        // The confirmation PDF goes only after a verified ID check, never before one exists.
+        sql`(${whatsappMessages.kind} <> 'booking_confirmed' or exists (
+          select 1 from guest_onboarding o where o.booking_id = ${whatsappMessages.bookingId} and o.status = 'verified'))`,
       ),
     )
     .orderBy(asc(whatsappMessages.sendAfter))
@@ -78,6 +90,14 @@ export async function markSent(
  * exponential backoff; anything else, or too many tries, is terminal so the
  * queue cannot spin forever on a number that will never accept a message.
  */
+/** A repeating message (ID reminder, review reminder) goes back in the queue after a send. */
+export async function requeueMessage(id: string, sendAfter: Date, templateName?: string): Promise<void> {
+  await db
+    .update(whatsappMessages)
+    .set({ status: "pending", sendAfter, ...(templateName ? { templateName } : {}), updatedAt: new Date() })
+    .where(eq(whatsappMessages.id, id));
+}
+
 export async function markFailed(
   id: string,
   error: string,
