@@ -27,7 +27,7 @@ const rupee = (price: number) => `₹${price.toLocaleString('en-IN')}`;
 export default function CafeSoi() {
   useEffect(() => {
     const previous = document.title;
-    document.title = 'Cafe Soi, Shantiniketan — Menu & Prices | Raj Kuthir';
+    document.title = 'Cafe Soi, Santiniketan — Menu & Prices | Raj Kuthir';
     return () => {
       document.title = previous;
     };

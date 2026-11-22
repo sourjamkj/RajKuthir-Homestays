@@ -213,7 +213,7 @@ export const PAGES: Record<string, PageMeta> = {
   "/": {
     // The query leads, the brand follows. Nobody searches for "Raj Kuthir"
     // yet; they search for the kind of place this is.
-    title: "Private 2-Bedroom Villa in Shantiniketan | Raj Kuthir",
+    title: "Private Villa Homestay in Santiniketan | Raj Kuthir",
     description:
       "An entire 2-bedroom villa in Bolpur, Santiniketan \u2014 not a room in a homestay. Two AC bedrooms, private garden, parking, pet-friendly. Book direct.",
     lastmod: "2026-10-29",
@@ -238,9 +238,9 @@ export const PAGES: Record<string, PageMeta> = {
     },
   },
   "/pet-friendly-homestay-shantiniketan": {
-    title: "Pet-Friendly Homestay in Shantiniketan | Raj Kuthir",
+    title: "Pet-Friendly Homestay in Santiniketan | Raj Kuthir",
     description:
-      "Bring the dog. A private two-bedroom villa with its own garden in Bolpur, Santiniketan — the whole house is yours, and pets are in our house rules.",
+      "Bring your dog to Santiniketan. The whole two-bedroom villa is yours: private garden, AC bedrooms, parking, and pets welcome in our house rules. Book direct.",
     ogImage: {
       url: `${SITE_ORIGIN}/villa-day.jpg`,
       width: 1536,
@@ -263,9 +263,9 @@ export const PAGES: Record<string, PageMeta> = {
     // while the server sent the wording below it — so Google indexed one title
     // and the tab showed another. The page's own version wins: it leads with
     // the query, as the commercial titles now do.
-    title: "Villa Photos in Shantiniketan | Raj Kuthir Homestays",
+    title: "Villa Photos in Santiniketan | Raj Kuthir Homestays",
     description:
-      "Every room, the garden and the walk outside \u2014 photographs of Sobuj Potro, the two-bedroom villa at Raj Kuthir Homestays in Bolpur, Shantiniketan.",
+      "Every room, the garden and the walk outside \u2014 photographs of Sobuj Potro, the two-bedroom villa at Raj Kuthir Homestays in Bolpur, Santiniketan.",
     ogImage: {
       url: `${SITE_ORIGIN}/External%20Villa%20Morning.jpg`,
       width: 1448,
@@ -277,7 +277,7 @@ export const PAGES: Record<string, PageMeta> = {
     intent: { primary: "Raj Kuthir Homestays photos" },
   },
   "/our-story": {
-    title: "Our Story | Raj Kuthir Homestays, Shantiniketan",
+    title: "Our Story | Raj Kuthir Homestays, Santiniketan",
     description:
       "Why Sobuj Potro exists and what the house actually is \u2014 an entire two-bedroom villa with its own garden in Bolpur, let directly by the owner.",
     lastmod: "2026-10-29",
@@ -287,7 +287,7 @@ export const PAGES: Record<string, PageMeta> = {
     intent: { primary: "Raj Kuthir Homestays story" },
   },
   "/places-to-visit-in-shantiniketan": {
-    title: "Places to Visit in Shantiniketan | Raj Kuthir Homestays",
+    title: "Places to Visit in Santiniketan | Raj Kuthir Homestays",
     description:
       "Eighteen places around Santiniketan with road distances from our doorstep in Bolpur \u2014 the Tagore campus, Sonajhuri haat, Kopai, Tarapith and Bishnupur.",
     ogImage: {
@@ -311,7 +311,7 @@ export const PAGES: Record<string, PageMeta> = {
    * apart is what stops either from becoming a doorway for the other.
    */
   "/homestay-near-sonajhuri-haat": {
-    title: "Homestay near Sonajhuri Haat, Shantiniketan | Raj Kuthir",
+    title: "Homestay near Sonajhuri Haat, Santiniketan | Raj Kuthir",
     description:
       "A private two-bedroom villa in Bolpur, a short ride from Sonajhuri Khoai Haat. Two AC bedrooms, garden, parking, pet-friendly. Enquire direct.",
     lastmod: "2026-10-29",
@@ -322,7 +322,7 @@ export const PAGES: Record<string, PageMeta> = {
     },
   },
   "/homestay-near-visva-bharati": {
-    title: "Homestay near Visva-Bharati, Shantiniketan | Raj Kuthir",
+    title: "Homestay near Visva-Bharati, Santiniketan | Raj Kuthir",
     description:
       "A private two-bedroom villa in Bolpur, a short ride from Visva-Bharati and Rabindra Bhavan. Two AC bedrooms, garden, parking. Enquire direct.",
     lastmod: "2026-09-18",
@@ -339,7 +339,7 @@ export const PAGES: Record<string, PageMeta> = {
    * pair rather than restating it.
    */
   "/shantiniketan-weekend-trip-from-kolkata": {
-    title: "Shantiniketan Weekend Trip from Kolkata | Raj Kuthir",
+    title: "Santiniketan Weekend Trip from Kolkata | Raj Kuthir",
     description:
       "Planning a weekend in Santiniketan from Kolkata: trains, roads, which days the haat runs, and a private two-bedroom villa in Bolpur to come back to.",
     lastmod: "2026-10-29",
@@ -350,7 +350,7 @@ export const PAGES: Record<string, PageMeta> = {
     },
   },
   "/shantiniketan-2-day-itinerary": {
-    title: "2-Day Shantiniketan Itinerary | Raj Kuthir Homestays",
+    title: "2-Day Santiniketan Itinerary | Raj Kuthir Homestays",
     description:
       "A 2-day Shantiniketan itinerary with road distances from Bolpur: Sonajhuri haat and the Kopai on day one, the Tagore campus and Ballavpur on day two.",
     lastmod: "2026-10-29",
@@ -389,7 +389,7 @@ export const PAGES: Record<string, PageMeta> = {
     noindex: true,
   },
   "/house-rules": {
-    title: "House Rules | Raj Kuthir Homestays, Shantiniketan",
+    title: "House Rules | Raj Kuthir Homestays, Santiniketan",
     description:
       "Check-in and check-out times, our pet and smoking policy, and what we ask of guests — published in full before you book, so nothing is a surprise.",
     lastmod: "2026-09-14",
@@ -407,7 +407,7 @@ export const PAGES: Record<string, PageMeta> = {
    * plan's peak period rather than stating them in copy.
    */
   "/poush-mela-stay-shantiniketan": {
-    title: "Stay for Poush Mela in Shantiniketan | Raj Kuthir",
+    title: "Stay for Poush Mela in Santiniketan | Raj Kuthir",
     description:
       "A private two-bedroom villa in Bolpur for Poush Mela in Santiniketan: this year's peak dates, two-night minimum and live rates. Garden, parking. Book direct.",
     lastmod: "2026-10-29",
@@ -418,7 +418,7 @@ export const PAGES: Record<string, PageMeta> = {
     },
   },
   "/basanta-utsav-stay-shantiniketan": {
-    title: "Stay for Basanta Utsav in Shantiniketan | Raj Kuthir",
+    title: "Stay for Basanta Utsav in Santiniketan | Raj Kuthir",
     description:
       "A private two-bedroom villa in Bolpur for Basanta Utsav and Dol in Santiniketan: peak dates, two-night minimum, live rates, and what to check first.",
     lastmod: "2026-10-29",
@@ -433,7 +433,7 @@ export const PAGES: Record<string, PageMeta> = {
    * ("cafe in Shantiniketan", "Cafe Soi menu"), which no stay page answers.
    */
   "/cafe-soi-shantiniketan": {
-    title: "Cafe Soi, Shantiniketan — Menu & Prices | Raj Kuthir",
+    title: "Cafe Soi, Santiniketan — Menu & Prices | Raj Kuthir",
     description:
       "The full Cafe Soi menu with prices: Bengali home cooking, breakfast combos, tea and snacks in Bolpur, Santiniketan. Open to everyone; plus 5% GST.",
     lastmod: "2026-10-29",
@@ -444,9 +444,9 @@ export const PAGES: Record<string, PageMeta> = {
     },
   },
   "/rates": {
-    title: "Shantiniketan Homestay Rates & Tariff | Raj Kuthir",
+    title: "Santiniketan Homestay Rates & Tariff | Raj Kuthir",
     description:
-      "The full tariff for Sobuj Potro, a private two-bedroom villa in Bolpur, Shantiniketan: priced by number of guests, with extra-guest and pet charges in full.",
+      "The full tariff for Sobuj Potro, a private two-bedroom villa in Bolpur, Santiniketan: priced by number of guests, with extra-guest and pet charges in full.",
     lastmod: "2026-10-29",
     breadcrumb: "Rates",
     intent: {

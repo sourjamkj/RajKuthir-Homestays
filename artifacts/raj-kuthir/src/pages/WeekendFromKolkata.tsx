@@ -35,7 +35,7 @@ const distanceTo = (title: string) =>
 export default function WeekendFromKolkata() {
   useEffect(() => {
     const previous = document.title;
-    document.title = 'Shantiniketan Weekend Trip from Kolkata | Raj Kuthir';
+    document.title = 'Santiniketan Weekend Trip from Kolkata | Raj Kuthir';
     return () => {
       document.title = previous;
     };

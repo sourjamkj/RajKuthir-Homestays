@@ -33,7 +33,7 @@ const distanceTo = (title: string) =>
 export default function TwoDayItinerary() {
   useEffect(() => {
     const previous = document.title;
-    document.title = '2-Day Shantiniketan Itinerary | Raj Kuthir Homestays';
+    document.title = '2-Day Santiniketan Itinerary | Raj Kuthir Homestays';
     return () => {
       document.title = previous;
     };

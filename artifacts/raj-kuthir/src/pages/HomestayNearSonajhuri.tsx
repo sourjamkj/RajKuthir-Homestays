@@ -34,7 +34,7 @@ const distanceTo = (title: string) =>
 export default function HomestayNearSonajhuri() {
   useEffect(() => {
     const previous = document.title;
-    document.title = 'Homestay near Sonajhuri Haat, Shantiniketan | Raj Kuthir';
+    document.title = 'Homestay near Sonajhuri Haat, Santiniketan | Raj Kuthir';
     return () => {
       document.title = previous;
     };
