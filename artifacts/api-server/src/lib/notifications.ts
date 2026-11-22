@@ -2,6 +2,7 @@ import { logger } from "./logger";
 import type { Booking } from "@workspace/db";
 import { buildTemplate, checkoutTemplateName, type MessageKind } from "./whatsapp-templates";
 import { withHouseRules } from "./house-rules";
+import { sendConfirmationOnWhatsapp } from "./invoices";
 import { REVIEW_TEMPLATE_NAMES } from "./review-rules";
 import { nextRepeat } from "./notifications-repeat";
 import { readFile } from "node:fs/promises";
@@ -52,7 +53,7 @@ const BATCH_SIZE = 20;
 const IST_OFFSET_MIN = 5 * 60 + 30;
 
 /** Nothing reaches a guest's phone between these hours, local time. */
-const QUIET_START_HOUR = 21;
+const QUIET_START_HOUR = 23;
 const QUIET_END_HOUR = 8;
 
 /** The UTC instant of `hour:00` IST on the given yyyy-mm-dd. */
@@ -96,8 +97,9 @@ function respectQuietHours(at: Date): Date {
 function scheduleFor(kind: MessageKind, booking: Booking, now: Date): Date | null {
   switch (kind) {
     case "booking_confirmed":
-      // Only worth sending while the stay is still ahead of them.
-      return booking.checkIn > istDateOf(now) ? now : null;
+      // The confirmation PDF with the house rules. Held until the guests' ID
+      // is verified (claimDueMessages), so "now" means "as soon as verified".
+      return booking.checkOut >= istDateOf(now) ? now : null;
 
     case "checkin_reminder":
       return istMoment(addDays(booking.checkIn, -1), 10);
@@ -110,9 +112,14 @@ function scheduleFor(kind: MessageKind, booking: Booking, now: Date): Date | nul
       // An hour before the 11 am check-out: time to call the caretaker for the deposit check.
       return istMoment(booking.checkOut, 10);
 
-    case "verification_reminder":
-      // Right after booking, then every 24 hours (see nextSendOf) while the ID is unverified.
-      return booking.checkIn >= istDateOf(now) ? now : null;
+    case "verification_reminder": {
+      // Every 24 hours (nextSendOf) while the ID is unverified. A website
+      // booking's payment message already carried the upload link, so its
+      // first reminder is a day later; a channel booking's goes now.
+      if (booking.checkIn < istDateOf(now)) return null;
+      const dayAfterBooking = new Date(booking.createdAt.getTime() + 24 * 60 * 60 * 1000);
+      return booking.source === "direct" && dayAfterBooking > now ? dayAfterBooking : now;
+    }
 
     case "owner_new_booking":
       return null; // queued by queueOwnerAlert, to the owner's number
@@ -186,10 +193,9 @@ export async function scheduleForBooking(
  * Messages queued as drafts while a kind was not ticked for auto-send (or
  * WhatsApp was in manual mode) stay drafts forever, because each booking
  * gets one message per kind. Once the owner ticks a kind, still-useful
- * drafts of it go out too: anything whose moment is still ahead; a
- * booking confirmation only for a booking made in the last day whose stay
- * has not begun; and the arrival messages while they are still useful
- * (see expireArrivalMessages), since they may have waited on ID checks.
+ * drafts of it go out too: anything whose moment is still ahead, and the
+ * confirmation PDF and arrival messages while they are still useful (see
+ * expireArrivalMessages), since they wait on ID checks.
  */
 async function promoteDrafts(now = new Date()): Promise<void> {
   const kinds = autoSendKinds().filter((k) => (ALL_KINDS as readonly string[]).includes(k));
@@ -199,9 +205,7 @@ async function promoteDrafts(now = new Date()): Promise<void> {
      FROM bookings b
      WHERE m.booking_id = b.id AND m.status = 'draft' AND m.kind::text = ANY($1)
        AND b.status = 'confirmed' AND b.check_out >= ($2::timestamptz AT TIME ZONE 'Asia/Kolkata')::date
-       AND (m.send_after > $2::timestamptz - interval '1 hour' OR m.kind IN ('checkin_reminder', 'checkin_welcome'))
-       AND (m.kind <> 'booking_confirmed' OR (b.created_at > $2::timestamptz - interval '24 hours'
-            AND b.check_in > ($2::timestamptz AT TIME ZONE 'Asia/Kolkata')::date))`,
+       AND (m.send_after > $2::timestamptz - interval '1 hour' OR m.kind IN ('booking_confirmed', 'checkin_reminder', 'checkin_welcome'))`,
     [kinds, now],
   );
   if (rowCount) logger.info({ promoted: rowCount }, "Auto-send now covers queued drafts");
@@ -218,7 +222,7 @@ async function expireArrivalMessages(now = new Date()): Promise<void> {
      FROM bookings b
      WHERE m.booking_id = b.id AND m.status = 'pending'
        AND ((m.kind = 'checkin_reminder' AND $1::timestamptz > (b.check_in + time '12:00') AT TIME ZONE 'Asia/Kolkata')
-         OR (m.kind = 'checkin_welcome' AND $1::timestamptz > (b.check_out + time '11:00') AT TIME ZONE 'Asia/Kolkata'))`,
+         OR (m.kind IN ('booking_confirmed', 'checkin_welcome') AND $1::timestamptz > (b.check_out + time '11:00') AT TIME ZONE 'Asia/Kolkata'))`,
     [now],
   );
 }
@@ -334,7 +338,9 @@ export async function drainOutbox(now = new Date()): Promise<DrainResult> {
     const outcome =
       message.kind === "checkin_welcome"
         ? await sendWithPoster(message.toPhone, message.templateName, message.templateParams)
-        : await sendTemplate({
+        : message.kind === "booking_confirmed" && message.bookingId
+          ? await sendConfirmationOnWhatsapp(message.bookingId, message.toPhone, now)
+          : await sendTemplate({
         to: message.toPhone,
         templateName:
           message.kind === "review_request"

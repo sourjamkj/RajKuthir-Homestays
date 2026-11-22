@@ -8,6 +8,12 @@ import { SITE_ORIGIN } from "./seo";
 import { logPaymentEvent, setDecision, type RequestWithEnquiry } from "./book-pay-repo";
 import { confirmedMessage } from "./book-pay-messages";
 import { deliverConfirmation } from "./invoices";
+import { sendTemplate, toWhatsappNumber } from "./whatsapp-client";
+import { guestApiSendingOn } from "./whatsapp-mode";
+import { prettyDate, rupees } from "./whatsapp-templates";
+
+/** "Payment received, booking confirmed" + Upload ID button (URL ends in the pre-arrival token). */
+export const PAYMENT_RECEIVED_TEMPLATE = "rk_payment_received_id";
 import { delivered, deliverySummary } from "./confirmation-delivery";
 
 /**
@@ -138,10 +144,10 @@ export async function confirmPaymentRequest(
     balancePaise: request.totalPaise - request.advancePaise,
     preArrivalUrl,
   });
-  // The booking confirmation PDF (CONFIRMED, how the advance was paid, the
-  // balance and a QR for it) goes out on every channel we have: email with
-  // the message above, and WhatsApp with the PDF attached. One failing never
-  // stops the other; a failure is retried by the Book & Pay cron.
+  // Email: the message above with the confirmation PDF attached. WhatsApp:
+  // "payment received, booking confirmed" with an Upload ID button, sent at
+  // once whatever the hour; the PDF with the house rules follows on WhatsApp
+  // once the ID is verified (the outbox's booking_confirmed).
   const emailMessage = {
     subject: message.subject,
     text: message.text.replace(
@@ -149,7 +155,30 @@ export async function confirmPaymentRequest(
       "\n\nYour booking confirmation (PDF) is attached — please keep it handy for check-in.\n\nAny questions,",
     ),
   };
-  const delivery = await deliverConfirmation(booking.id, { emailMessage, paymentRequestId: request.id });
+  const delivery = await deliverConfirmation(booking.id, { emailMessage, paymentRequestId: request.id, whatsapp: false });
+  const whatsappTo = toWhatsappNumber(enquiry.phone);
+  if (guestApiSendingOn() && whatsappTo && onboarding) {
+    const sent = await sendTemplate({
+      to: whatsappTo,
+      templateName: PAYMENT_RECEIVED_TEMPLATE,
+      params: [
+        enquiry.name.trim().split(/\s+/)[0] || "there",
+        prettyDate(booking.checkIn),
+        prettyDate(booking.checkOut),
+        booking.reference ?? request.reference,
+        rupees(request.advancePaise),
+        rupees(request.totalPaise - request.advancePaise),
+      ],
+      urlButtonParam: onboarding.token,
+    }).catch((error) => ({ ok: false as const, error: String(error), retryable: false }));
+    if (sent.ok) {
+      delivery.whatsapp = "sent";
+      delivery.whatsappTo = whatsappTo;
+    } else {
+      delivery.whatsapp = "failed";
+      delivery.notes.push(`whatsapp failed (${sent.error})`);
+    }
+  }
   const summary = deliverySummary(delivery);
   await logPaymentEvent(request.id, "confirmation_sent", summary);
 

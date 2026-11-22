@@ -51,7 +51,7 @@ const CONTACT = {
 };
 
 /** "2026-09-14" -> "14 Sep 2026", which is how a guest reads a date. */
-function prettyDate(iso: string): string {
+export function prettyDate(iso: string): string {
   const [year, month, day] = iso.split("-").map(Number);
   if (!year || !month || !day) return iso;
   return new Intl.DateTimeFormat("en-IN", {
@@ -102,16 +102,16 @@ export function buildTemplate(
 
   switch (kind) {
     case "booking_confirmed":
+      // The confirmation PDF with the house rules, after ID verification. Sent
+      // by invoices.ts as WHATSAPP_CONFIRMATION_TEMPLATE with the PDF header.
       return {
-        name: "rk_booking_confirmed",
+        name: "rk_booking_confirmation_pdf",
         category: "utility",
         languageCode: "en",
-        params: [guest, arrive, depart, String(nights)],
+        params: [guest, booking.reference ?? ""],
         preview:
-          `Hello ${guest}, your stay at Raj Kuthir Homestays (Sobuj Potro) is confirmed — ` +
-          `${arrive} to ${depart}, ${nights} night${nights === 1 ? "" : "s"}. ` +
-          `We will send directions the day before you arrive. ` +
-          `Any questions, reply here or call ${CONTACT.hostPhone}.`,
+          `Hello ${guest}, thank you — your ID is verified. Your booking confirmation for ${arrive} to ${depart} ` +
+          `is attached, with the house rules. See you soon!`,
       };
 
     case "checkin_reminder":
