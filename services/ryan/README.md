@@ -52,6 +52,10 @@ On the **api-server**: `RYAN_TOKEN` (the same value). That switches on `/api/ops
 
 **Pause it:** Railway → ryan → Settings → remove the service's deployment (or scale to 0). Nothing on the site depends on it.
 
+## Models
+
+Sonnet (`config.yaml`) does the work. Opus advises through Anthropic's advisor tool (beta `advisor-tool-2026-03-01`), added by `patch_advisor.py` at build time to Ryan's main loop and subagents only. Ryan consults it before planning, fixing and finishing (see `SOUL.md`). Set the Railway variable `RYAN_ADVISOR_MODEL` to empty to switch the advisor off, or to another model to change it.
+
 ## Cost
 
 AI runs only when the watchdog finds something new (at most 6 times a day) or you message it. Estimated ₹100–500/month at normal error rates; not measured yet. Shares Hermes's Anthropic key and limit.

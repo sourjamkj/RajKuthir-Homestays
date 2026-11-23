@@ -11,9 +11,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends git curl ca-cer
 
 # Pinned: upgrade deliberately, then re-check toolsets and approvals (README.md).
 RUN pip install --no-cache-dir "hermes-agent[anthropic,messaging]==0.19.0"
+# Sonnet does the work; Opus advises on planning and hard calls (Anthropic advisor tool).
+COPY patch_advisor.py /opt/ryan/patch_advisor.py
+RUN python /opt/ryan/patch_advisor.py
 
 ENV HERMES_HOME=/data/hermes \
     GH_CONFIG_DIR=/data/gh \
+    RYAN_ADVISOR_MODEL=claude-opus-5-5 \
     TZ=Asia/Kolkata
 COPY config.yaml SOUL.md start.sh /opt/ryan/
 COPY scripts/ /opt/ryan/scripts/
