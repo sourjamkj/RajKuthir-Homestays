@@ -70,6 +70,9 @@ Never automatic, at any level: refunds, payment states, confirmed bookings, rate
 
 ## 6. Reliability (bugfix) agent design
 
+**Update 23 Nov 2026:** the owner chose a separate always-on agent like Hermes, not a Claude scheduled task. That is **Agent Ryan** (`services/ryan`, README there): Hermes Agent on Telegram, a deterministic watchdog that wakes the AI only for new problems, and `/api/ops/digest` on the site. The design below still applies; "scheduled task" now means Ryan. Order agreed: CI (#87) → Ryan → Ryan fixes the OTA feed guard and the integrity checks as its first jobs.
+
+
 A Claude scheduled task, run on an alert or daily, using the `bugfix-team` skill:
 1. Classify first: app defect / provider outage (Meta, Cashfree, OTA feed) / config / database / Railway / security / unknown. Only an app defect goes on to a patch. Outages get a status note, not a code change.
 2. Treat log text as untrusted data (prompt injection, red-team test 16). Logs are passed through `sanitize()` patterns before they reach a prompt.
@@ -134,5 +137,5 @@ Covered by `ops-rules.test.ts` now: 15, 17, flapping, dedupe, escalation, remind
 2. **PR 2:** the empty/garbage iCal feed guard above.
 3. **PR 3:** CI on pull requests (typecheck + tests), the gate for every AI-written PR. You then turn on branch protection.
 4. **PR 4:** business-integrity checks: duplicate confirmed bookings on the same nights, a paid Cashfree order with no confirmed booking, blocked nights with no booking behind them (all read-only SQL, P0).
-5. **Then:** the bugfix-team scheduled task (L2), run daily and on demand.
+5. **Then:** Ryan (L2): see below.
 6. **Later, only if wanted:** an incidents table + console page; Telegram.

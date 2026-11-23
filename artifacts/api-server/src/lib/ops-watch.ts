@@ -33,6 +33,7 @@ import { guestApiSendingOn } from "./whatsapp-mode";
 const beats = new Map<JobId, JobBeat>();
 let states: Record<string, CheckState> = {};
 const labels: Record<string, string> = {};
+let lastResults: CheckResult[] = [];
 
 /** A job calls this when it starts its timer. Jobs that never start are not watched. */
 export function jobStarted(id: JobId, now = Date.now()): void {
@@ -93,6 +94,7 @@ async function runChecks(now: Date): Promise<CheckResult[]> {
 export async function runOpsWatch(now = new Date()): Promise<void> {
   const results = await runChecks(now);
   for (const r of results) labels[r.id] = r.label;
+  lastResults = results;
   const out = step(states, withMissingAsOk(states, results, labels), now);
   states = out.states;
   const day = new Date(now.getTime() + 330 * 60_000).toISOString().slice(0, 10);
@@ -105,6 +107,13 @@ export async function runOpsWatch(now = new Date()): Promise<void> {
 
 export function opsStatus() {
   return publicStatus(states, labels);
+}
+
+/** Open incidents with their owner-facing (sanitised) summaries, for Ryan's private digest. */
+export function openIncidents() {
+  return Object.entries(states)
+    .filter(([, s]) => s.failing)
+    .map(([id, s]) => ({ id, label: labels[id] ?? id, severity: s.severity, since: s.openedAt, summary: lastResults.find((r) => r.id === id)?.summary ?? "" }));
 }
 
 let started = false;

@@ -1,5 +1,5 @@
 # The checks CLAUDE.md asks for before every PR, run by GitHub on every PR, so
-# a change (from Claude, Sentinel or the dev chat) can't claim "tests pass"
+# a change (from Claude, Ryan or the dev chat) can't claim "tests pass"
 # without proof. Branch protection on main then requires this to be green.
 # Public repo: free. No secrets.
 name: CI

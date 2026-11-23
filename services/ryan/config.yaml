@@ -1,0 +1,57 @@
+# Hermes Agent config for Ryan, the Raj Kuthir ops agent (copied into
+# $HERMES_HOME on every start, so this file is the source of truth).
+# Secrets never go here: they are Railway variables (see README.md).
+
+model:
+  provider: anthropic
+  default: claude-sonnet-5-5
+
+# Ryan works on code in its own container: terminal + files to clone, test
+# and open PRs; delegation for the bugfix team (triage/fix/review subagents).
+# Only the owner reaches it (TELEGRAM_ALLOWED_USERS).
+platform_toolsets:
+  telegram: [terminal, file, delegation, todo, clarify]
+  cron: [terminal, file, delegation, todo]
+
+agent:
+  disabled_toolsets:
+    - browser
+    - computer_use
+    - web
+    - search
+    - x_search
+    - code_execution
+    - memory
+    - session_search
+    # It may not change its own schedules or permissions.
+    - cronjob
+    - skills
+    - kanban
+    - project
+    - image_gen
+    - video_gen
+    - tts
+    - vision
+    - homeassistant
+
+approvals:
+  mode: smart
+  # Scheduled runs have no human to ask: risky commands are refused, not run.
+  cron_mode: deny
+  # Blocked always, before any approval. Merging and deploying are the owner's.
+  deny:
+    - "*git push*origin main*"
+    - "*git push*:main*"
+    - "*git push*--force*"
+    - "*git push*-f *"
+    - "*git push*--delete*"
+    - "*gh pr merge*"
+    - "*gh pr review*--approve*"
+    - "*gh api*merge*"
+    - "*gh api*-X DELETE*"
+    - "*gh repo *"
+    - "*gh secret*"
+    - "*gh variable*"
+    - "*railway*"
+    - "*psql*"
+    - "*DATABASE_URL*"
