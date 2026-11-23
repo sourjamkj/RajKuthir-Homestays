@@ -157,7 +157,13 @@ export async function scheduleForBooking(
     return queued;
   }
 
+  // A verified guest never gets an ID reminder; the next steps follow on their own.
+  const verified = (
+    await pool.query("SELECT 1 FROM guest_onboarding WHERE booking_id = $1 AND status = 'verified'", [booking.id])
+  ).rowCount;
+
   for (const kind of ALL_KINDS) {
+    if (kind === "verification_reminder" && verified) continue;
     const at = scheduleFor(kind, booking, now);
     if (!at) continue;
 
