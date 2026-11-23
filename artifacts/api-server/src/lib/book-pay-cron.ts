@@ -12,6 +12,7 @@ import { sendEmail, sendWhatsappTemplate } from "./book-pay-notify";
 import { SITE_ORIGIN } from "./seo";
 import { reconcileOnlinePayments } from "./cashfree-service";
 import { retryConfirmations } from "./invoices";
+import { jobFailed, jobOk, jobStarted } from "./ops-watch";
 
 /**
  * Every five minutes: close unpaid Book & Pay holds whose time is up and tell
@@ -66,9 +67,15 @@ export async function runBookPayExpiry(now = new Date()): Promise<number> {
 
     // Booking confirmation PDFs that reached nobody because a send failed.
     await retryConfirmations(now);
+    jobOk("book_pay");
     return closed.length;
   } catch (error) {
-    if (!isNotMigrated(error)) logger.error({ err: error }, "Book & Pay expiry run failed");
+    // Not migrated yet means Book & Pay is not in use, not broken.
+    if (isNotMigrated(error)) jobOk("book_pay");
+    else {
+      jobFailed("book_pay", error);
+      logger.error({ err: error }, "Book & Pay expiry run failed");
+    }
     return 0;
   } finally {
     running = false;
@@ -78,6 +85,7 @@ export async function runBookPayExpiry(now = new Date()): Promise<number> {
 export function startBookPayCron(): void {
   if (started) return;
   started = true;
+  jobStarted("book_pay");
   const interval = setInterval(() => void runBookPayExpiry(), INTERVAL_MS);
   interval.unref?.();
   setTimeout(() => void runBookPayExpiry(), 20_000).unref?.();

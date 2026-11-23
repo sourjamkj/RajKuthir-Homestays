@@ -3,6 +3,7 @@ import { pool } from "@workspace/db";
 import { listActivity } from "./activity-repo";
 import { logger } from "./logger";
 import { notifyOwner } from "./owner-alerts";
+import { jobFailed, jobOk, jobStarted } from "./ops-watch";
 import { checkinTomorrowAlert, eventForActivity, isEveningRun, istTomorrow } from "./owner-alert-rules";
 
 /**
@@ -113,12 +114,15 @@ export function startOwnerAlertWatch(): void {
     running = true;
     try {
       await runOwnerAlertWatch();
+      jobOk("owner_alerts");
     } catch (error) {
+      jobFailed("owner_alerts", error);
       logger.error({ err: error }, "Owner alert watch failed");
     } finally {
       running = false;
     }
   };
+  jobStarted("owner_alerts");
   setTimeout(() => void tick(), 45_000).unref?.();
   setInterval(() => void tick(), EVERY_MS).unref?.();
 }

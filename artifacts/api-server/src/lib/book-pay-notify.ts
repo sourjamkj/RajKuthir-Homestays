@@ -43,7 +43,8 @@ export async function sendEmail(
   if (!to || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(to)) return false;
 
   try {
-    const [account] = await listForSync();
+    // A database outage must not stop the email that reports it.
+    const [account] = await listForSync().catch(() => []);
     const gmail = gmailConfig();
 
     // Gmail API over HTTPS when it is set up: the only way out of Railway

@@ -1,6 +1,7 @@
 import { logger } from "./logger";
 import { runNotifications } from "./notifications";
 import { isWhatsappConfigured } from "./whatsapp-client";
+import { jobFailed, jobOk, jobStarted } from "./ops-watch";
 
 /**
  * Runs the scheduler and drains the outbox every 15 minutes. Frequent enough
@@ -30,15 +31,18 @@ export function startNotificationsCron(): void {
   const poll = () => {
     runNotifications()
       .then((result) => {
+        jobOk("notifications");
         if (result.attempted > 0) {
           logger.info(result, "WhatsApp outbox drained");
         }
       })
       .catch((error) => {
+        jobFailed("notifications", error);
         logger.error({ err: error }, "Notification run failed unexpectedly");
       });
   };
 
+  jobStarted("notifications");
   const interval = setInterval(poll, POLL_INTERVAL_MS);
   interval.unref?.();
 

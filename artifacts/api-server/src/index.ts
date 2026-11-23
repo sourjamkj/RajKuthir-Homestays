@@ -25,6 +25,7 @@ import { applySalePlanOnce } from "./lib/rate-plan-sale-nov-2026";
 import { ensureMcpTables } from "./lib/mcp-oauth";
 import { startOwnerAlertWatch } from "./lib/owner-alerts-watch";
 import { startOwnerSettingsRefresh } from "./lib/owner-settings";
+import { startOpsWatch } from "./lib/ops-watch";
 
 const rawPort = process.env["PORT"];
 
@@ -112,6 +113,8 @@ app.listen(port, (err) => {
   void ensureMcpTables();
   startOwnerAlertWatch();
   startOwnerSettingsRefresh();
+  // Watches the database, the jobs above and the outbox; tells the owner once per incident.
+  startOpsWatch();
 
   // Google reviews: queues review-request drafts for stays that just ended
   // and drafts replies to new reviews. Creates its tables (and the WhatsApp
