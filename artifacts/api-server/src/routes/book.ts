@@ -120,7 +120,7 @@ function notReady(res: import("express").Response) {
 type Party = { checkIn: string; checkOut: string; adults: number; children: number; pets: number };
 
 /** Dates and party from a request body, or the reason they are unusable. */
-function readParty(body: unknown): { ok: true; party: Party } | { ok: false; error: string } {
+export function readParty(body: unknown): { ok: true; party: Party } | { ok: false; error: string } {
   const b = (body ?? {}) as Record<string, unknown>;
   const checkIn = text(b.checkIn, 10);
   const checkOut = text(b.checkOut, 10);
@@ -177,6 +177,60 @@ function perNight(plan: RatePlan, party: Party, quote: QuoteResult) {
 
 /* -------------------------------- public ------------------------------- */
 
+/**
+ * The public price check: availability, the full price and the next free
+ * windows, with no guest data. Shared by /book/quote and the WhatsApp agent's
+ * guest connector (mcp-guest.ts).
+ */
+export async function priceCheck(party: Party) {
+  const [plan, settings, taken] = await Promise.all([
+    getRatePlan(),
+    getBookPaySettings(),
+    readTakenRanges(),
+  ]);
+  const quote = priceParty(plan, party, settings);
+  const stay = { startDate: party.checkIn, endDate: party.checkOut };
+  const today = todayInIndia();
+
+  if (!quote.ok) {
+    // Usually a peak minimum stay. Say so, and offer stays that meet it.
+    const min = minimumStay(plan, nightsOf(party.checkIn, party.checkOut));
+    return {
+      available: false,
+      reason: quote.reason,
+      nextFree: nextFreeWindows(stay, taken, { today, minNights: min?.minNights }),
+    };
+  }
+
+  const clash = clashesWith(stay, taken);
+  if (clash) {
+    return {
+      available: false,
+      reason: "Some of those nights are already taken.",
+      nextFree: nextFreeWindows(stay, taken, { today }),
+    };
+  }
+
+  return {
+    available: true,
+    checkIn: quote.checkIn,
+    checkOut: quote.checkOut,
+    nights: quote.nights,
+    guests: quote.guests,
+    perNight: perNight(plan, party, quote),
+    roomPaise: quote.roomPaise,
+    extraGuestPaise: quote.extraGuestPaise,
+    petPaise: quote.petPaise,
+    totalPaise: quote.totalPaise,
+    advancePaise: quote.advancePaise,
+    balancePaise: quote.balancePaise,
+    advancePercent: quote.advancePercent,
+    peak: quote.peak,
+    holdMinutes: settings.holdMinutes,
+    onlineBooking: upiDetails() !== null || onlinePaymentMode() !== null,
+  };
+}
+
 router.post("/book/quote", async (req, res) => {
   res.setHeader("Cache-Control", "no-store");
   if (quoteLimiter(ipOf(req))) {
@@ -192,54 +246,7 @@ router.post("/book/quote", async (req, res) => {
   const { party } = read;
 
   try {
-    const [plan, settings, taken] = await Promise.all([
-      getRatePlan(),
-      getBookPaySettings(),
-      readTakenRanges(),
-    ]);
-    const quote = priceParty(plan, party, settings);
-    const stay = { startDate: party.checkIn, endDate: party.checkOut };
-    const today = todayInIndia();
-
-    if (!quote.ok) {
-      // Usually a peak minimum stay. Say so, and offer stays that meet it.
-      const min = minimumStay(plan, nightsOf(party.checkIn, party.checkOut));
-      res.json({
-        available: false,
-        reason: quote.reason,
-        nextFree: nextFreeWindows(stay, taken, { today, minNights: min?.minNights }),
-      });
-      return;
-    }
-
-    const clash = clashesWith(stay, taken);
-    if (clash) {
-      res.json({
-        available: false,
-        reason: "Some of those nights are already taken.",
-        nextFree: nextFreeWindows(stay, taken, { today }),
-      });
-      return;
-    }
-
-    res.json({
-      available: true,
-      checkIn: quote.checkIn,
-      checkOut: quote.checkOut,
-      nights: quote.nights,
-      guests: quote.guests,
-      perNight: perNight(plan, party, quote),
-      roomPaise: quote.roomPaise,
-      extraGuestPaise: quote.extraGuestPaise,
-      petPaise: quote.petPaise,
-      totalPaise: quote.totalPaise,
-      advancePaise: quote.advancePaise,
-      balancePaise: quote.balancePaise,
-      advancePercent: quote.advancePercent,
-      peak: quote.peak,
-      holdMinutes: settings.holdMinutes,
-      onlineBooking: upiDetails() !== null || onlinePaymentMode() !== null,
-    });
+    res.json(await priceCheck(party));
   } catch (error) {
     logger.error({ err: error }, "Book & Pay quote failed");
     res.status(500).json({ error: "Could not price those dates just now. Please try again." });

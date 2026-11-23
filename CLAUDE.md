@@ -44,6 +44,7 @@ pnpm monorepo (pnpm only), TypeScript, Express + React/Vite + Postgres/Drizzle, 
 | `artifacts/owner-app/` | Native Android owner app; mirrors the web console |
 | `lib/db/src/schema/` | Drizzle schema (source of truth for types) |
 | `lib/admin-client/` | Typed client shared by console and owner app |
+| `services/hermes/` | Hermes WhatsApp guest agent (own Railway service; the one approved exception to "no separate service"). Guest tools only via `/mcp/guest` — see its README |
 
 **Schema changes:** edit `lib/db/src/schema/*` *and* add idempotent SQL to the matching `ensure*Tables()` / `*_MIGRATION_SQL` run at startup (`CREATE … IF NOT EXISTS`, `ALTER TYPE … ADD VALUE IF NOT EXISTS`). Never destructive migrations. A new enum value also goes in `lib/admin-client` unions and the owner-app labels.
 

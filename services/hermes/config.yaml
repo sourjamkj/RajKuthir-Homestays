@@ -1,0 +1,45 @@
+# Hermes Agent config for the Raj Kuthir WhatsApp guest agent (copied into
+# $HERMES_HOME on every start, so this file is the source of truth).
+# Secrets never go here: they are Railway variables (see README.md).
+
+model:
+  provider: anthropic
+  default: claude-sonnet-5-5
+
+# Guests reach the agent only through WhatsApp. Its tools there: the guest
+# connector (availability + price) and clarify (quick-reply buttons). By
+# default Hermes gives WhatsApp the terminal, files and code execution —
+# never for a public bot.
+platform_toolsets:
+  whatsapp_cloud: [clarify, raj-kuthir-guest]
+
+# Belt and braces: removed everywhere, whatever a platform list says.
+agent:
+  disabled_toolsets:
+    - terminal
+    - file
+    - code_execution
+    - browser
+    - computer_use
+    - web
+    - search
+    - x_search
+    - skills
+    - memory
+    - session_search
+    - cronjob
+    - delegation
+    - kanban
+    - todo
+    - project
+    - image_gen
+    - video_gen
+    - tts
+    - vision
+    - homeassistant
+
+mcp_servers:
+  raj-kuthir-guest:
+    url: "${RAJ_KUTHIR_GUEST_MCP_URL}"
+    headers:
+      Authorization: "Bearer ${HERMES_MCP_TOKEN}"
