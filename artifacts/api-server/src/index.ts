@@ -67,7 +67,7 @@ app.listen(port, (err) => {
   startMailCron();
 
   // WhatsApp alerts to the caretaker (and the owner): new booking, the day
-  // before check-in, the day before check-out. Idle without BLUETICKS_API_KEY.
+  // before check-in, the day before check-out. Manual queue until WHATSAPP_CARETAKER_TEMPLATE is set.
   startCaretakerAlerts();
 
   // One-off: import every Booking.com email already in the mailbox (bookings,

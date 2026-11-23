@@ -394,7 +394,7 @@ export const RAILWAY_STATUS_VARS = [
   { name: "WHATSAPP_INVOICE_TEMPLATE", group: "WhatsApp", showValue: true },
   { name: "WHATSAPP_REVIEW_TEMPLATES", group: "WhatsApp", showValue: true },
   { name: "MAIL_ENCRYPTION_KEY", group: "Mail" },
-  { name: "BLUETICKS_API_KEY", group: "Caretaker alerts" },
+  { name: "WHATSAPP_CARETAKER_TEMPLATE", group: "Caretaker alerts", showValue: true },
   { name: "ANTHROPIC_API_KEY", group: "Review drafts" },
   { name: "RAJ_KUTHIR_CALENDAR_FEED_TOKEN", group: "Calendars" },
   { name: "GA4_MEASUREMENT_ID", group: "Analytics", showValue: true },

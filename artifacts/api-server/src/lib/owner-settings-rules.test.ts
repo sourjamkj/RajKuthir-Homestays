@@ -119,7 +119,7 @@ test("Settings shows whether each Railway secret is set, and never its value", (
   const token = rows.find((r) => r.name === "WHATSAPP_ACCESS_TOKEN")!;
   assert.deepEqual([token.set, token.value], [true, null]);
   assert.equal(rows.find((r) => r.name === "RAJ_KUTHIR_UPI_ID")!.value, "9674138627-2@ybl");
-  assert.equal(rows.find((r) => r.name === "BLUETICKS_API_KEY")!.set, false);
+  assert.equal(rows.find((r) => r.name === "WHATSAPP_CARETAKER_TEMPLATE")!.set, false);
   const view = JSON.stringify(settingsView({}, env));
   assert.ok(!view.includes("secret-token") && !view.includes("very-secret"));
   assert.equal(Object.keys(settingsView({}, {}).alerts.push).length, OWNER_EVENTS.length);

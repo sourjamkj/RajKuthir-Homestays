@@ -123,6 +123,40 @@ export function alertText(kind: AlertKind, b: AlertBooking): string {
   }
 }
 
+const HEADLINE: Record<AlertKind, string> = {
+  new_booking: "NEW BOOKING",
+  checkin_eve: "guest ARRIVES TOMORROW",
+  checkout_eve: "guest CHECKS OUT TOMORROW",
+  cancelled: "booking CANCELLED",
+};
+
+const ACTION: Record<AlertKind, string> = {
+  new_booking: "Please note the dates.",
+  checkin_eve: "Please get the villa ready today: cleaning, fresh linen and towels, drinking water, AC and Wi-Fi working.",
+  checkout_eve: "Check-out by 11 am. Please check the rooms, collect the keys, and report any damage.",
+  cancelled: "No need to prepare for these dates.",
+};
+
+/**
+ * The nine values of the rk_caretaker_alert template, in order: headline,
+ * guest, pets, check-in, check-out, booked via, guest phone, payment, action.
+ * Meta refuses template values with line breaks, so each is one line.
+ */
+export function caretakerTemplateParams(kind: AlertKind, b: AlertBooking): string[] {
+  const n = nights(b);
+  return [
+    HEADLINE[kind],
+    `${b.guestName ?? "Name not known yet"}${b.guests ? ` (${b.guests} guest${b.guests === 1 ? "" : "s"})` : ""}`,
+    b.pets && b.pets > 0 ? `Yes, ${b.pets}` : "No",
+    day(b.checkIn),
+    `${day(b.checkOut)} (${n} night${n === 1 ? "" : "s"})`,
+    SOURCE_LABEL[b.source] ?? b.source,
+    b.guestPhone ?? "not known yet",
+    kind === "cancelled" ? "n/a" : paymentStatus(b),
+    ACTION[kind],
+  ];
+}
+
 /**
  * Which alerts are due right now and have not been sent.
  *

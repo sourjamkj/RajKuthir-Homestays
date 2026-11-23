@@ -2,13 +2,16 @@ import { gte } from "drizzle-orm";
 import { bookings, db, pool } from "@workspace/db";
 
 import { logger } from "./logger";
+import { isWhatsappConfigured, sendTemplate } from "./whatsapp-client";
 import { caretakerWhatsappNumber, ownerWhatsappNumber } from "./owner-settings-state";
 import {
   bookingCaretakerCards,
+  caretakerTemplateParams,
   dueAlerts,
   istDate,
   toE164,
   type AlertBooking,
+  type AlertKind,
   type BookingCaretakerCard,
   type CaretakerMessageState,
 } from "./caretaker-rules";
@@ -16,15 +19,16 @@ import {
 /**
  * Caretaker alerts. Two ways out:
  *
- *  - MANUAL (default, free): caretakerQueue() lists what is due in the
+ *  - MANUAL (until switched on): caretakerQueue() lists what is due in the
  *    console with a one-tap WhatsApp button; see the bottom of this file.
- *  - AUTOMATIC (optional, paid): sent from the owner's own number through
- *    Blueticks (https://api.blueticks.co) when BLUETICKS_API_KEY is set. The rules are in caretaker-rules.ts.
+ *  - AUTOMATIC: sent from the business number through the WhatsApp Cloud API
+ *    as the approved template named by WHATSAPP_CARETAKER_TEMPLATE
+ *    (rk_caretaker_alert). The rules are in caretaker-rules.ts.
  *
  * Environment:
- *   BLUETICKS_API_KEY        required; without it this whole feature is idle
- *   CARETAKER_WHATSAPP       Settings first; default +91 78726 85558 (the number on the site)
- *   OWNER_WHATSAPP_NUMBER    Settings first; default +91 62903 99165; gets a copy of everything
+ *   WHATSAPP_CARETAKER_TEMPLATE  set once Meta approves it; without it, manual
+ *   CARETAKER_WHATSAPP           Settings first; default +91 78726 85558 (the number on the site)
+ *   OWNER_WHATSAPP_NUMBER        Settings first; default +91 62903 99165; gets a copy of everything
  *
  * Delivery is recorded per (booking, kind, recipient) in caretaker_alerts, a
  * table this file creates itself (additive, IF NOT EXISTS), so a message is
@@ -65,34 +69,22 @@ export function caretakerRecipients(): string[] {
   return [...new Set(list)];
 }
 
-export function caretakerAlertsEnabled(): boolean {
-  return Boolean(process.env["BLUETICKS_API_KEY"]?.trim());
+function caretakerTemplate(): string | null {
+  return process.env["WHATSAPP_CARETAKER_TEMPLATE"]?.trim() || null;
 }
 
-/** One WhatsApp text through Blueticks. Resolves to an error string or null. */
-export async function sendWhatsappViaBlueticks(to: string, text: string): Promise<string | null> {
-  const key = process.env["BLUETICKS_API_KEY"]?.trim();
-  if (!key) return "BLUETICKS_API_KEY is not set";
+export function caretakerAlertsEnabled(): boolean {
+  return Boolean(caretakerTemplate()) && isWhatsappConfigured();
+}
 
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 15_000);
-  try {
-    const response = await fetch(`https://api.blueticks.co/v1/scheduled-messages/${encodeURIComponent(to)}`, {
-      method: "POST",
-      headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ type: "text", text }),
-      signal: controller.signal,
-    });
-    const body = (await response.json().catch(() => ({}))) as { success?: boolean; error?: unknown; message?: unknown };
-    if (!response.ok || body.success === false) {
-      return `Blueticks ${response.status}: ${String(body.message ?? body.error ?? "rejected").slice(0, 200)}`;
-    }
-    return null;
-  } catch (error) {
-    return error instanceof Error ? error.message.slice(0, 200) : "send failed";
-  } finally {
-    clearTimeout(timer);
-  }
+/** One caretaker alert as the approved template. Resolves to an error string or null. */
+async function sendCaretakerTemplate(to: string, alert: { kind: AlertKind; bookingId: string }, b: AlertBooking): Promise<string | null> {
+  const sent = await sendTemplate({
+    to: to.replace(/^\+/, ""),
+    templateName: caretakerTemplate()!,
+    params: caretakerTemplateParams(alert.kind, b),
+  }).catch((error) => ({ ok: false as const, error: String(error), retryable: true }));
+  return sent.ok ? null : sent.error.slice(0, 200);
 }
 
 type AlertRow = { booking_id: string; kind: string; recipient: string; status: string; attempts: number };
@@ -150,7 +142,7 @@ export async function runCaretakerAlerts(now = new Date()): Promise<{ sent: numb
         const record = byKey.get(`${alert.bookingId}:${alert.kind}:${to}`);
         if (record && (record.status === "sent" || record.attempts >= MAX_ATTEMPTS)) continue;
 
-        const error = await sendWhatsappViaBlueticks(to, alert.text);
+        const error = await sendCaretakerTemplate(to, alert, rows.find((r) => r.id === alert.bookingId)!);
         await pool.query(
           `insert into caretaker_alerts (booking_id, kind, recipient, status, attempts, last_error, sent_at)
            values ($1, $2, $3, $4, 1, $5, $6)
@@ -186,7 +178,7 @@ export function startCaretakerAlerts(): void {
   if (started) return;
   started = true;
   if (!caretakerAlertsEnabled()) {
-    logger.info("Caretaker alerts are in manual mode (console queue); set BLUETICKS_API_KEY to send automatically.");
+    logger.info("Caretaker alerts are in manual mode (console queue); set WHATSAPP_CARETAKER_TEMPLATE once Meta approves it.");
     return;
   }
   const interval = setInterval(() => void runCaretakerAlerts(), INTERVAL_MS);
@@ -220,6 +212,8 @@ export type CaretakerQueueItem = {
 };
 
 export async function caretakerQueue(now = new Date()): Promise<CaretakerQueueItem[]> {
+  // Sent automatically: nothing for the owner to tap (no double sends).
+  if (caretakerAlertsEnabled()) return [];
   await ensureTable();
   const yesterday = istDate(new Date(now.getTime() - 86_400_000));
   const rows = (await db
