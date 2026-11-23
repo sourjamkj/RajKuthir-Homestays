@@ -206,3 +206,30 @@ export function publicStatus(states: Readonly<Record<string, CheckState>>, label
     },
   };
 }
+
+/** One warning or error line kept for Ryan's digest. Already sanitised. */
+export type LogEntry = { at: string; level: "warn" | "error" | "fatal"; msg: string; error?: string; stack?: string[]; where?: string };
+
+/**
+ * Turns a pino call (its args and numeric level) into a digest line, or null
+ * below warn. Keeps the message, the error and the top of its stack, plus
+ * path/source/check context; drops everything else (bodies, guests, payloads).
+ */
+export function logEntryFrom(args: readonly unknown[], level: number, now: Date): LogEntry | null {
+  if (level < 40) return null;
+  const [first, second] = args;
+  const obj = first && typeof first === "object" && !(first instanceof Error) ? (first as Record<string, unknown>) : {};
+  const err = first instanceof Error ? first : (obj["err"] ?? obj["error"]);
+  const msg = typeof first === "string" ? first : typeof second === "string" ? second : err instanceof Error ? err.message : "";
+  const where = ["path", "source", "check", "event", "table"].map((k) => obj[k]).find((v) => typeof v === "string") as string | undefined;
+  const entry: LogEntry = { at: now.toISOString(), level: level >= 60 ? "fatal" : level >= 50 ? "error" : "warn", msg: sanitize(msg).slice(0, 300) };
+  if (err instanceof Error) {
+    // Drizzle wraps DB errors as "Failed query: <sql>\nparams: <values>" with the real error in `cause`;
+    // params can hold guest names, so they never leave.
+    const cause = err.cause instanceof Error ? ` ← ${err.cause.message}` : "";
+    entry.error = sanitize(err.message.split("\nparams:")[0]! + cause).slice(0, 400);
+    entry.stack = (err.stack ?? "").split("\n").slice(1, 7).map((line) => sanitize(line.trim()));
+  } else if (typeof err === "string") entry.error = sanitize(err).slice(0, 300);
+  if (where) entry.where = sanitize(where).slice(0, 120);
+  return entry;
+}

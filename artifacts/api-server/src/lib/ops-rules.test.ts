@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
-import { alertFor, databaseCheck, jobCheck, outboxCheck, publicStatus, sanitize, step, withMissingAsOk, type CheckState } from "./ops-rules.ts";
+import { alertFor, databaseCheck, jobCheck, logEntryFrom, outboxCheck, publicStatus, sanitize, step, withMissingAsOk, type CheckState } from "./ops-rules.ts";
 
 const MIN = 60_000;
 const at = (iso: string) => new Date(iso);
@@ -100,4 +100,27 @@ test("public status is 503 only for an open P0 and never carries error text", ()
   const down = publicStatus({ database: { ...p2, severity: "P0" } }, { database: "Database" });
   assert.equal(down.httpStatus, 503);
   assert.deepEqual(Object.keys(down.body.open[0]!), ["check", "severity", "since"]);
+});
+
+test("log entries keep message, error and stack top, sanitised; info is dropped", () => {
+  const now = at("2026-11-23T05:00:00Z");
+  assert.equal(logEntryFrom([{ a: 1 }, "hello"], 30, now), null);
+  const err = new Error("connect failed postgres://u:pw@host/db token=abc12345");
+  const e = logEntryFrom([{ err, source: "airbnb", guest: { phone: "919830012345" } }, "Calendar feed failed"], 50, now)!;
+  assert.equal(e.level, "error");
+  assert.equal(e.msg, "Calendar feed failed");
+  assert.equal(e.where, "airbnb");
+  assert.ok(e.error && !e.error.includes("pw@") && !e.error.includes("abc12345"));
+  assert.ok(e.stack && e.stack.length > 0 && e.stack.length <= 6);
+  assert.ok(!JSON.stringify(e).includes("919830012345"), "unlisted fields are not copied");
+  assert.equal(logEntryFrom(["plain warning"], 40, now)!.msg, "plain warning");
+});
+
+test("database errors keep the real cause and never the query params", () => {
+  const err = new Error('Failed query: select * from "bookings" where "guest_name" = $1\nparams: Asha Roy', {
+    cause: new Error('relation "bookings" does not exist'),
+  });
+  const e = logEntryFrom([{ err }, "Unhandled error"], 50, at("2026-11-23T05:00:00Z"))!;
+  assert.ok(e.error!.includes('relation "bookings" does not exist'), e.error);
+  assert.ok(!e.error!.includes("Asha"), e.error);
 });
