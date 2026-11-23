@@ -29,3 +29,19 @@ end = src.index(")\n", start) + 2
 assert '"♻️ Recovered reply' in src[start:end], "hermes-agent changed: re-check RECOVERED_MARKER"
 ledger.write_text(src[:start] + 'RECOVERED_MARKER = ""\n' + src[end:])
 print("patched", ledger)
+
+# Slash commands are owner-only: guests get no command at all (Hermes otherwise
+# always leaves /help and /whoami open), and a blocked command gets a plain reply.
+access = pathlib.Path(importlib.util.find_spec("gateway.slash_access").origin)
+src = access.read_text()
+floor = '_ALWAYS_ALLOWED_FOR_USERS: FrozenSet[str] = frozenset({\n    "help",\n    "whoami",\n})\n'
+assert src.count(floor) == 1, "hermes-agent changed: re-check _ALWAYS_ALLOWED_FOR_USERS"
+access.write_text(src.replace(floor, "_ALWAYS_ALLOWED_FOR_USERS: FrozenSet[str] = frozenset()\n"))
+print("patched", access)
+
+src = path.read_text()
+denied = '        return f"⛔ /{canonical_cmd} is admin-only here. {suffix}"\n'
+assert src.count(denied) == 1, "hermes-agent changed: re-check the slash-command denial reply"
+guest = "Sorry, I can only help with questions about staying at Raj Kuthir Homestays – Sobuj Potro. Just type your question."
+path.write_text(src.replace(denied, f"        return {guest!r}\n"))
+print("patched denial", path)

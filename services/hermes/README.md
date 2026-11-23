@@ -21,7 +21,8 @@ Templates (confirmations, reminders) stay with the api-server outbox; Hermes can
 
 - `config.yaml` gives WhatsApp only `clarify` + `raj-kuthir-guest` and disables terminal, files, code, browser, web, memory and skills everywhere. Hermes's default for WhatsApp includes the terminal and code execution — never use the default.
 - `/mcp/guest` exposes only `quote_stay`, the same answer as the public booking page. The owner's connector (`/mcp`) is never given to Hermes.
-- Pilot: the api-server only forwards numbers in `WHATSAPP_TEST_NUMBERS` until auto-reply is switched on in Settings; Hermes also only answers `WHATSAPP_CLOUD_ALLOWED_USERS`.
+- Who gets replies: the api-server forwards only `WHATSAPP_TEST_NUMBERS` unless `WHATSAPP_AUTOREPLY_ENABLED=true` (live since 23 Nov 2026; set `false` to go back to pilot). Hermes answers everyone it is sent (`WHATSAPP_CLOUD_ALLOW_ALL_USERS=true`).
+- Slash commands work only for the numbers in `allow_admin_from` (`config.yaml`); guests get none, not even /help, and a blocked command gets a plain reply (`patch_errors.py`); the owner's chat is the home channel (Dockerfile), so guests never get Hermes setup prompts.
 - After upgrading `hermes-agent` in the Dockerfile, re-check that WhatsApp still resolves to exactly `clarify, raj-kuthir-guest`.
 - `patch_errors.py` (run at build time) replaces Hermes's technical failure text ("model provider failed… check gateway logs") with a polite hand-off to the host (sent once: the interim status copy is dropped), and drops the "♻️ Recovered reply" prefix. The build fails if an upgrade moves the patched code.
 

@@ -6,6 +6,8 @@ COPY patch_errors.py /opt/rk/patch_errors.py
 RUN python /opt/rk/patch_errors.py
 
 ENV HERMES_HOME=/data/hermes
+# Owner's chat as home channel, so guests never see the "No home channel" setup prompt.
+ENV WHATSAPP_CLOUD_HOME_CHANNEL=916290399165
 COPY config.yaml SOUL.md house-rules.txt start.sh /opt/rk/
 
 CMD ["sh", "/opt/rk/start.sh"]

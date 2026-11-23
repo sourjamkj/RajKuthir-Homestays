@@ -13,6 +13,13 @@ model:
 platform_toolsets:
   whatsapp_cloud: [clarify, raj-kuthir-guest]
 
+# Hermes slash commands (/sethome, /model, /reset, /help…) are for these numbers only;
+# guests get none (patch_errors.py removes Hermes's /help + /whoami floor). Add numbers here.
+platforms:
+  whatsapp_cloud:
+    allow_admin_from: ["916290399165"]
+    user_allowed_commands: []
+
 # Belt and braces: removed everywhere, whatever a platform list says.
 agent:
   disabled_toolsets:
