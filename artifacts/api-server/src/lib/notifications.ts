@@ -375,13 +375,8 @@ export async function drainOutbox(now = new Date()): Promise<DrainResult> {
         "WhatsApp message sent",
       );
     } else {
-      await markFailed(
-        message.id,
-        outcome.error,
-        outcome.retryable,
-        message.attempts,
-        MAX_ATTEMPTS,
-      );
+      // No automatic retries: the owner is alerted (owner-alerts-watch) and retries after fixing.
+      await markFailed(message.id, outcome.error, false, message.attempts, MAX_ATTEMPTS);
       result.failed += 1;
     }
   }

@@ -178,12 +178,19 @@ export default function AdminWhatsApp() {
                   <summary className="cursor-pointer text-muted-foreground">Preview message</summary>
                   <p className="mt-2 whitespace-pre-wrap">{m.preview}</p>
                 </details>
+                {m.status === 'sent' && !manual && (
+                  <div className="mt-3">
+                    <button type="button" className={BTN_OUTLINE} disabled={act.isPending} onClick={() => act.mutate({ path: `/api/notifications/${m.id}/approve`, done: 'Sending it again now.' })}>
+                      Resend
+                    </button>
+                  </div>
+                )}
                 {(m.status === 'draft' || m.status === 'failed') && (
                   <div className="mt-3 flex flex-wrap gap-2">
                     {manual ? (
                       <a className={BTN_PRIMARY} href={manualWhatsappLink(m.toPhone, m.preview)} target="_blank" rel="noreferrer">Open in WhatsApp</a>
                     ) : (
-                      <button type="button" className={BTN_PRIMARY} disabled={act.isPending} onClick={() => act.mutate({ path: `/api/notifications/${m.id}/approve`, done: 'Approved — it goes out at the next run (within 15 minutes).' })}>
+                      <button type="button" className={BTN_PRIMARY} disabled={act.isPending} onClick={() => act.mutate({ path: `/api/notifications/${m.id}/approve`, done: 'Sending now (guest messages wait until 8 am during 11 pm–8 am).' })}>
                         {m.status === 'failed' ? 'Retry' : 'Approve and send'}
                       </button>
                     )}
