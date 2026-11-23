@@ -23,6 +23,8 @@ Templates (confirmations, reminders) stay with the api-server outbox; Hermes can
 - `/mcp/guest` exposes only `quote_stay`, the same answer as the public booking page. The owner's connector (`/mcp`) is never given to Hermes.
 - Who gets replies: the api-server forwards only `WHATSAPP_TEST_NUMBERS` unless `WHATSAPP_AUTOREPLY_ENABLED=true` (live since 23 Nov 2026; set `false` to go back to pilot). Hermes answers everyone it is sent (`WHATSAPP_CLOUD_ALLOW_ALL_USERS=true`).
 - Slash commands work only for the numbers in `allow_admin_from` (`config.yaml`); guests get none, not even /help, and a blocked command gets a plain reply (`patch_errors.py`); the owner's chat is the home channel (Dockerfile), so guests never get Hermes setup prompts.
+- Guests never get Hermes housekeeping messages: no restart pings (`gateway_restart_notification: false`), no "⚡ Interrupting" ack (`HERMES_GATEWAY_BUSY_ACK_ENABLED=false`), no session-reset notice (`patch_errors.py`); idle chats reset quietly after 24h.
+- Catch-all: every WhatsApp text passes `_rk_guest_safe` (patched into the adapter's `send`). Any error or system notice becomes the polite hand-off (once per chat per 2 min) and the original is logged as `RK_GUEST_ERROR {"chat":…,"text":…}` in the hermes logs, for the bug-fix agent (Railway logs filter `RK_GUEST_ERROR`).
 - After upgrading `hermes-agent` in the Dockerfile, re-check that WhatsApp still resolves to exactly `clarify, raj-kuthir-guest`.
 - `patch_errors.py` (run at build time) replaces Hermes's technical failure text ("model provider failed… check gateway logs") with a polite hand-off to the host (sent once: the interim status copy is dropped), and drops the "♻️ Recovered reply" prefix. The build fails if an upgrade moves the patched code.
 
