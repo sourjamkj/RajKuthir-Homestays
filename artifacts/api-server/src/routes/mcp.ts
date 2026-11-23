@@ -1,6 +1,8 @@
 import express, { Router, type IRouter } from "express";
 import { getOAuthProtectedResourceMetadataUrl, mcpAuthRouter } from "@modelcontextprotocol/sdk/server/auth/router.js";
 import { requireBearerAuth } from "@modelcontextprotocol/sdk/server/auth/middleware/bearerAuth.js";
+import { buildGuestMcpServer } from "../lib/mcp-guest";
+import { guestTokenMatches } from "../lib/mcp-guest-rules";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 
 import { clearAttempts, recordFailedAttempt, requireAdmin, tooManyAttempts, verifyAdminPassword } from "../lib/admin-auth";
@@ -120,7 +122,31 @@ router.post("/mcp", bearer, async (req, res) => {
   }
 });
 
-router.all("/mcp", (_req, res) => {
+/**
+ * The WhatsApp agent's guest connector: availability and price only, behind
+ * its own token (HERMES_MCP_TOKEN). Never the owner's tools above.
+ */
+router.post("/mcp/guest", async (req, res) => {
+  if (!guestTokenMatches(req.headers.authorization)) {
+    res.status(401).json({ jsonrpc: "2.0", error: { code: -32001, message: "Unauthorized." }, id: null });
+    return;
+  }
+  const server = buildGuestMcpServer();
+  const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined });
+  res.on("close", () => {
+    void transport.close();
+    void server.close();
+  });
+  try {
+    await server.connect(transport);
+    await transport.handleRequest(req, res, req.body);
+  } catch (error) {
+    logger.error({ err: error }, "Guest connector request failed");
+    if (!res.headersSent) res.status(500).json({ jsonrpc: "2.0", error: { code: -32603, message: "Internal error" }, id: null });
+  }
+});
+
+router.all(["/mcp", "/mcp/guest"], (_req, res) => {
   res.setHeader("Allow", "POST");
   res.status(405).json({ jsonrpc: "2.0", error: { code: -32000, message: "Method not allowed." }, id: null });
 });

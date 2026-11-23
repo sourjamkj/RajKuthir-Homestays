@@ -77,10 +77,32 @@ router.post("/webhooks/whatsapp", (req, res) => {
   }
 
   // Parse and process async (fire-and-forget after the 200)
-  void processPayload(req.body);
+  void processPayload(req.body, rawBody, signature!);
 });
 
-async function processPayload(body: unknown): Promise<void> {
+/**
+ * Hands a guest chat to the Hermes agent (HERMES_WEBHOOK_URL, on Railway's
+ * private network) as Meta sent it, signature and all, so Hermes verifies it
+ * with the same app secret and replies to the guest itself.
+ */
+async function forwardToHermes(url: string, rawBody: Buffer, signature: string): Promise<void> {
+  try {
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { "content-type": "application/json", "x-hub-signature-256": signature },
+      body: rawBody,
+      signal: AbortSignal.timeout(10_000),
+    });
+    if (!res.ok) logger.warn({ status: res.status }, "Hermes agent refused a forwarded WhatsApp message");
+  } catch (error) {
+    logger.error({ err: error }, "Could not reach the Hermes agent");
+  }
+}
+
+async function processPayload(body: unknown, rawBody: Buffer, signature: string): Promise<void> {
+  // Who answers chats: Hermes when HERMES_WEBHOOK_URL is set, else the built-in bot.
+  const hermesUrl = process.env["HERMES_WEBHOOK_URL"]?.trim();
+  let forHermes = false;
   try {
     const parsed = parseWebhookPayload(body);
 
@@ -92,8 +114,10 @@ async function processPayload(body: unknown): Promise<void> {
       // Touch the conversation's last_inbound_at
       await touchInbound(msg.phone, new Date(msg.timestamp * 1000));
 
-      // Dispatch to the bot (lazy-imported to keep this file light)
-      if (shouldAutoReply(msg.phone)) {
+      // Pilot numbers only, until auto-reply is switched on in Settings.
+      if (shouldAutoReply(msg.phone) && hermesUrl) {
+        forHermes = true;
+      } else if (shouldAutoReply(msg.phone)) {
         try {
           const { handleInbound } = await import("../lib/wa-bot");
           void handleInbound(msg);
@@ -102,6 +126,8 @@ async function processPayload(body: unknown): Promise<void> {
         }
       }
     }
+
+    if (forHermes && hermesUrl) await forwardToHermes(hermesUrl, rawBody, signature);
 
     // Update statuses
     for (const st of parsed.statuses) {
