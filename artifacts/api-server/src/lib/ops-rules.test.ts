@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
-import { alertFor, blockWithoutBookingCheck, databaseCheck, doubleBookingCheck, paidNotBookedCheck, jobCheck, logEntryFrom, outboxCheck, publicStatus, sanitize, step, withMissingAsOk, type CheckState } from "./ops-rules.ts";
+import { inIntegrityScope, alertFor, blockWithoutBookingCheck, databaseCheck, doubleBookingCheck, paidNotBookedCheck, jobCheck, logEntryFrom, outboxCheck, publicStatus, sanitize, step, withMissingAsOk, type CheckState } from "./ops-rules.ts";
 
 const MIN = 60_000;
 const at = (iso: string) => new Date(iso);
@@ -165,4 +165,10 @@ test("an open integrity incident never makes the public health 503 or appears in
   assert.equal(hidden.httpStatus, 200);
   assert.deepEqual(hidden.body, { status: "ok", open: [] });
   assert.equal(publicStatus({ database: open }, { database: "Database" }).httpStatus, 503);
+});
+
+test("integrity checks start with December stays: November is out, 1 December is in", () => {
+  assert.equal(inIntegrityScope("2026-11-30"), false);
+  assert.equal(inIntegrityScope("2026-12-01"), true);
+  assert.equal(inIntegrityScope("2027-01-05"), true);
 });
