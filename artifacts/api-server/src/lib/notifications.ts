@@ -205,7 +205,7 @@ async function promoteDrafts(now = new Date()): Promise<void> {
      FROM bookings b
      WHERE m.booking_id = b.id AND m.status = 'draft' AND m.kind::text = ANY($1)
        AND b.status = 'confirmed' AND b.check_out >= ($2::timestamptz AT TIME ZONE 'Asia/Kolkata')::date
-       AND (m.send_after > $2::timestamptz - interval '1 hour' OR m.kind IN ('booking_confirmed', 'checkin_reminder', 'checkin_welcome'))`,
+       AND (m.send_after > $2::timestamptz - interval '1 hour' OR m.kind IN ('booking_confirmed', 'checkin_reminder', 'checkin_welcome', 'verification_reminder'))`,
     [kinds, now],
   );
   if (rowCount) logger.info({ promoted: rowCount }, "Auto-send now covers queued drafts");
@@ -223,6 +223,15 @@ async function expireArrivalMessages(now = new Date()): Promise<void> {
      WHERE m.booking_id = b.id AND m.status = 'pending'
        AND ((m.kind = 'checkin_reminder' AND $1::timestamptz > (b.check_in + time '12:00') AT TIME ZONE 'Asia/Kolkata')
          OR (m.kind IN ('booking_confirmed', 'checkin_welcome') AND $1::timestamptz > (b.check_out + time '11:00') AT TIME ZONE 'Asia/Kolkata'))`,
+    [now],
+  );
+  // ID reminders that no longer have a job: the ID is verified, or check-in day has come.
+  await pool.query(
+    `UPDATE whatsapp_messages m SET status = 'cancelled', error = 'Not needed: ID verified or check-in reached', updated_at = now()
+     FROM bookings b
+     WHERE m.booking_id = b.id AND m.kind = 'verification_reminder' AND m.status IN ('draft', 'pending')
+       AND (b.check_in <= ($1::timestamptz AT TIME ZONE 'Asia/Kolkata')::date
+         OR EXISTS (SELECT 1 FROM guest_onboarding o WHERE o.booking_id = b.id AND o.status = 'verified'))`,
     [now],
   );
 }
@@ -366,13 +375,8 @@ export async function drainOutbox(now = new Date()): Promise<DrainResult> {
         "WhatsApp message sent",
       );
     } else {
-      await markFailed(
-        message.id,
-        outcome.error,
-        outcome.retryable,
-        message.attempts,
-        MAX_ATTEMPTS,
-      );
+      // No automatic retries: the owner is alerted (owner-alerts-watch) and retries after fixing.
+      await markFailed(message.id, outcome.error, false, message.attempts, MAX_ATTEMPTS);
       result.failed += 1;
     }
   }
@@ -397,7 +401,36 @@ async function sendWithPoster(to: string, templateName: string, params: string[]
   return sendTemplate({ to, templateName, params, headerDocument: { mediaId: media.mediaId, filename } });
 }
 
-export async function runNotifications(): Promise<DrainResult> {
+let inFlight: Promise<DrainResult> | null = null;
+let again = false;
+
+/**
+ * One run at a time: the cron, an Approve tap and an ID verification can all
+ * ask at once, and two overlapping drains would send a message twice. A
+ * request made during a run gets one more run straight after.
+ * shortcut: in-process lock, fine for one Railway replica; use a DB lock if it ever scales out.
+ */
+export function runNotifications(): Promise<DrainResult> {
+  if (inFlight) {
+    again = true;
+    return inFlight;
+  }
+  inFlight = (async () => {
+    try {
+      let result: DrainResult;
+      do {
+        again = false;
+        result = await runOnce();
+      } while (again);
+      return result;
+    } finally {
+      inFlight = null;
+    }
+  })();
+  return inFlight;
+}
+
+async function runOnce(): Promise<DrainResult> {
   // The outbox table and any message kinds added since it was created.
   await ensureReviewTables();
   await scheduleUpcoming();

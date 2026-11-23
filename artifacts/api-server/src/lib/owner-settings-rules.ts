@@ -42,7 +42,7 @@ export const OWNER_EVENT_INFO: Record<OwnerEvent, { label: string; description: 
   ota_cancellation: { label: "Booking cancelled", description: "A booking was cancelled on any channel.", push: true, email: false },
   checkin_tomorrow: { label: "Check-in tomorrow", description: "Every evening at 6 pm, for guests arriving the next day.", push: true, email: false },
   message_draft: { label: "WhatsApp messages to send", description: "Guest messages are waiting for you to approve or send.", push: true, email: false },
-  message_failed: { label: "WhatsApp message failed", description: "A message to a guest could not be delivered.", push: true, email: false },
+  message_failed: { label: "WhatsApp message failed", description: "A message to a guest could not be delivered.", push: true, email: true },
   documents_uploaded: { label: "Guest ID uploaded", description: "A guest uploaded their ID before arrival.", push: true, email: false },
   invoice_check_failed: { label: "Invoices failing", description: "The hourly test of the invoice and confirmation PDFs failed, or recovered.", push: true, email: true },
   review_received: { label: "New Google review", description: "A new review, with a reply drafted for you.", push: true, email: true },

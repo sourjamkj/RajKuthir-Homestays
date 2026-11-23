@@ -48,19 +48,20 @@ export async function runOwnerAlertWatch(now = new Date()): Promise<void> {
 
   // 2. WhatsApp messages that failed since the cursor.
   const failed = await pool
-    .query<{ id: string; kind: string; to_phone: string; error: string | null }>(
-      `SELECT id, kind::text, to_phone, error FROM whatsapp_messages WHERE status = 'failed' AND updated_at > $1 ORDER BY updated_at LIMIT 20`,
+    .query<{ id: string; kind: string; to_phone: string; error: string | null; attempts: number }>(
+      `SELECT id, kind::text, to_phone, error, attempts FROM whatsapp_messages WHERE status = 'failed' AND updated_at > $1 ORDER BY updated_at LIMIT 20`,
       [cursor],
     )
-    .catch(() => ({ rows: [] as Array<{ id: string; kind: string; to_phone: string; error: string | null }> }));
+    .catch(() => ({ rows: [] as Array<{ id: string; kind: string; to_phone: string; error: string | null; attempts: number }> }));
   for (const m of failed.rows) {
     await notifyOwner(
       {
         event: "message_failed",
         title: "WhatsApp message not delivered",
         body: `${m.kind.replace(/_/g, " ")} to +${m.to_phone}${m.error ? `: ${m.error.slice(0, 120)}` : ""}`,
-        href: "/admin/guests#messages",
-        dedupeKey: `failed:${m.id}`,
+        href: "/admin/whatsapp",
+        // Per attempt: a retry that fails again alerts again.
+        dedupeKey: `failed:${m.id}:${m.attempts}`,
       },
       now,
     );
