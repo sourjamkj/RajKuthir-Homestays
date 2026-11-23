@@ -17,6 +17,7 @@ import invoicesRouter from "./invoices";
 import ownerAppRouter from "./owner-app";
 import caretakerConsoleRouter from "./caretaker-console";
 import complianceRouter from "./compliance";
+import waInboxRouter from "./wa-inbox";
 
 const router: IRouter = Router();
 
@@ -38,5 +39,6 @@ router.use(caretakerRouter);
 router.use(reviewsRouter);
 router.use(invoicesRouter);
 router.use(complianceRouter);
+router.use(waInboxRouter);
 
 export default router;

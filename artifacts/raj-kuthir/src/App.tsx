@@ -54,6 +54,7 @@ import ManagementDocuments from '@/pages/ManagementDocuments';
 import Feedback from '@/pages/Feedback';
 import { CAFE_HOURS } from '@/content/cafe-menu';
 import AdminCompliance from '@/pages/AdminCompliance';
+import AdminInbox from '@/pages/AdminInbox';
 import {
   useRatePlan,
   rateForNight,
@@ -1796,6 +1797,7 @@ function Router() {
         <Route path="/admin/guest-info" component={AdminGuestInfo} />
         <Route path="/admin/caretaker" component={AdminCaretakerConsole} />
         <Route path="/admin/compliance" component={AdminCompliance} />
+        <Route path="/admin/inbox" component={AdminInbox} />
         {/* Legacy sign-in path, kept so existing bookmarks still land somewhere useful. */}
         <Route path="/sign-in/*?" component={AdminLogin} />
         <Route component={NotFound} />
