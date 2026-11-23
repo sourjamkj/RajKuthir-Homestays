@@ -19,6 +19,14 @@ platforms:
   whatsapp_cloud:
     allow_admin_from: ["916290399165"]
     user_allowed_commands: []
+    # No "♻️ Gateway restarted" pings to guests on every deploy.
+    gateway_restart_notification: false
+
+# A chat idle for 24h starts fresh (keeps prompts small), without telling the guest.
+session_reset:
+  mode: idle
+  idle_minutes: 1440
+  notify: false
 
 # Belt and braces: removed everywhere, whatever a platform list says.
 agent:

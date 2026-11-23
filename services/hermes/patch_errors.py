@@ -45,3 +45,11 @@ assert src.count(denied) == 1, "hermes-agent changed: re-check the slash-command
 guest = "Sorry, I can only help with questions about staying at Raj Kuthir Homestays – Sobuj Potro. Just type your question."
 path.write_text(src.replace(denied, f"        return {guest!r}\n"))
 print("patched denial", path)
+
+# Never send guests "◐ Session automatically reset… Use /resume…" (Hermes sends it
+# after a restart even when session_reset.notify is false).
+src = path.read_text()
+reset = 'should_notify = reset_reason in {"suspended", "resume_pending_expired"} or ('
+assert src.count(reset) == 1, "hermes-agent changed: re-check the session-reset notice"
+path.write_text(src.replace(reset, "should_notify = False and ("))
+print("patched reset notice", path)

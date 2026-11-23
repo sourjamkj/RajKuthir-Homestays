@@ -8,6 +8,8 @@ RUN python /opt/rk/patch_errors.py
 ENV HERMES_HOME=/data/hermes
 # Owner's chat as home channel, so guests never see the "No home channel" setup prompt.
 ENV WHATSAPP_CLOUD_HOME_CHANNEL=916290399165
+# No "⚡ Interrupting current task" reply when a guest sends two messages quickly.
+ENV HERMES_GATEWAY_BUSY_ACK_ENABLED=false
 COPY config.yaml SOUL.md house-rules.txt start.sh /opt/rk/
 
 CMD ["sh", "/opt/rk/start.sh"]
