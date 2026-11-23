@@ -36,6 +36,8 @@ agent:
 
 approvals:
   mode: smart
+  # How long a merge waits for the owner's Approve tap on Telegram (default 60 s was too short).
+  timeout: 600
   # Scheduled runs have no human to ask: risky commands are refused, not run.
   cron_mode: deny
   # Blocked always, before any approval. A merge (`gh pr merge`) is not blocked here:
