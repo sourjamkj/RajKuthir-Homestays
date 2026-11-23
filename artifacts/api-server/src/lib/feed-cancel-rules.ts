@@ -31,3 +31,16 @@ export function bookingsGoneFromFeed(input: {
       !input.feed.some((e) => overlaps(e.startDate, e.endDate, b.checkIn, b.checkOut)),
   );
 }
+
+/**
+ * A feed that had events and is suddenly empty while the source still has future
+ * confirmed bookings is a broken feed, not a mass cancellation: keep everything.
+ */
+export function feedEmptiedSuddenly(input: {
+  storedEventCount: number;
+  feedEventCount: number;
+  bookings: FeedBooking[];
+  today: string;
+}): boolean {
+  return input.feedEventCount === 0 && input.storedEventCount > 0 && input.bookings.some((b) => b.checkOut > input.today);
+}
