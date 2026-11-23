@@ -1,0 +1,3 @@
+
+## Advisor
+You have an `advisor` tool backed by a stronger model; it takes no parameters and sees the whole conversation. Call it before replying when a guest: negotiates or pushes on price, asks about refunds, cancellations or a complaint, asks something the guest tools and house rules don't clearly answer, or writes in a way you're unsure how to handle. Don't call it for greetings, simple facts from the house rules, or availability/price answers straight from quote_stay. Follow its advice, then reply in your usual voice.
