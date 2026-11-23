@@ -1,13 +1,18 @@
 import { pool } from "@workspace/db";
 
+import { auditCalendar } from "./calendar-repo";
+
 import { logger } from "./logger";
 import { notifyOwner } from "./owner-alerts";
 import {
   JOBS,
   alertFor,
+  blockWithoutBookingCheck,
   databaseCheck,
+  doubleBookingCheck,
   jobCheck,
   outboxCheck,
+  paidNotBookedCheck,
   publicStatus,
   step,
   withMissingAsOk,
@@ -88,7 +93,60 @@ async function runChecks(now: Date): Promise<CheckResult[]> {
       logger.warn({ err: error }, "Ops watch could not read the outbox");
     }
   }
+  if (dbOk) results.push(...(await integrityChecks()));
   return results;
+}
+
+/** A failed query must not read as "recovered": an open incident keeps its last result until the query works again. */
+const stillOpen = (id: string): CheckResult[] => (states[id]?.failing ? lastResults.filter((r) => r.id === id) : []);
+
+/** Read-only. */
+async function integrityChecks(): Promise<CheckResult[]> {
+  const out: CheckResult[] = [];
+  try {
+    const { rows } = await pool.query<{ a_in: string; a_out: string; b_in: string; b_out: string }>(
+      `SELECT a.check_in::text AS a_in, a.check_out::text AS a_out, b.check_in::text AS b_in, b.check_out::text AS b_out
+       FROM bookings a JOIN bookings b ON a.id < b.id AND a.check_in < b.check_out AND b.check_in < a.check_out
+       WHERE a.status = 'confirmed' AND b.status = 'confirmed'
+       ORDER BY a.check_in LIMIT 50`,
+    );
+    out.push(doubleBookingCheck(rows.map((r) => ({ aIn: r.a_in, aOut: r.a_out, bIn: r.b_in, bOut: r.b_out }))));
+  } catch (error) {
+    logger.warn({ err: error, check: "integrity:double_booking" }, "Ops watch could not run an integrity check");
+    out.push(...stillOpen("integrity:double_booking"));
+  }
+  try {
+    // 15 min grace: the webhook confirms the booking right after marking the order paid.
+    // A live refund (same set as cashfree-rules LIVE_REFUND) explains a cancelled booking.
+    const { rows } = await pool.query<{ check_in: string | null; check_out: string | null; booking_status: string | null }>(
+      `SELECT e.check_in::text AS check_in, e.check_out::text AS check_out, b.status::text AS booking_status
+       FROM gateway_orders o
+       JOIN payment_requests r ON r.id = o.payment_request_id
+       JOIN enquiries e ON e.id = r.enquiry_id
+       LEFT JOIN bookings b ON b.id = e.converted_booking_id
+       WHERE o.status = 'PAID' AND o.paid_at < now() - interval '15 minutes' AND o.paid_at > now() - interval '60 days'
+         AND b.status IS DISTINCT FROM 'confirmed'
+         AND NOT EXISTS (SELECT 1 FROM gateway_refunds f WHERE f.gateway_order_id = o.id
+                         AND f.status IN ('SUCCESS', 'PENDING', 'PENDING_APPROVAL', 'ONHOLD'))
+       ORDER BY o.paid_at LIMIT 50`,
+    );
+    out.push(paidNotBookedCheck(rows.map((r) => ({ checkIn: r.check_in, checkOut: r.check_out, bookingStatus: r.booking_status }))));
+  } catch (error) {
+    logger.warn({ err: error, check: "integrity:paid_not_booked" }, "Ops watch could not run an integrity check");
+    out.push(...stillOpen("integrity:paid_not_booked"));
+  }
+  try {
+    const { events, issues } = await auditCalendar();
+    out.push(
+      blockWithoutBookingCheck(
+        events.filter((e) => issues.has(e.id)).map((e) => ({ startDate: e.startDate, endDate: e.endDate, issue: issues.get(e.id)! })),
+      ),
+    );
+  } catch (error) {
+    logger.warn({ err: error, check: "integrity:block_unexplained" }, "Ops watch could not run an integrity check");
+    out.push(...stillOpen("integrity:block_unexplained"));
+  }
+  return out;
 }
 
 export async function runOpsWatch(now = new Date()): Promise<void> {
