@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { alertText, dueAlerts, istAt, toE164, type AlertBooking } from "./caretaker-rules.ts";
+import { alertText, caretakerTemplateParams, dueAlerts, istAt, toE164, type AlertBooking } from "./caretaker-rules.ts";
 
 const booking = (over: Partial<AlertBooking> = {}): AlertBooking => ({
   id: "b1",
@@ -90,4 +90,15 @@ test("caretaker · manual queue ignores quiet hours and keeps a new booking for 
   const threeDaysLater = new Date("2026-10-23T06:00:00Z");
   assert.deepEqual(kinds(dueAlerts([b], none, threeDaysLater)), []);
   assert.deepEqual(kinds(dueAlerts([b], none, threeDaysLater, { manual: true })), ["new_booking"]);
+});
+
+test("caretaker · template values: nine single-line values in the template's order", () => {
+  const b = booking({ guestName: "Rana Datta", guests: 3, pets: 1, guestPhone: "+91 98300 40042" });
+  const params = caretakerTemplateParams("checkin_eve", b);
+  assert.equal(params.length, 9);
+  assert.equal(params[0], "guest ARRIVES TOMORROW");
+  assert.equal(params[1], "Rana Datta (3 guests)");
+  assert.equal(params[2], "Yes, 1");
+  assert.ok(params.every((p) => p.length > 0 && !/[\n\t]/.test(p)), "Meta refuses empty values and line breaks");
+  assert.equal(caretakerTemplateParams("cancelled", b)[7], "n/a");
 });
