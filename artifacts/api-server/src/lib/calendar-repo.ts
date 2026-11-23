@@ -15,7 +15,7 @@ import {
 } from "./calendar-bookings";
 import { readLiveHolds } from "./book-pay-repo";
 import { holdsAsEvents } from "./book-pay-rules";
-import { bookingsGoneFromFeed } from "./feed-cancel-rules.ts";
+import { bookingsGoneFromFeed, feedEmptiedSuddenly } from "./feed-cancel-rules.ts";
 import { auditCalendarRows, type AuditIssue } from "./calendar-audit-rules.ts";
 import { todayInIndia } from "./guest-lookup";
 import { logger } from "./logger";
@@ -244,6 +244,21 @@ export async function replaceSourceEvents(
       .from(calendarEvents)
       .where(eq(calendarEvents.source, source));
 
+    const confirmedFromSource = () =>
+      transaction
+        .select({ id: bookings.id, checkIn: bookings.checkIn, checkOut: bookings.checkOut })
+        .from(bookings)
+        .where(and(eq(bookings.source, source), eq(bookings.status, "confirmed")));
+
+    if (events.length === 0 && existing.length > 0) {
+      const today = todayInIndia();
+      if (feedEmptiedSuddenly({ storedEventCount: existing.length, feedEventCount: 0, bookings: await confirmedFromSource(), today })) {
+        logger.warn({ source, storedEvents: existing.length }, "Calendar feed emptied suddenly, kept bookings");
+        // Throw so the sync records a feed error (the ops watch counts it); nothing was written yet.
+        throw new Error("Feed emptied suddenly; bookings kept. Check this feed.");
+      }
+    }
+
     const byUid = new Map(existing.map((row) => [row.externalUid, row]));
     const byRange = new Map(
       existing.map((row) => [`${row.startDate}:${row.endDate}`, row]),
@@ -300,10 +315,7 @@ export async function replaceSourceEvents(
         .where(inArray(calendarEvents.id, gone));
 
       // The OTA dropped a reservation: cancel our copy so the nights reopen everywhere.
-      const confirmed = await transaction
-        .select({ id: bookings.id, checkIn: bookings.checkIn, checkOut: bookings.checkOut })
-        .from(bookings)
-        .where(and(eq(bookings.source, source), eq(bookings.status, "confirmed")));
+      const confirmed = await confirmedFromSource();
       const cancelled = bookingsGoneFromFeed({
         removed: existing.filter((row) => gone.includes(row.id)),
         feed: events,

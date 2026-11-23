@@ -137,6 +137,13 @@ export function parseIcs(content: string, _source: ImportSource): ParsedEvent[] 
   );
 }
 
+/** An OTA error page served with status 200 is not a calendar: syncing it would read as "all reservations gone". */
+export function assertIcsBody(content: string): void {
+  if (!/BEGIN:VCALENDAR/i.test(content)) {
+    throw new Error("Feed is not an iCalendar file (no BEGIN:VCALENDAR); ignored.");
+  }
+}
+
 export async function fetchFeed(url: string): Promise<string> {
   if (!isSafeFeedUrl(url)) {
     throw new Error("Enter a public http(s) calendar feed URL.");
@@ -164,6 +171,7 @@ export async function fetchFeed(url: string): Promise<string> {
       throw new Error("Feed is larger than the supported 2 MB limit.");
     }
 
+    assertIcsBody(content);
     return content;
   } finally {
     clearTimeout(timeout);
