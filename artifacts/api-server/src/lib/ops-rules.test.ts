@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
-import { alertFor, databaseCheck, jobCheck, logEntryFrom, outboxCheck, publicStatus, sanitize, step, withMissingAsOk, type CheckState } from "./ops-rules.ts";
+import { alertFor, blockWithoutBookingCheck, databaseCheck, doubleBookingCheck, paidNotBookedCheck, jobCheck, logEntryFrom, outboxCheck, publicStatus, sanitize, step, withMissingAsOk, type CheckState } from "./ops-rules.ts";
 
 const MIN = 60_000;
 const at = (iso: string) => new Date(iso);
@@ -123,4 +123,46 @@ test("database errors keep the real cause and never the query params", () => {
   const e = logEntryFrom([{ err }, "Unhandled error"], 50, at("2026-11-23T05:00:00Z"))!;
   assert.ok(e.error!.includes('relation "bookings" does not exist'), e.error);
   assert.ok(!e.error!.includes("Asha"), e.error);
+});
+
+test("integrity checks are P0, ok when no rows, and name dates but never people", () => {
+  for (const c of [doubleBookingCheck([]), paidNotBookedCheck([]), blockWithoutBookingCheck([])]) {
+    assert.equal(c.ok, true);
+    assert.equal(c.severity, "P0");
+  }
+  const d = doubleBookingCheck([{ aIn: "2026-12-01", aOut: "2026-12-03", bIn: "2026-12-02", bOut: "2026-12-04" }]);
+  assert.equal(d.ok, false);
+  assert.equal(d.id, "integrity:double_booking");
+  assert.match(d.summary, /1 pair of confirmed bookings overlap: 2026-12-01 to 2026-12-03 with 2026-12-02 to 2026-12-04\./);
+  const p = paidNotBookedCheck([{ checkIn: "2026-12-01", checkOut: "2026-12-03", bookingStatus: null }, { checkIn: null, checkOut: null, bookingStatus: "pending" }]);
+  assert.match(p.summary, /2 paid online orders have no confirmed booking: 2026-12-01 to 2026-12-03 \(no booking\); dates unknown \(pending\)\./);
+  const b = blockWithoutBookingCheck([{ startDate: "2026-12-05", endDate: "2026-12-06", issue: "no_reason" }, { startDate: "2026-12-07", endDate: "2026-12-08", issue: "no_booking" }]);
+  assert.match(b.summary, /owner block without a reason/);
+  assert.match(b.summary, /no booking behind it/);
+});
+
+test("a long integrity list is capped and the three checks have distinct ids", () => {
+  const many = Array.from({ length: 8 }, (_, i) => ({ startDate: `2026-12-0${i + 1}`, endDate: `2026-12-0${i + 2}`, issue: "no_booking" as const }));
+  assert.match(blockWithoutBookingCheck(many).summary, /; and 3 more\.$/);
+  assert.equal(new Set([doubleBookingCheck([]).id, paidNotBookedCheck([]).id, blockWithoutBookingCheck([]).id]).size, 3);
+});
+
+test("an open integrity incident opens after two runs, then recovers after two clean ones", () => {
+  const bad = doubleBookingCheck([{ aIn: "2026-12-01", aOut: "2026-12-03", bIn: "2026-12-02", bOut: "2026-12-04" }]);
+  const t = new Date("2026-12-01T06:00:00Z");
+  let r = step({}, [bad], t);
+  assert.equal(r.events.length, 0);
+  r = step(r.states, [bad], t);
+  assert.deepEqual(r.events.map((e) => e.kind), ["opened"]);
+  r = step(r.states, [doubleBookingCheck([])], t);
+  r = step(r.states, [doubleBookingCheck([])], t);
+  assert.deepEqual(r.events.map((e) => e.kind), ["recovered"]);
+});
+
+test("an open integrity incident never makes the public health 503 or appears in it", () => {
+  const open: CheckState = { failing: true, streak: 0, severity: "P0", openedAt: "2026-12-01T06:00:00.000Z", remindedDay: null };
+  const hidden = publicStatus({ "integrity:double_booking": open }, { "integrity:double_booking": "Double bookings" });
+  assert.equal(hidden.httpStatus, 200);
+  assert.deepEqual(hidden.body, { status: "ok", open: [] });
+  assert.equal(publicStatus({ database: open }, { database: "Database" }).httpStatus, 503);
 });

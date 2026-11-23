@@ -74,6 +74,48 @@ export function outboxCheck(stuck: number): CheckResult {
   };
 }
 
+/** Money-and-nights integrity: P0, read-only, dates only (never names or phone numbers). */
+const MAX_LISTED = 5;
+const nights = (a: string | null, b: string | null) => (a && b ? `${a} to ${b}` : "dates unknown");
+
+function integrityResult(id: string, label: string, okText: string, problem: (n: number) => string, rows: readonly string[]): CheckResult {
+  const list = rows.slice(0, MAX_LISTED).join("; ") + (rows.length > MAX_LISTED ? `; and ${rows.length - MAX_LISTED} more` : "");
+  return { id, label, ok: rows.length === 0, severity: "P0", summary: rows.length === 0 ? okText : `${problem(rows.length)}: ${list}.` };
+}
+
+/** Pairs of confirmed bookings whose nights overlap (the query pairs each booking once). */
+export function doubleBookingCheck(pairs: ReadonlyArray<{ aIn: string; aOut: string; bIn: string; bOut: string }>): CheckResult {
+  return integrityResult(
+    "integrity:double_booking",
+    "Double bookings",
+    "No overlapping confirmed bookings.",
+    (n) => `${n} pair${n === 1 ? "" : "s"} of confirmed bookings overlap`,
+    pairs.map((p) => `${nights(p.aIn, p.aOut)} with ${nights(p.bIn, p.bOut)}`),
+  );
+}
+
+/** Orders recorded paid whose booking is missing or not confirmed (and not refunded). */
+export function paidNotBookedCheck(rows: ReadonlyArray<{ checkIn: string | null; checkOut: string | null; bookingStatus: string | null }>): CheckResult {
+  return integrityResult(
+    "integrity:paid_not_booked",
+    "Paid but not booked",
+    "Every paid online order has a confirmed booking.",
+    (n) => `${n} paid online order${n === 1 ? " has" : "s have"} no confirmed booking`,
+    rows.map((r) => `${nights(r.checkIn, r.checkOut)} (${r.bookingStatus ?? "no booking"})`),
+  );
+}
+
+/** Upcoming blocked nights that no booking or owner reason explains (calendar-audit-rules). */
+export function blockWithoutBookingCheck(rows: ReadonlyArray<{ startDate: string; endDate: string; issue: "no_booking" | "no_reason" }>): CheckResult {
+  return integrityResult(
+    "integrity:block_unexplained",
+    "Blocked nights without a booking",
+    "Every blocked night is a booking or an owner block with a reason.",
+    (n) => `${n} blocked night range${n === 1 ? "" : "s"} unexplained`,
+    rows.map((r) => `${nights(r.startDate, r.endDate)} (${r.issue === "no_reason" ? "owner block without a reason" : "no booking behind it"})`),
+  );
+}
+
 /**
  * Strips what must never reach an alert, a log digest or an AI prompt:
  * tokens and keys, emails, phone numbers, long digit runs (UPI, accounts),
@@ -196,7 +238,9 @@ export function alertFor(event: OpsEvent, day: string): { title: string; body: s
  * email every 15 minutes for one incident.
  */
 export function publicStatus(states: Readonly<Record<string, CheckState>>, labels: Readonly<Record<string, string>>) {
-  const open = Object.entries(states).filter(([, s]) => s.failing);
+  // Integrity incidents reach the owner (alert) and Ryan (digest) only: a 503 would make the outside monitor
+  // email every 15 minutes, and the public body must not say "double booking".
+  const open = Object.entries(states).filter(([id, s]) => s.failing && !id.startsWith("integrity:"));
   const serious = open.some(([, s]) => s.severity === "P0");
   return {
     httpStatus: serious ? 503 : 200,
