@@ -12,7 +12,12 @@ reply = (
     "Sorry, I couldn't reply just now. Our host Sourja will get back to you shortly, "
     "or you can call him on +91 62903 99165."
 )
-path.write_text(src.replace(marker, marker + f"    return {reply!r}\n"))
+src = src.replace(marker, marker + f"    return {reply!r}\n")
+# The interim status note for a provider error is dropped, so a failed turn sends the
+# hand-off once (from the final reply), not twice.
+status = "        return _gateway_provider_error_reply(text)\n    return text\n"
+assert src.count(status) == 1, "hermes-agent changed: re-check _prepare_gateway_status_message"
+path.write_text(src.replace(status, "        return None\n    return text\n"))
 print("patched", path)
 
 # A reply redelivered after a restart goes out as-is: no "♻️ Recovered reply — the
