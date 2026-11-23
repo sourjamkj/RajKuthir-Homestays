@@ -10,6 +10,8 @@ import {
   blockWithoutBookingCheck,
   databaseCheck,
   doubleBookingCheck,
+  INTEGRITY_FROM,
+  inIntegrityScope,
   jobCheck,
   outboxCheck,
   paidNotBookedCheck,
@@ -107,8 +109,9 @@ async function integrityChecks(): Promise<CheckResult[]> {
     const { rows } = await pool.query<{ a_in: string; a_out: string; b_in: string; b_out: string }>(
       `SELECT a.check_in::text AS a_in, a.check_out::text AS a_out, b.check_in::text AS b_in, b.check_out::text AS b_out
        FROM bookings a JOIN bookings b ON a.id < b.id AND a.check_in < b.check_out AND b.check_in < a.check_out
-       WHERE a.status = 'confirmed' AND b.status = 'confirmed'
+       WHERE a.status = 'confirmed' AND b.status = 'confirmed' AND a.check_in >= $1 AND b.check_in >= $1
        ORDER BY a.check_in LIMIT 50`,
+      [INTEGRITY_FROM],
     );
     out.push(doubleBookingCheck(rows.map((r) => ({ aIn: r.a_in, aOut: r.a_out, bIn: r.b_in, bOut: r.b_out }))));
   } catch (error) {
@@ -125,10 +128,11 @@ async function integrityChecks(): Promise<CheckResult[]> {
        JOIN enquiries e ON e.id = r.enquiry_id
        LEFT JOIN bookings b ON b.id = e.converted_booking_id
        WHERE o.status = 'PAID' AND o.paid_at < now() - interval '15 minutes' AND o.paid_at > now() - interval '60 days'
-         AND b.status IS DISTINCT FROM 'confirmed'
+         AND b.status IS DISTINCT FROM 'confirmed' AND (e.check_in IS NULL OR e.check_in >= $1)
          AND NOT EXISTS (SELECT 1 FROM gateway_refunds f WHERE f.gateway_order_id = o.id
                          AND f.status IN ('SUCCESS', 'PENDING', 'PENDING_APPROVAL', 'ONHOLD'))
        ORDER BY o.paid_at LIMIT 50`,
+      [INTEGRITY_FROM],
     );
     out.push(paidNotBookedCheck(rows.map((r) => ({ checkIn: r.check_in, checkOut: r.check_out, bookingStatus: r.booking_status }))));
   } catch (error) {
@@ -139,7 +143,7 @@ async function integrityChecks(): Promise<CheckResult[]> {
     const { events, issues } = await auditCalendar();
     out.push(
       blockWithoutBookingCheck(
-        events.filter((e) => issues.has(e.id)).map((e) => ({ startDate: e.startDate, endDate: e.endDate, issue: issues.get(e.id)! })),
+        events.filter((e) => issues.has(e.id) && inIntegrityScope(e.startDate)).map((e) => ({ startDate: e.startDate, endDate: e.endDate, issue: issues.get(e.id)! })),
       ),
     );
   } catch (error) {

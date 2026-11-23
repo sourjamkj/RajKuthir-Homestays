@@ -74,6 +74,10 @@ export function outboxCheck(stuck: number): CheckResult {
   };
 }
 
+/** Integrity checks only look at stays and blocks starting on or after this date (owner's call: from December). */
+export const INTEGRITY_FROM = "2026-12-01";
+export const inIntegrityScope = (startDate: string) => startDate >= INTEGRITY_FROM;
+
 /** Money-and-nights integrity: P0, read-only, dates only (never names or phone numbers). */
 const MAX_LISTED = 5;
 const nights = (a: string | null, b: string | null) => (a && b ? `${a} to ${b}` : "dates unknown");
