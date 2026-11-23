@@ -1,7 +1,8 @@
-"""Build-time patch: Agent Ryan runs on Sonnet and can consult Opus through
+"""Build-time patch (shared by services/ryan and services/hermes; keep both copies identical):
+the main model can consult a stronger one through
 Anthropic's advisor tool (beta advisor-tool-2026-03-01) before substantive
 work. Only the main agent loop and its subagents get it (AnthropicTransport);
-Hermes's side calls (titles, approval checks) don't. RYAN_ADVISOR_MODEL empty
+Hermes's side calls (titles, approval checks) don't. ADVISOR_MODEL empty
 = off. Fails the build if the code it patches has moved."""
 import importlib.util
 import pathlib
@@ -20,7 +21,7 @@ def _with_advisor(kwargs, base_url, is_oauth, drop_context_1m_beta):
     import os
     from agent.anthropic_adapter import _OAUTH_ONLY_BETAS, _common_betas_for_base_url, _is_third_party_anthropic_endpoint
 
-    model = os.environ.get("RYAN_ADVISOR_MODEL", "").strip()
+    model = os.environ.get("ADVISOR_MODEL", "").strip()
     if not model or not kwargs.get("tools") or _is_third_party_anthropic_endpoint(base_url):
         return kwargs
     kwargs["tools"] = [*kwargs["tools"], {"type": "advisor_20260301", "name": "advisor", "model": model}]

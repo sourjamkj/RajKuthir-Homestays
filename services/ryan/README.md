@@ -11,7 +11,7 @@ every 5 min  watchdog.py (no AI)  ──GET /api/ops/digest (Bearer RYAN_TOKEN)�
              Ryan (Claude): classify → app defect? → bugfix team in /data/repo:
                 branch → failing test → minimal fix → typecheck + tests → reviewer subagent
                 → gh pr create → Telegram message to the owner with the PR link
-owner        Telegram: "status", "fix #N", "prs"   ·   GitHub: "merge #N" (deploys)
+owner        Telegram: "status", "fix #N", "prs", "merge #N" (→ you tap Approve; deploys)
 ```
 
 The digest (`/api/ops/digest`) holds open incidents and the last warnings/errors, already sanitised by the site (no secrets, emails, phone numbers); 404 without the token.
@@ -21,7 +21,7 @@ The digest (`/api/ops/digest`) holds open incidents and the last warnings/errors
 | Can | Cannot (and why) |
 |---|---|
 | Read the digest and public health | Railway: no Railway token → cannot deploy or change variables |
-| Clone the repo, run typecheck/tests, push `ryan/*` branches, open PRs | Merge or push to `main`: **branch protection** on `main` (owner sets it), plus deny rules in `config.yaml` |
+| Clone the repo, run typecheck/tests, push `ryan/*` branches, open PRs | Push to `main` (deny rules + branch protection). Merge on its own: `patch_merge.py` makes `gh pr merge` wait for the owner's **Approve** tap on Telegram, and scheduled runs refuse it. Ryan merges only when you say "merge #N" to it and CI is green |
 | Message the owner on Telegram | Talk to anyone else: `TELEGRAM_ALLOWED_USERS` is the owner only |
 | | Database, payments, guest IDs: never given any access |
 | | Change its tools: `config.yaml` is write-protected by Hermes and re-copied on every boot. Its watchdog job and script are also recreated on every boot (it *could* edit them on the volume until the next restart). |
@@ -54,7 +54,7 @@ On the **api-server**: `RYAN_TOKEN` (the same value). That switches on `/api/ops
 
 ## Models
 
-Sonnet (`config.yaml`) does the work. Opus advises through Anthropic's advisor tool (beta `advisor-tool-2026-03-01`), added by `patch_advisor.py` at build time to Ryan's main loop and subagents only. Ryan consults it before planning, fixing and finishing (see `SOUL.md`). Set the Railway variable `RYAN_ADVISOR_MODEL` to empty to switch the advisor off, or to another model to change it.
+Sonnet (`config.yaml`) does the work. Opus advises through Anthropic's advisor tool (beta `advisor-tool-2026-03-01`), added by `patch_advisor.py` at build time to Ryan's main loop and subagents only. Ryan consults it before planning, fixing and finishing (see `SOUL.md`). Set the Railway variable `ADVISOR_MODEL` to empty to switch the advisor off, or to another model to change it.
 
 ## Cost
 
