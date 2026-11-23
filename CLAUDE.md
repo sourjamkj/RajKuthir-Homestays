@@ -55,7 +55,7 @@ pnpm run typecheck                        # whole workspace, must exit 0
 cd artifacts/api-server && pnpm test      # all tests must pass
 ```
 
-Report "typecheck passes, N tests pass" in the PR body, plus anything you could not verify. For SQL that matters, run it against a local Postgres with the schema.
+GitHub runs both on every PR (`.github/workflows/ci.yml`); a red CI run is never "waiting on review". Report "typecheck passes, N tests pass" in the PR body, plus anything you could not verify. For SQL that matters, run it against a local Postgres with the schema.
 
 PR body: Why → What → Checks → what I must do before/after merging. End with what was skipped or risky.
 
