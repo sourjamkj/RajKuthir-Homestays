@@ -109,7 +109,7 @@ export type OwnerEvent = (typeof OWNER_EVENTS)[number];
 export type SettingSource = 'console' | 'railway' | 'default';
 export type Resolved<T> = { value: T; source: SettingSource };
 export type WhatsappMode = 'manual' | 'api';
-export type AutoSendKind = 'booking_confirmed' | 'checkin_reminder' | 'checkin_welcome' | 'checkout_today' | 'dates_available' | 'enquiry_quote' | 'review_request' | 'verification_reminder';
+export type AutoSendKind = 'booking_confirmed' | 'checkin_reminder' | 'checkin_welcome' | 'checkout_today' | 'dates_available' | 'enquiry_quote' | 'review_request' | 'verification_reminder' | 'owner_new_booking';
 
 export type SettingsView = {
   contacts: {

@@ -157,7 +157,13 @@ export async function scheduleForBooking(
     return queued;
   }
 
+  // A verified guest never gets an ID reminder; the next steps follow on their own.
+  const verified = (
+    await pool.query("SELECT 1 FROM guest_onboarding WHERE booking_id = $1 AND status = 'verified'", [booking.id])
+  ).rowCount;
+
   for (const kind of ALL_KINDS) {
+    if (kind === "verification_reminder" && verified) continue;
     const at = scheduleFor(kind, booking, now);
     if (!at) continue;
 
@@ -252,10 +258,12 @@ async function issueIdLinkIfUnverified(bookingId: string): Promise<string | null
 
 /**
  * "New booking" to the owner's own WhatsApp, for a booking from any channel
- * made in the last day. Always auto-sent and not held for quiet hours: it
+ * made in the last day, when the owner has ticked it. Not held for quiet hours: it
  * goes to the owner, never a guest.
  */
 async function queueOwnerAlert(booking: Booking, now: Date): Promise<boolean> {
+  // Off unless ticked in the console (Settings → messages that send themselves).
+  if (!autoSendKinds().includes("owner_new_booking")) return false;
   const owner = toWhatsappNumber(ownerWhatsappNumber());
   if (!owner || booking.createdAt.getTime() < now.getTime() - 24 * 60 * 60 * 1000) return false;
   const spec = buildTemplate("owner_new_booking", booking);
