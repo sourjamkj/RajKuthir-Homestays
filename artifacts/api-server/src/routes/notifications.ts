@@ -55,6 +55,8 @@ router.post("/notifications/:id/approve", async (req, res) => {
   }
 
   res.json(updated);
+  // Send now rather than at the next 15-minute run (quiet hours still apply).
+  if (isWhatsappConfigured()) void runNotifications().catch(() => undefined);
 });
 
 router.post("/notifications/:id/cancel", async (req, res) => {
