@@ -1,0 +1,35 @@
+# Outside monitor: runs on GitHub, not Railway, so it still fails (and GitHub
+# emails the owner) when the whole server or its database is down.
+# Public repo: Actions minutes are free. No secrets used.
+name: Uptime
+
+on:
+  schedule:
+    - cron: "*/15 * * * *"
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    # Worst case: 3 URLs x 2 min of retries.
+    timeout-minutes: 8
+    steps:
+      - name: Site, API and ops health
+        run: |
+          fail=0
+          for url in \
+            https://rajkuthirhomestays.casa/ \
+            https://rajkuthirhomestays.casa/api/healthz \
+            https://rajkuthirhomestays.casa/api/health/ops; do
+            # Two retries 30 s apart: one slow answer during a deploy is not an outage.
+            if code=$(curl -sS -o /tmp/body -m 20 --retry 2 --retry-delay 30 --retry-all-errors -w "%{http_code}" "$url") && [ "$code" -lt 400 ]; then
+              echo "ok   $code $url"
+            else
+              echo "::error::DOWN ${code:-no answer} $url"
+              head -c 500 /tmp/body 2>/dev/null; echo
+              fail=1
+            fi
+          done
+          exit $fail

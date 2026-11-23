@@ -1,5 +1,6 @@
 import { logger } from "./logger";
 import { runMailSync } from "./mail-runner";
+import { jobFailed, jobOk, jobStarted } from "./ops-watch";
 
 /**
  * Reads the mailboxes on a timer, in step with the calendar poller beside it.
@@ -19,11 +20,15 @@ export function startMailCron(): void {
   started = true;
 
   const poll = () => {
-    runMailSync().catch((error) => {
-      logger.error({ err: error }, "Mailbox polling failed unexpectedly");
-    });
+    runMailSync()
+      .then(() => jobOk("mail"))
+      .catch((error) => {
+        jobFailed("mail", error);
+        logger.error({ err: error }, "Mailbox polling failed unexpectedly");
+      });
   };
 
+  jobStarted("mail");
   const interval = setInterval(poll, POLL_INTERVAL_MS);
   // Never hold the process open for a poll: a deploy should not wait on it.
   interval.unref?.();
