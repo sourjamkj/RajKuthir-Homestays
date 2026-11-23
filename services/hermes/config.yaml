@@ -13,6 +13,13 @@ model:
 platform_toolsets:
   whatsapp_cloud: [clarify, raj-kuthir-guest]
 
+# Guests can't run Hermes slash commands (/sethome, /model, /reset…); only the
+# owner can. Hermes always leaves /help and /whoami open.
+platforms:
+  whatsapp_cloud:
+    allow_admin_from: ["916290399165"]
+    user_allowed_commands: []
+
 # Belt and braces: removed everywhere, whatever a platform list says.
 agent:
   disabled_toolsets:
