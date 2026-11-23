@@ -1,0 +1,33 @@
+# The checks CLAUDE.md asks for before every PR, run by GitHub on every PR, so
+# a change (from Claude, Sentinel or the dev chat) can't claim "tests pass"
+# without proof. Branch protection on main then requires this to be green.
+# Public repo: free. No secrets.
+name: CI
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  checks:
+    name: Typecheck and tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4 # version from package.json "packageManager"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22 # 22.18+ runs the .ts tests directly
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm run typecheck
+      - run: pnpm test
+        working-directory: artifacts/api-server
