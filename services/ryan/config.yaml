@@ -38,14 +38,15 @@ approvals:
   mode: smart
   # Scheduled runs have no human to ask: risky commands are refused, not run.
   cron_mode: deny
-  # Blocked always, before any approval. Merging and deploying are the owner's.
+  # Blocked always, before any approval. A merge (`gh pr merge`) is not blocked here:
+  # patch_merge.py makes it wait for the owner's Approve tap on Telegram, and
+  # scheduled runs refuse it.
   deny:
     - "*git push*origin main*"
     - "*git push*:main*"
     - "*git push*--force*"
     - "*git push*-f *"
     - "*git push*--delete*"
-    - "*gh pr merge*"
     - "*gh pr review*--approve*"
     - "*gh api*merge*"
     - "*gh api*-X DELETE*"
