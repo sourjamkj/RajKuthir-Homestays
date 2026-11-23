@@ -66,7 +66,7 @@ export function AdminAutoSend() {
       </ul>
       <p className="mt-4 text-[12px] leading-5 text-muted-foreground">
         Ticked messages go out by themselves once WhatsApp is on the Business API. Unticked ones wait for you as drafts. OTA guests' review requests and
-        anything not from an approved template always wait. No message goes out between 9 pm and 8 am.
+        anything not from an approved template always wait. No guest message goes out between 11 pm and 8 am, except the payment confirmation.
         {w.mode.value !== 'api' && ' WhatsApp is in manual mode right now, so every message waits for you to send it from your phone.'}
       </p>
       {changed && (

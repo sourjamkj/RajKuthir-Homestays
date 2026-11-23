@@ -28,6 +28,7 @@ import AdminEarnings from '@/pages/AdminEarnings';
 import AdminRates from '@/pages/AdminRates';
 import AdminGuests from '@/pages/AdminGuests';
 import AdminReviews from '@/pages/AdminReviews';
+import AdminWhatsApp from '@/pages/AdminWhatsApp';
 import HouseRules from '@/pages/HouseRules';
 import Policies from '@/pages/Policies';
 import PetFriendly from '@/pages/PetFriendly';
@@ -1791,6 +1792,7 @@ function Router() {
         <Route path="/admin/rates" component={AdminRates} />
         <Route path="/admin/guests" component={AdminGuests} />
         <Route path="/admin/reviews" component={AdminReviews} />
+        <Route path="/admin/whatsapp" component={AdminWhatsApp} />
         <Route path="/admin/guest-info" component={AdminGuestInfo} />
         <Route path="/admin/caretaker" component={AdminCaretakerConsole} />
         <Route path="/admin/compliance" component={AdminCompliance} />
