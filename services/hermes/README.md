@@ -23,7 +23,7 @@ Templates (confirmations, reminders) stay with the api-server outbox; Hermes can
 - `/mcp/guest` exposes only `quote_stay`, the same answer as the public booking page. The owner's connector (`/mcp`) is never given to Hermes.
 - Pilot: the api-server only forwards numbers in `WHATSAPP_TEST_NUMBERS` until auto-reply is switched on in Settings; Hermes also only answers `WHATSAPP_CLOUD_ALLOWED_USERS`.
 - After upgrading `hermes-agent` in the Dockerfile, re-check that WhatsApp still resolves to exactly `clarify, raj-kuthir-guest`.
-- `patch_errors.py` (run at build time) replaces Hermes's technical failure text ("model provider failed… check gateway logs") with a polite hand-off to the host, and drops the "♻️ Recovered reply" prefix. The build fails if an upgrade moves the patched code.
+- `patch_errors.py` (run at build time) replaces Hermes's technical failure text ("model provider failed… check gateway logs") with a polite hand-off to the host (sent once: the interim status copy is dropped), and drops the "♻️ Recovered reply" prefix. The build fails if an upgrade moves the patched code.
 
 ## Railway setup
 
