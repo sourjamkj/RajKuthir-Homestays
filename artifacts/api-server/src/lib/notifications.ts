@@ -258,12 +258,11 @@ async function issueIdLinkIfUnverified(bookingId: string): Promise<string | null
 }
 
 /**
- * Owner-only new-booking alert. The legacy setting remains as the owner's
- * opt-in switch, but delivery goes through notifyOwner (Telegram + owner app),
- * never the guest/caretaker WhatsApp channel.
+ * Owner-only alert for a direct website booking. OTA imports are already
+ * notified by the activity watcher; avoid sending a second Telegram alert.
  */
 async function queueOwnerAlert(booking: Booking, now: Date): Promise<boolean> {
-  if (!autoSendKinds().includes("owner_new_booking")) return false;
+  if (booking.source !== "direct") return false;
   if (booking.createdAt.getTime() < now.getTime() - 24 * 60 * 60 * 1000) return false;
   await notifyOwner({
     event: "booking_confirmed",
@@ -319,7 +318,15 @@ export async function drainOutbox(now = new Date()): Promise<DrainResult> {
 
   // Manual mode: drafts wait for the owner to send them from their own WhatsApp.
   if (!guestApiSendingOn()) return result;
-  // Quiet hours hold every guest message; only the owner's own alerts go.
+  // Retire legacy owner_new_booking WhatsApp rows. Owner operations now use
+  // the owner-only Telegram alert outbox, never the guest/caretaker sender.
+  await pool.query(
+    `UPDATE whatsapp_messages
+       SET status = 'cancelled', error = 'Owner alerts now route through Telegram', updated_at = now()
+     WHERE kind = 'owner_new_booking' AND status IN ('draft', 'pending')`,
+  );
+
+  // Quiet hours hold every guest message.
   const quiet = istHourOf(now) >= QUIET_START_HOUR || istHourOf(now) < QUIET_END_HOUR;
 
   const due = await claimDueMessages(BATCH_SIZE, now, quiet ? ["owner_new_booking"] : undefined);
