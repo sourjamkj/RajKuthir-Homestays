@@ -29,12 +29,12 @@ CREATE TABLE IF NOT EXISTS owner_alerts (
   emailed boolean NOT NULL DEFAULT false,
   created_at timestamptz NOT NULL DEFAULT now(),
   read_at timestamptz,
-  telegram_sent boolean NOT NULL DEFAULT false,
+  telegram_sent boolean NOT NULL DEFAULT true,
   telegram_attempts integer NOT NULL DEFAULT 0,
   telegram_last_attempt_at timestamptz,
   telegram_last_error text
 );
-ALTER TABLE owner_alerts ADD COLUMN IF NOT EXISTS telegram_sent boolean NOT NULL DEFAULT false;
+ALTER TABLE owner_alerts ADD COLUMN IF NOT EXISTS telegram_sent boolean NOT NULL DEFAULT true;
 ALTER TABLE owner_alerts ADD COLUMN IF NOT EXISTS telegram_attempts integer NOT NULL DEFAULT 0;
 ALTER TABLE owner_alerts ADD COLUMN IF NOT EXISTS telegram_last_attempt_at timestamptz;
 ALTER TABLE owner_alerts ADD COLUMN IF NOT EXISTS telegram_last_error text;
@@ -140,7 +140,8 @@ export async function notifyOwner(input: OwnerAlertInput, now = new Date()): Pro
   try {
     if (await ensureOwnerAlertsTable()) {
       const { rows } = await pool.query<{ id: string }>(
-        `INSERT INTO owner_alerts (event, title, body, href, dedupe_key) VALUES ($1, $2, $3, $4, $5)
+        `INSERT INTO owner_alerts (event, title, body, href, dedupe_key, telegram_sent)
+         VALUES ($1, $2, $3, $4, $5, false)
          ON CONFLICT (dedupe_key) DO NOTHING RETURNING id`,
         [input.event, input.title, input.body, input.href ?? "/admin", input.dedupeKey ?? null],
       );
