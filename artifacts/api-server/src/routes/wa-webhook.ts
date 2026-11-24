@@ -8,8 +8,8 @@
  *   GET  /webhooks/whatsapp   — verification handshake
  *   POST /webhooks/whatsapp   — inbound messages and status callbacks
  *
- * The POST handler responds 200 immediately and processes async, as
- * Meta requires. It never blocks on database writes or bot replies.
+ * The POST handler verifies the signature and waits for durable storage
+ * before acknowledging. Bot/agent dispatch happens after the 200 response.
  */
 
 import { Router, type IRouter } from "express";
@@ -19,8 +19,8 @@ import {
   parseWebhookPayload,
   storeInbound,
   updateMessageStatus,
-  touchInbound,
   shouldAutoReply,
+  getOrCreateConversation,
 } from "../lib/wa-webhook";
 
 const router: IRouter = Router();
@@ -59,82 +59,120 @@ router.get("/webhooks/whatsapp", (req, res) => {
  * the middleware was not set up), we reject the request.
  * ------------------------------------------------------------------ */
 
-router.post("/webhooks/whatsapp", (req, res) => {
-  // Always respond 200 immediately — Meta retries on anything else.
-  res.sendStatus(200);
-
-  // Signature check
+router.post("/webhooks/whatsapp", async (req, res) => {
   const rawBody = (req as unknown as { rawBody?: Buffer }).rawBody;
   if (!rawBody) {
     logger.warn("WhatsApp webhook: no raw body available for signature check");
+    res.sendStatus(400);
     return;
   }
 
   const signature = req.headers["x-hub-signature-256"] as string | undefined;
   if (!verifySignature(rawBody, signature)) {
-    logger.warn("WhatsApp webhook: invalid signature — ignoring payload");
+    logger.warn("WhatsApp webhook: invalid signature — rejecting payload");
+    res.sendStatus(401);
     return;
   }
 
-  // Parse and process async (fire-and-forget after the 200)
-  void processPayload(req.body, rawBody, signature!);
+  let parsed: ReturnType<typeof parseWebhookPayload>;
+  try {
+    parsed = parseWebhookPayload(req.body);
+  } catch (error) {
+    logger.warn({ err: error }, "WhatsApp webhook payload could not be parsed");
+    res.sendStatus(400);
+    return;
+  }
+
+  // Meta is acknowledged only after every message and status update in this
+  // delivery is durable. ON CONFLICT makes Meta retries safe and idempotent.
+  const newMessages: ReturnType<typeof parseWebhookPayload>["messages"] = [];
+  try {
+    for (const msg of parsed.messages) {
+      const isNew = await storeInbound(msg);
+      if (isNew) newMessages.push(msg);
+    }
+    for (const st of parsed.statuses) {
+      await updateMessageStatus(st.waId, st.status, st.timestamp, st.errorCode, st.errorTitle);
+    }
+  } catch (error) {
+    logger.error({ err: error }, "WhatsApp webhook persistence failed; asking Meta to retry");
+    res.sendStatus(503);
+    return;
+  }
+
+  res.sendStatus(200);
+  if (newMessages.length) {
+    void dispatchNewMessages(newMessages, parsed.messages.length, rawBody, signature!);
+  }
 });
 
 /**
- * Hands a guest chat to the Hermes agent (HERMES_WEBHOOK_URL, on Railway's
- * private network) as Meta sent it, signature and all, so Hermes verifies it
- * with the same app secret and replies to the guest itself.
+ * Dispatch only newly persisted messages. A human-owned conversation is never
+ * forwarded to the AI agent. For Hermes, forward the original signed body only
+ * when every inbound message in the delivery is eligible; this avoids leaking
+ * a human-owned chat from a mixed webhook batch into the agent.
  */
+async function dispatchNewMessages(
+  messages: ReturnType<typeof parseWebhookPayload>["messages"],
+  payloadMessageCount: number,
+  rawBody: Buffer,
+  signature: string,
+): Promise<void> {
+  const hermesUrl = process.env["HERMES_WEBHOOK_URL"]?.trim();
+  const eligible: typeof messages = [];
+
+  for (const msg of messages) {
+    try {
+      const conversation = await getOrCreateConversation(msg.phone);
+      if (conversation.state === "human") {
+        logger.info({ phone: msg.phone }, "WhatsApp AI dispatch skipped: conversation is human-owned");
+        continue;
+      }
+      if (shouldAutoReply(msg.phone)) eligible.push(msg);
+    } catch (error) {
+      logger.error({ err: error, phone: msg.phone }, "Could not check WhatsApp conversation ownership");
+    }
+  }
+
+  if (!eligible.length) return;
+
+  if (hermesUrl) {
+    if (eligible.length !== payloadMessageCount || messages.length !== payloadMessageCount) {
+      logger.warn(
+        { eligible: eligible.length, newMessages: messages.length, payloadMessages: payloadMessageCount },
+        "Hermes dispatch skipped for mixed or partially duplicated webhook delivery",
+      );
+      return;
+    }
+    await forwardToHermes(hermesUrl, rawBody, signature);
+    return;
+  }
+
+  for (const msg of eligible) {
+    try {
+      const { handleInbound } = await import("../lib/wa-bot");
+      void handleInbound(msg).catch((error) => {
+        logger.error({ err: error, phone: msg.phone }, "WhatsApp bot handler failed");
+      });
+    } catch (error) {
+      logger.error({ err: error, phone: msg.phone }, "Failed to dispatch to WhatsApp bot");
+    }
+  }
+}
+
 async function forwardToHermes(url: string, rawBody: Buffer, signature: string): Promise<void> {
   try {
-    const res = await fetch(url, {
+    const response = await fetch(url, {
       method: "POST",
       headers: { "content-type": "application/json", "x-hub-signature-256": signature },
       body: rawBody,
       signal: AbortSignal.timeout(10_000),
     });
-    if (!res.ok) logger.warn({ status: res.status }, "Hermes agent refused a forwarded WhatsApp message");
+    if (!response.ok) {
+      logger.warn({ status: response.status }, "Hermes agent refused a forwarded WhatsApp message");
+    }
   } catch (error) {
     logger.error({ err: error }, "Could not reach the Hermes agent");
-  }
-}
-
-async function processPayload(body: unknown, rawBody: Buffer, signature: string): Promise<void> {
-  // Who answers chats: Hermes when HERMES_WEBHOOK_URL is set, else the built-in bot.
-  const hermesUrl = process.env["HERMES_WEBHOOK_URL"]?.trim();
-  let forHermes = false;
-  try {
-    const parsed = parseWebhookPayload(body);
-
-    // Store inbound messages
-    for (const msg of parsed.messages) {
-      const isNew = await storeInbound(msg);
-      if (!isNew) continue; // Duplicate delivery
-
-      // Touch the conversation's last_inbound_at
-      await touchInbound(msg.phone, new Date(msg.timestamp * 1000));
-
-      // Pilot numbers only, until auto-reply is switched on in Settings.
-      if (shouldAutoReply(msg.phone) && hermesUrl) {
-        forHermes = true;
-      } else if (shouldAutoReply(msg.phone)) {
-        try {
-          const { handleInbound } = await import("../lib/wa-bot");
-          void handleInbound(msg);
-        } catch (error) {
-          logger.error({ err: error, phone: msg.phone }, "Failed to dispatch to WhatsApp bot");
-        }
-      }
-    }
-
-    if (forHermes && hermesUrl) await forwardToHermes(hermesUrl, rawBody, signature);
-
-    // Update statuses
-    for (const st of parsed.statuses) {
-      await updateMessageStatus(st.waId, st.status, st.timestamp, st.errorCode, st.errorTitle);
-    }
-  } catch (error) {
-    logger.error({ err: error }, "WhatsApp webhook processing failed");
   }
 }
 
