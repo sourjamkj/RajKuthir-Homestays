@@ -3,7 +3,7 @@ import { bookings, db, pool } from "@workspace/db";
 
 import { logger } from "./logger";
 import { isWhatsappConfigured, sendTemplate } from "./whatsapp-client";
-import { caretakerWhatsappNumber, ownerWhatsappNumber } from "./owner-settings-state";
+import { caretakerWhatsappNumber } from "./owner-settings-state";
 import {
   bookingCaretakerCards,
   caretakerTemplateParams,
@@ -28,7 +28,7 @@ import {
  * Environment:
  *   WHATSAPP_CARETAKER_TEMPLATE  set once Meta approves it; without it, manual
  *   CARETAKER_WHATSAPP           Settings first; default +91 78726 85558 (the number on the site)
- *   OWNER_WHATSAPP_NUMBER        Settings first; default +91 62903 99165; gets a copy of everything
+ *   Owner notifications           delivered through the owner-only Telegram bot and owner app
  *
  * Delivery is recorded per (booking, kind, recipient) in caretaker_alerts, a
  * table this file creates itself (additive, IF NOT EXISTS), so a message is
@@ -62,11 +62,8 @@ async function ensureTable(): Promise<void> {
 }
 
 export function caretakerRecipients(): string[] {
-  const list = [
-    toE164(caretakerWhatsappNumber()),
-    toE164(ownerWhatsappNumber()),
-  ].filter((value): value is string => Boolean(value));
-  return [...new Set(list)];
+  const caretaker = toE164(caretakerWhatsappNumber());
+  return caretaker ? [caretaker] : [];
 }
 
 function caretakerTemplate(): string | null {
