@@ -241,6 +241,12 @@ describe("isWithin24h", () => {
   it("returns false for null", () => {
     assert.equal(isWithin24h(null), false);
   });
+
+  it("returns false for a future inbound timestamp", () => {
+    const now = new Date();
+    const inTheFuture = new Date(now.getTime() + 60_000);
+    assert.equal(isWithin24h(inTheFuture, now), false);
+  });
 });
 
 /* ------------------------------------------------------------------ *
