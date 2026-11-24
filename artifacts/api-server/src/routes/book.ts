@@ -51,8 +51,7 @@ import {
   submitUtr,
 } from "../lib/book-pay-repo";
 import { bookingSummaryMessages, confirmedMessage, expiredMessage, ownerUtrAlert } from "../lib/book-pay-messages";
-import { ownerEmail, sendEmail, sendWhatsappTemplate } from "../lib/book-pay-notify";
-import { ownerWhatsappNumberIfSet } from "../lib/owner-settings-state";
+import { ownerEmail, sendEmail } from "../lib/book-pay-notify";
 import { confirmPaymentRequest, waLink } from "../lib/book-pay-confirm";
 import { buildBookingSummary, buildConfirmation, sendConfirmation } from "../lib/invoices";
 import { CashfreeError, cashfreeConfig } from "../lib/cashfree-client";
@@ -756,12 +755,8 @@ router.post("/book/pay/utr", async (req, res) => {
         dedupeKey: `utr:${result.request.id}:${utr}`,
         email: { subject: alert.subject, text: alert.text },
       });
-      await sendWhatsappTemplate(ownerWhatsappNumberIfSet(), "WHATSAPP_OWNER_ALERT_TEMPLATE", [
-        found.enquiry.name,
-        `₹${result.request.advancePaise / 100}`,
-        utr,
-        result.request.reference,
-      ]);
+      // Owner notifications route through notifyOwner's Telegram + owner-app channels.
+      // Guest and caretaker WhatsApp traffic remains unchanged.
     })();
 
     res.json({
