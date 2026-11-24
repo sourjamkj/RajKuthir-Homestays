@@ -79,7 +79,8 @@ export function verifySignature(rawBody: Buffer, signatureHeader: string | undef
 /** True if the last inbound is within the 24h window. */
 export function isWithin24h(lastInbound: Date | null, now = new Date()): boolean {
   if (!lastInbound) return false;
-  return now.getTime() - lastInbound.getTime() < 24 * 60 * 60 * 1000;
+  const age = now.getTime() - lastInbound.getTime();
+  return age >= 0 && age < 24 * 60 * 60 * 1000;
 }
 
 /* ------------------------------------------------------------------ *
