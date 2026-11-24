@@ -1,4 +1,5 @@
 import { logger } from "./logger";
+import { randomUUID } from "node:crypto";
 
 /**
  * Transport for Meta's WhatsApp Cloud API.
@@ -220,6 +221,37 @@ export async function sendInteractive(input: {
     return { ok: false, error: error instanceof Error ? error.message : "Network error.", retryable: true };
   } finally {
     clearTimeout(timeout);
+  }
+}
+
+/** Launches Meta's published booking-enquiry Flow inside the guest's 24-hour chat window. */
+export async function sendBookingEnquiryFlow(input: { to: string }): Promise<SendResult> {
+  if (!isWhatsappEnabled()) return { ok: false, error: "WhatsApp sending is disabled or not configured.", retryable: false };
+  const flowId = process.env["WHATSAPP_BOOKING_FLOW_ID"]?.trim();
+  if (!flowId) return { ok: false, error: "WhatsApp booking Flow is not configured.", retryable: false };
+  try {
+    const response = await fetch(`https://graph.facebook.com/${GRAPH_VERSION}/${PHONE_NUMBER_ID}/messages`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${ACCESS_TOKEN}`, "Content-Type": "application/json" },
+      signal: AbortSignal.timeout(15_000),
+      body: JSON.stringify({
+        messaging_product: "whatsapp", recipient_type: "individual", to: input.to, type: "interactive",
+        interactive: {
+          type: "flow",
+          header: { type: "text", text: "Raj Kuthir Homestays – Sobuj Potro" },
+          body: { text: "Share your dates and guest details to send a booking enquiry." },
+          footer: { text: "Enquiry only · No booking or date hold" },
+          action: { name: "flow", parameters: { flow_message_version: "3", flow_id: flowId, flow_token: randomUUID(), flow_cta: "Plan your stay", flow_action: "navigate", flow_action_payload: { screen: "BOOKING_ENQUIRY", data: { today: new Date(Date.now() + 330 * 60_000).toISOString().slice(0, 10) } } } },
+        },
+      }),
+    });
+    const result = await response.json().catch(() => ({})) as { messages?: Array<{ id?: string }>; error?: { message?: string } };
+    if (!response.ok || !result.messages?.[0]?.id) {
+      return { ok: false, error: result.error?.message ?? `HTTP ${response.status}`, retryable: response.status === 429 || response.status >= 500 };
+    }
+    return { ok: true, providerMessageId: result.messages[0].id };
+  } catch (error) {
+    return { ok: false, error: error instanceof Error ? error.message : "Network error.", retryable: true };
   }
 }
 

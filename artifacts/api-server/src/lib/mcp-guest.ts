@@ -2,6 +2,25 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 
 import { priceCheck, readParty } from "../routes/book";
+import { pool } from "@workspace/db";
+import { acceptWaFlowSubmission } from "./wa-flow-enquiry";
+import {
+  expectedPhoneNumberIdMatches,
+  parseWaFlowAnswers,
+} from "./wa-flow-rules.ts";
+import { shouldAutoReply } from "./wa-webhook-rules.ts";
+
+const flowResponseSchema = z
+  .object({
+    flow_token: z.string().max(512).optional(),
+    check_in: z.string(),
+    check_out: z.string(),
+    adults: z.union([z.string(), z.number()]),
+    children: z.union([z.string(), z.number()]),
+    bringing_pets: z.union([z.boolean(), z.string()]),
+    pet_count: z.union([z.string(), z.number()]).optional(),
+  })
+  .strict();
 
 /**
  * The guest-facing connector for the WhatsApp agent (Hermes) at /mcp/guest.
@@ -13,7 +32,9 @@ import { priceCheck, readParty } from "../routes/book";
  */
 
 const ISO = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "YYYY-MM-DD");
-const json = (value: unknown) => ({ content: [{ type: "text" as const, text: JSON.stringify(value) }] });
+const json = (value: unknown) => ({
+  content: [{ type: "text" as const, text: JSON.stringify(value) }],
+});
 
 export function buildGuestMcpServer(): McpServer {
   const server = new McpServer({ name: "raj-kuthir-guest", version: "1.0.0" });
@@ -38,8 +59,81 @@ export function buildGuestMcpServer(): McpServer {
     },
     async (args) => {
       const read = readParty(args);
-      if (!read.ok) return { content: [{ type: "text" as const, text: read.error }], isError: true };
+      if (!read.ok)
+        return {
+          content: [{ type: "text" as const, text: read.error }],
+          isError: true,
+        };
       return json(await priceCheck(read.party));
+    },
+  );
+
+  server.registerTool(
+    "create_guest_enquiry",
+    {
+      title: "Accept a WhatsApp booking enquiry",
+      description:
+        "Accept a validated Meta WhatsApp booking Flow response by its inbound WhatsApp message id. The server verifies that the submitted answers match the stored signed-webhook response and derives the guest phone from that record; never supply or infer a guest phone number. Returns an enquiry reference and current availability/quotation status. This records an enquiry only and never books or blocks dates.",
+      inputSchema: {
+        messageId: z.string().min(5).max(128),
+        response: flowResponseSchema,
+      },
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+        idempotentHint: true,
+      },
+    },
+    async ({ messageId, response }) => {
+      const { rows } = await pool.query<{ phone: string; payload: unknown }>(
+        `SELECT phone, payload FROM wa_inbound_messages WHERE wa_id = $1 AND direction = 'inbound' LIMIT 1`,
+        [messageId],
+      );
+      const stored = rows[0];
+      const payload = stored?.payload as
+        | {
+            type?: string;
+            phone_number_id?: string | null;
+            interactive?: {
+              type?: string;
+              nfm_reply?: { name?: string; response_json?: unknown };
+            };
+          }
+        | undefined;
+      const responseJson = payload?.interactive?.nfm_reply?.response_json;
+      const storedAnswers = parseWaFlowAnswers(responseJson);
+      const suppliedAnswers = parseWaFlowAnswers(response);
+      if (
+        !stored ||
+        !expectedPhoneNumberIdMatches(payload?.phone_number_id) ||
+        payload?.type !== "interactive" ||
+        payload.interactive?.type !== "nfm_reply" ||
+        payload.interactive.nfm_reply?.name !== "flow" ||
+        !storedAnswers ||
+        !suppliedAnswers ||
+        JSON.stringify(storedAnswers) !== JSON.stringify(suppliedAnswers) ||
+        !shouldAutoReply(stored.phone)
+      ) {
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: JSON.stringify({
+                accepted: false,
+                error: "No eligible booking enquiry was found.",
+              }),
+            },
+          ],
+          isError: true,
+        };
+      }
+      const result = await acceptWaFlowSubmission({
+        messageId,
+        senderPhone: stored.phone,
+        responseJson,
+      });
+      const { newlyCreated: _newlyCreated, ...publicResult } = result;
+      return json(publicResult);
     },
   );
 

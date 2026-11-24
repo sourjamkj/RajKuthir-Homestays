@@ -93,6 +93,7 @@ export type InboundMessage = {
   text: string | null;
   payload: unknown;
   timestamp: number;
+  phoneNumberId: string | null;
 };
 
 type WaWebhookEntry = {
@@ -106,7 +107,7 @@ type WaWebhookEntry = {
         timestamp?: string;
         type?: string;
         text?: { body?: string };
-        interactive?: { type?: string; button_reply?: { id?: string; title?: string }; list_reply?: { id?: string; title?: string } };
+        interactive?: { type?: string; button_reply?: { id?: string; title?: string }; list_reply?: { id?: string; title?: string }; nfm_reply?: { name?: string; response_json?: unknown } };
         [key: string]: unknown;
       }>;
       statuses?: Array<{
@@ -122,12 +123,13 @@ type WaWebhookEntry = {
 export type ParsedInbound = {
   messages: InboundMessage[];
   statuses: Array<{ waId: string; status: string; timestamp: number; errorCode?: string; errorTitle?: string }>;
+  flows: Array<{ waId: string; phone: string; timestamp: number; phoneNumberId: string | null; responseJson: unknown }>;
 };
 
 export function parseWebhookPayload(body: unknown): ParsedInbound {
-  const result: ParsedInbound = { messages: [], statuses: [] };
-  const payload = body as { entry?: WaWebhookEntry[] };
-  if (!payload.entry) return result;
+  const result: ParsedInbound = { messages: [], statuses: [], flows: [] };
+  if (!body || typeof body !== "object" || !Array.isArray((body as { entry?: unknown }).entry)) return result;
+  const payload = body as { entry: WaWebhookEntry[] };
 
   for (const entry of payload.entry) {
     if (!entry.changes) continue;
@@ -159,9 +161,14 @@ export function parseWebhookPayload(body: unknown): ParsedInbound {
             phone,
             type: msg.type ?? "unknown",
             text,
-            payload: msg,
+            payload: { ...msg, phone_number_id: value.metadata?.phone_number_id ?? null },
             timestamp: Number(msg.timestamp),
+            phoneNumberId: value.metadata?.phone_number_id ?? null,
           });
+          const nfm = msg.type === "interactive" && msg.interactive?.type === "nfm_reply" ? msg.interactive.nfm_reply : undefined;
+          if (nfm?.name === "flow" && typeof nfm.response_json !== "undefined") {
+            result.flows.push({ waId: msg.id, phone, timestamp: Number(msg.timestamp), phoneNumberId: value.metadata?.phone_number_id ?? null, responseJson: nfm.response_json });
+          }
         }
       }
 
@@ -182,4 +189,24 @@ export function parseWebhookPayload(body: unknown): ParsedInbound {
   }
 
   return result;
+}
+
+/** Rebuild only approved message ids; status events and unrelated guests are omitted. */
+export function filterWebhookForHermes(body: unknown, allowedIds: ReadonlySet<string>, includeFlowReplies = false): unknown {
+  if (!body || typeof body !== "object" || !Array.isArray((body as { entry?: unknown }).entry)) return { object: "whatsapp_business_account", entry: [] };
+  const input = body as { [key: string]: unknown; entry: Array<{ [key: string]: unknown; changes?: Array<{ [key: string]: unknown; value?: Record<string, unknown> }> }> };
+  return {
+    ...input,
+    entry: input.entry.map((entry) => ({
+      ...entry,
+      changes: entry.changes?.map((change) => {
+        const value = change.value ?? {};
+        const messages = Array.isArray(value.messages) ? value.messages.filter((raw) => {
+          const msg = raw as { id?: string; type?: string; interactive?: { type?: string } };
+          return Boolean(msg.id && allowedIds.has(msg.id) && (includeFlowReplies || !(msg.type === "interactive" && msg.interactive?.type === "nfm_reply")));
+        }) : [];
+        return { ...change, value: { ...value, messages, statuses: [] } };
+      }).filter((change) => change.value?.messages && (change.value.messages as unknown[]).length),
+    })).filter((entry) => entry.changes?.length),
+  };
 }
