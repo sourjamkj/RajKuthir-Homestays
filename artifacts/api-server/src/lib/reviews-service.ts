@@ -139,7 +139,7 @@ async function alertOwner(review: GoogleReview): Promise<void> {
   if (!told.id && !told.pushed && !told.emailed) {
     logger.warn({ reviewId: review.id }, "Review owner alert was already queued or could not be recorded");
   }
-
+}
 
 /* ------------------------------ intake ------------------------------- */
 
