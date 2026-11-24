@@ -3,9 +3,7 @@ import { SITE_ORIGIN } from "./seo";
 import { findById, getBookPaySettings, logPaymentEvent, type RequestWithEnquiry } from "./book-pay-repo";
 import { confirmPaymentRequest } from "./book-pay-confirm";
 import { ownerOnlinePaymentAlert } from "./book-pay-messages";
-import { sendWhatsappTemplate } from "./book-pay-notify";
 import { notifyOwner } from "./owner-alerts";
-import { ownerWhatsappNumberIfSet } from "./owner-settings-state";
 import { holdBlocks } from "./book-pay-rules";
 import { normaliseMobile } from "./phone";
 import {
@@ -381,12 +379,7 @@ async function alertOwner(
       dedupeKey: `online-paid:${paymentRequestId}:${cfPaymentId ?? "?"}`,
       email: { subject: alert.subject, text: alert.text },
     });
-    await sendWhatsappTemplate(ownerWhatsappNumberIfSet(), "WHATSAPP_OWNER_ALERT_TEMPLATE", [
-      found.enquiry.name,
-      `₹${amountPaise / 100}`,
-      `${gatewayOf(cfPaymentId)} ${cfPaymentId ?? methodLabel(paymentGroup)}`,
-      found.request.reference,
-    ]);
+    // notifyOwner routes this alert to the private Telegram owner chat and owner app.
   } catch (error) {
     logger.error({ err: error, paymentRequestId }, "Could not alert the owner about an online payment");
   }
