@@ -248,8 +248,15 @@ export async function startGuestBookingHold(input: {
   adults: number;
   children: number;
   pets: number;
-  acceptedTotalPaise: number;
-  acceptedAdvancePaise: number;
+  acceptedQuote: {
+    checkIn: string;
+    checkOut: string;
+    adults: number;
+    children: number;
+    pets: number;
+    totalPaise: number;
+    advancePaise: number;
+  };
 }): Promise<
   | {
       ok: true;
@@ -285,12 +292,26 @@ export async function startGuestBookingHold(input: {
     const [plan, settings] = await Promise.all([getRatePlan(), getBookPaySettings()]);
     const quote = priceParty(plan, read.party, settings);
     if (!quote.ok) return { ok: false, reason: "unavailable", message: quote.reason };
-    if (!acceptedQuoteMatches(input, quote)) {
+    const currentAcceptedShape = {
+      checkIn: read.party.checkIn,
+      checkOut: read.party.checkOut,
+      adults: read.party.adults,
+      children: read.party.children,
+      pets: read.party.pets,
+      totalPaise: quote.totalPaise,
+      advancePaise: quote.advancePaise,
+    };
+    if (!acceptedQuoteMatches(input.acceptedQuote, currentAcceptedShape)) {
       return {
         ok: false,
         reason: "quote_changed",
         message: "The price or advance changed since the guest accepted the quote. Show the updated quote and ask for acceptance again.",
         quote: {
+          checkIn: read.party.checkIn,
+          checkOut: read.party.checkOut,
+          adults: read.party.adults,
+          children: read.party.children,
+          pets: read.party.pets,
           totalPaise: quote.totalPaise,
           advancePaise: quote.advancePaise,
           balancePaise: quote.balancePaise,
