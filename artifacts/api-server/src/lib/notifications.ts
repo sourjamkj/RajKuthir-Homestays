@@ -27,7 +27,8 @@ import {
 import { createOrRefreshOnboarding } from "./guest-onboarding-repo";
 import { guestApiSendingOn } from "./whatsapp-mode";
 import { pool } from "@workspace/db";
-import { autoSendKinds, ownerWhatsappNumber } from "./owner-settings-state";
+import { autoSendKinds } from "./owner-settings-state";
+import { notifyOwner } from "./owner-alerts";
 import { ensureReviewTables } from "./reviews-migrate";
 
 /**
@@ -122,7 +123,7 @@ function scheduleFor(kind: MessageKind, booking: Booking, now: Date): Date | nul
     }
 
     case "owner_new_booking":
-      return null; // queued by queueOwnerAlert, to the owner's number
+      return null; // routed to the owner-only Telegram alert outbox
 
     case "review_request":
       // Queued by review-requests.ts instead: it has its own timing (14:00
@@ -257,27 +258,22 @@ async function issueIdLinkIfUnverified(bookingId: string): Promise<string | null
 }
 
 /**
- * "New booking" to the owner's own WhatsApp, for a booking from any channel
- * made in the last day, when the owner has ticked it. Not held for quiet hours: it
- * goes to the owner, never a guest.
+ * Owner-only new-booking alert. The legacy setting remains as the owner's
+ * opt-in switch, but delivery goes through notifyOwner (Telegram + owner app),
+ * never the guest/caretaker WhatsApp channel.
  */
 async function queueOwnerAlert(booking: Booking, now: Date): Promise<boolean> {
-  // Off unless ticked in the console (Settings → messages that send themselves).
   if (!autoSendKinds().includes("owner_new_booking")) return false;
-  const owner = toWhatsappNumber(ownerWhatsappNumber());
-  if (!owner || booking.createdAt.getTime() < now.getTime() - 24 * 60 * 60 * 1000) return false;
-  const spec = buildTemplate("owner_new_booking", booking);
-  return queueMessage({
-    bookingId: booking.id,
-    kind: "owner_new_booking",
-    toPhone: owner,
-    templateName: spec.name,
-    templateParams: spec.params,
-    preview: spec.preview,
-    sendAfter: now,
-    status: "pending",
-  });
-}
+  if (booking.createdAt.getTime() < now.getTime() - 24 * 60 * 60 * 1000) return false;
+  await notifyOwner({
+    event: "booking_confirmed",
+    title: `New booking confirmed: ${booking.guestName ?? "Guest"}`,
+    body: `${booking.checkIn} → ${booking.checkOut} · ${booking.source} · ref ${booking.reference ?? "pending"}`,
+    href: `/admin/guests#stay-${booking.id}`,
+    dedupeKey: `booking-confirmed:${booking.id}`,
+  }, now);
+  return true;
+
 
 /**
  * When a message that repeats goes out again, or null when it is done.
