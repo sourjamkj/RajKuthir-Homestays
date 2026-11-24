@@ -17,11 +17,13 @@ import invoicesRouter from "./invoices";
 import ownerAppRouter from "./owner-app";
 import caretakerConsoleRouter from "./caretaker-console";
 import complianceRouter from "./compliance";
+import waInboxRouter from "./wa-inbox";
 
 const router: IRouter = Router();
 
 router.use(healthRouter);
 router.use(adminRouter);
+router.use(waInboxRouter);
 router.use(ownerAppRouter);
 router.use(caretakerConsoleRouter);
 router.use(calendarRouter);
