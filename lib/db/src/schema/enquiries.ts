@@ -45,6 +45,8 @@ export const enquiries = pgTable(
     pets: integer("pets"),
 
     requests: text("requests"),
+    /** Meta inbound WhatsApp message id; unique for webhook retry safety. */
+    whatsappSubmissionId: text("whatsapp_submission_id").unique(),
     status: enquiryStatusEnum("status").notNull().default("new"),
 
     /**

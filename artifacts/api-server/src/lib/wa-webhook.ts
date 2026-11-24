@@ -84,23 +84,18 @@ export async function ensureWaInboundTables(): Promise<void> {
 
 /**
  * Stores an inbound message. Returns true if it was new, false if it was
- * a duplicate (same wa_id). Never throws — a storage failure is logged
- * and swallowed so the 200 still goes back to Meta.
+ * a duplicate (same wa_id). Database failures throw so the webhook can
+ * return a retryable response.
  */
 export async function storeInbound(msg: _InboundMessage): Promise<boolean> {
-  try {
-    await ensureWaInboundTables();
-    const result = await pool.query(
-      `INSERT INTO wa_inbound_messages (wa_id, phone, direction, msg_type, body_text, payload, created_at)
+  await ensureWaInboundTables();
+  const result = await pool.query(
+    `INSERT INTO wa_inbound_messages (wa_id, phone, direction, msg_type, body_text, payload, created_at)
        VALUES ($1, $2, 'inbound', $3, $4, $5, to_timestamp($6))
        ON CONFLICT (wa_id) DO NOTHING`,
-      [msg.waId, msg.phone, msg.type, msg.text, JSON.stringify(msg.payload), msg.timestamp],
-    );
-    return (result.rowCount ?? 0) > 0;
-  } catch (error) {
-    logger.error({ err: error, waId: msg.waId }, "Failed to store inbound WhatsApp message");
-    return false;
-  }
+    [msg.waId, msg.phone, msg.type, msg.text, JSON.stringify(msg.payload), msg.timestamp],
+  );
+  return (result.rowCount ?? 0) > 0;
 }
 
 /**

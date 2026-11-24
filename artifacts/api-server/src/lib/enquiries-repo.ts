@@ -25,6 +25,25 @@ export async function createEnquiry(input: {
   return created!;
 }
 
+export async function createWhatsappEnquiry(input: {
+  name: string;
+  phone: string;
+  checkIn: string;
+  checkOut: string;
+  adults: number;
+  children: number;
+  pets: number;
+  whatsappSubmissionId: string;
+}): Promise<{ enquiry: Enquiry; created: boolean }> {
+  const [created] = await db.insert(enquiries).values(input)
+    .onConflictDoNothing({ target: enquiries.whatsappSubmissionId }).returning();
+  if (created) return { enquiry: created, created: true };
+  const [existing] = await db.select().from(enquiries)
+    .where(eq(enquiries.whatsappSubmissionId, input.whatsappSubmissionId)).limit(1);
+  if (existing) return { enquiry: existing, created: false };
+  throw new Error("Could not create WhatsApp enquiry.");
+}
+
 export async function listEnquiries(limit = 200): Promise<Enquiry[]> {
   return db
     .select()

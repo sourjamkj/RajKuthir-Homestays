@@ -1,0 +1,101 @@
+{
+  "version": "7.3",
+  "data_api_version": "3.0",
+  "routing_model": { "BOOKING_ENQUIRY": [] },
+  "screens": [
+    {
+      "id": "BOOKING_ENQUIRY",
+      "title": "Booking enquiry",
+      "terminal": true,
+      "success": true,
+      "data": { "today": { "type": "string", "__example__": "2026-11-24" } },
+      "layout": {
+        "type": "SingleColumnLayout",
+        "children": [
+          {
+            "type": "TextHeading",
+            "text": "Let’s plan your Shantiniketan getaway 🌿"
+          },
+          {
+            "type": "DatePicker",
+            "name": "check_in",
+            "label": "Check-in date",
+            "required": true,
+            "min-date": "${data.today}"
+          },
+          {
+            "type": "DatePicker",
+            "name": "check_out",
+            "label": "Check-out date",
+            "required": true,
+            "min-date": "${data.today}"
+          },
+          {
+            "type": "TextInput",
+            "name": "adults",
+            "label": "Number of adults",
+            "input-type": "number",
+            "required": true,
+            "min-chars": 1,
+            "max-chars": 1,
+            "pattern": "^[1-5]$",
+            "helper-text": "1–5 adults"
+          },
+          {
+            "type": "TextInput",
+            "name": "children",
+            "label": "Number of children",
+            "input-type": "number",
+            "required": true,
+            "min-chars": 1,
+            "max-chars": 1,
+            "pattern": "^[0-5]$",
+            "helper-text": "0–5 children; 5 guests total maximum"
+          },
+          {
+            "type": "RadioButtonsGroup",
+            "name": "bringing_pets",
+            "label": "Are you bringing pets?",
+            "required": true,
+            "data-source": [
+              { "id": "true", "title": "Yes" },
+              { "id": "false", "title": "No" }
+            ]
+          },
+          {
+            "type": "If",
+            "condition": "${form.bringing_pets} == 'true'",
+            "then": [
+              {
+                "type": "TextInput",
+                "name": "pet_count",
+                "label": "Number of pets",
+                "input-type": "number",
+                "required": true,
+                "min-chars": 1,
+                "max-chars": 1,
+                "pattern": "^[1-4]$",
+                "helper-text": "1–4 pets"
+              }
+            ]
+          },
+          {
+            "type": "Footer",
+            "label": "Send enquiry",
+            "on-click-action": {
+              "name": "complete",
+              "payload": {
+                "check_in": "${form.check_in}",
+                "check_out": "${form.check_out}",
+                "adults": "${form.adults}",
+                "children": "${form.children}",
+                "bringing_pets": "${form.bringing_pets}",
+                "pet_count": "${form.pet_count}"
+              }
+            }
+          }
+        ]
+      }
+    }
+  ]
+}

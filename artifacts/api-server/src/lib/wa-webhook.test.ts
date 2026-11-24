@@ -1,7 +1,7 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { createHmac } from "node:crypto";
-import { verifySignature, parseWebhookPayload, isWithin24h, shouldAutoReply } from "./wa-webhook-rules.ts";
+import { verifySignature, parseWebhookPayload, isWithin24h, shouldAutoReply, filterWebhookForHermes } from "./wa-webhook-rules.ts";
 
 /* ------------------------------------------------------------------ *
  * verifySignature
@@ -224,6 +224,33 @@ describe("parseWebhookPayload", () => {
 /* ------------------------------------------------------------------ *
  * isWithin24h
  * ------------------------------------------------------------------ */
+
+describe("WhatsApp Flow batch handling", () => {
+  it("parses a native Flow response and binds it to Meta's sender and phone id", () => {
+    const payload = { entry: [{ changes: [{ value: {
+      messaging_product: "whatsapp", metadata: { phone_number_id: "business-1" },
+      messages: [{ id: "wamid.flow1", from: "919876543210", timestamp: "1700000001", type: "interactive", interactive: { type: "nfm_reply", nfm_reply: { name: "flow", response_json: JSON.stringify({ check_in: "2027-01-10" }) } } }],
+    } }] }] };
+    const result = parseWebhookPayload(payload);
+    assert.equal(result.flows.length, 1);
+    assert.equal(result.flows[0]!.waId, "wamid.flow1");
+    assert.equal(result.flows[0]!.phone, "919876543210");
+    assert.equal(result.flows[0]!.phoneNumberId, "business-1");
+  });
+
+  it("filters mixed batches and can pass one validated Flow message alone", () => {
+    const body = { entry: [{ changes: [{ value: { messaging_product: "whatsapp", messages: [
+      { id: "allowed", type: "text", text: { body: "hello" } },
+      { id: "other", type: "text", text: { body: "private" } },
+      { id: "flow", type: "interactive", interactive: { type: "nfm_reply", nfm_reply: { response_json: "private" } } },
+    ], statuses: [{ id: "status" }] } }] }] };
+    const ordinary = filterWebhookForHermes(body, new Set(["allowed", "flow"])) as typeof body;
+    assert.deepEqual(ordinary.entry[0]!.changes[0]!.value.messages.map((msg) => msg.id), ["allowed"]);
+    assert.deepEqual(ordinary.entry[0]!.changes[0]!.value.statuses, []);
+    const flowOnly = filterWebhookForHermes(body, new Set(["flow"]), true) as typeof body;
+    assert.deepEqual(flowOnly.entry[0]!.changes[0]!.value.messages.map((msg) => msg.id), ["flow"]);
+  });
+});
 
 describe("isWithin24h", () => {
   it("returns true for a message 1h ago", () => {

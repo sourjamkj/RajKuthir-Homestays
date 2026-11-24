@@ -11,7 +11,7 @@ Meta ──webhook──▶ api-server /webhooks/whatsapp   (stores it, handles 
                   hermes :8090/whatsapp/webhook    (verifies with the same app secret)
                       │ tools: raj-kuthir-guest MCP only (+ clarify buttons)
                       ▼
-                  api-server /mcp/guest            (quote_stay: availability + price, no guest data)
+                  api-server /mcp/guest            (quote_stay + accepted Flow enquiry, no unrelated guest data)
 Hermes ──Graph API──▶ guest                        (free-form replies inside the 24-hour window)
 ```
 
@@ -20,7 +20,7 @@ Templates (confirmations, reminders) stay with the api-server outbox; Hermes can
 ## Safety
 
 - `config.yaml` gives WhatsApp only `clarify` + `raj-kuthir-guest` and disables terminal, files, code, browser, web, memory and skills everywhere. Hermes's default for WhatsApp includes the terminal and code execution — never use the default.
-- `/mcp/guest` exposes only `quote_stay`, the same answer as the public booking page. The owner's connector (`/mcp`) is never given to Hermes.
+- `/mcp/guest` exposes `quote_stay` and `create_guest_enquiry`; the latter accepts only answers matching a stored signed Flow submission and uses its webhook-bound sender. The owner's connector (`/mcp`) is never given to Hermes.
 - Who gets replies: the api-server forwards only `WHATSAPP_TEST_NUMBERS` unless `WHATSAPP_AUTOREPLY_ENABLED=true` (live since 23 Nov 2026; set `false` to go back to pilot). Hermes answers everyone it is sent (`WHATSAPP_CLOUD_ALLOW_ALL_USERS=true`).
 - Slash commands work only for the numbers in `allow_admin_from` (`config.yaml`); guests get none, not even /help, and a blocked command gets a plain reply (`patch_errors.py`); the owner's chat is the home channel (Dockerfile), so guests never get Hermes setup prompts.
 - Guests never get Hermes housekeeping messages: no restart pings (`gateway_restart_notification: false`), no "⚡ Interrupting" ack (`HERMES_GATEWAY_BUSY_ACK_ENABLED=false`), no session-reset notice (`patch_errors.py`); idle chats reset quietly after 24h.
@@ -51,8 +51,10 @@ Leave `WHATSAPP_CLOUD_WEBHOOK_HOST` unset (listens on all interfaces). If the fo
 ## Phases
 
 1. **Pilot (now):** answers + live price and availability, sends guests to the booking page; test number only.
-2. Enquiry + priced quote with the guest's own Book link (new guest-connector tools).
+2. WhatsApp Flow booking enquiry form (Flow JSON is `artifacts/api-server/assets/wa-flow-01-booking-enquiry.json`). The api-server accepts signed submissions into the existing Enquiries list, checks the normal availability/rate engine, and notifies the owner. It does not create a booking or hold dates.
 3. Booking: hold dates and send the payment link; confirmation on payment as today. Cancellations and changes always hand off to the owner.
+
+For the Flow rollout steps, `WHATSAPP_BOOKING_FLOW_ID`, migration and Railway settings, see [`docs/whatsapp-flow-01.md`](../../docs/whatsapp-flow-01.md).
 
 ## Cheaper model with an advisor (off until tested)
 
