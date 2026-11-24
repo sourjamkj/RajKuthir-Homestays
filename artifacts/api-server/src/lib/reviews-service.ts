@@ -5,12 +5,10 @@ import {
   bookings,
   db,
   googleReviews,
-  pool,
   type GoogleReview,
 } from "@workspace/db";
 
 import { logger } from "./logger";
-import { ownerWhatsappNumber } from "./owner-settings-state";
 import { ownerEmail, sendEmail } from "./book-pay-notify";
 import { draftReply, isDrafterConfigured } from "./review-drafter";
 import {
@@ -26,7 +24,6 @@ import {
 import { getReviewSource, type FetchedReview } from "./review-source";
 import { ensureReviewTables } from "./reviews-migrate";
 import { SITE_ORIGIN } from "./seo";
-import { isWhatsappEnabled, sendText, toWhatsappNumber } from "./whatsapp-client";
 import { notifyOwner } from "./owner-alerts";
 import { reviewAlert } from "./owner-alert-rules";
 
@@ -120,8 +117,8 @@ export async function draftFor(id: string): Promise<GoogleReview | null> {
 /* ------------------------------ alerts ------------------------------- */
 
 /**
- * WhatsApp to the owner when the Cloud API can deliver free text — the owner
- * messaged the business number in the last 24 hours — otherwise email.
+ * Review alerts use the owner-only Telegram channel and owner app. Never
+ * deliver operational alerts to the guest/caretaker WhatsApp channel.
  */
 async function alertOwner(review: GoogleReview): Promise<void> {
   const alert = ownerReviewAlert({
@@ -131,34 +128,15 @@ async function alertOwner(review: GoogleReview): Promise<void> {
     adminUrl: ADMIN_URL,
   });
 
-  let sent = false;
-  const owner = toWhatsappNumber(ownerWhatsappNumber());
-  if (owner && isWhatsappEnabled()) {
-    try {
-      const { rows } = await pool.query<{ last_inbound_at: Date | null }>(
-        "SELECT last_inbound_at FROM wa_conversations WHERE phone = $1",
-        [owner],
-      );
-      const last = rows[0]?.last_inbound_at;
-      if (last && Date.now() - last.getTime() < 24 * 3_600_000) {
-        sent = (await sendText({ to: owner, text: alert.text })).ok;
-      }
-    } catch (error) {
-      logger.warn({ err: error instanceof Error ? error.message : error }, "Owner WhatsApp window check failed");
-    }
-  }
-  // The app's alert list and a push always; the email only if WhatsApp did not reach the owner.
   const told = await notifyOwner({
     event: "review_received",
     ...reviewAlert({ reviewerName: review.reviewerName, rating: review.rating, text: review.text }),
     href: "/admin/reviews",
     dedupeKey: `review:${review.id}`,
-    email: sent ? undefined : { subject: alert.subject, text: alert.text },
+    email: { subject: alert.subject, text: alert.text },
   });
-  if (!sent) sent = told.emailed || told.pushed > 0;
-
-  if (sent) {
-    await db.update(googleReviews).set({ ownerAlertedAt: new Date() }).where(eq(googleReviews.id, review.id));
+  if (!told.id && !told.pushed && !told.emailed) {
+    logger.warn({ reviewId: review.id }, "Review owner alert was already queued or could not be recorded");
   }
 }
 

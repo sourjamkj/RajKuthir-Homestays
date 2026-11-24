@@ -93,6 +93,7 @@ export const revokeDevice = (id: string, confirmPassword?: string) =>
 
 export const OWNER_EVENTS = [
   'booking_hold',
+  'booking_confirmed',
   'payment_submitted',
   'enquiry',
   'ota_booking',

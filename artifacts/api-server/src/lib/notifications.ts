@@ -27,7 +27,8 @@ import {
 import { createOrRefreshOnboarding } from "./guest-onboarding-repo";
 import { guestApiSendingOn } from "./whatsapp-mode";
 import { pool } from "@workspace/db";
-import { autoSendKinds, ownerWhatsappNumber } from "./owner-settings-state";
+import { autoSendKinds } from "./owner-settings-state";
+import { notifyOwner } from "./owner-alerts";
 import { ensureReviewTables } from "./reviews-migrate";
 
 /**
@@ -122,7 +123,7 @@ function scheduleFor(kind: MessageKind, booking: Booking, now: Date): Date | nul
     }
 
     case "owner_new_booking":
-      return null; // queued by queueOwnerAlert, to the owner's number
+      return null; // routed to the owner-only Telegram alert outbox
 
     case "review_request":
       // Queued by review-requests.ts instead: it has its own timing (14:00
@@ -257,26 +258,20 @@ async function issueIdLinkIfUnverified(bookingId: string): Promise<string | null
 }
 
 /**
- * "New booking" to the owner's own WhatsApp, for a booking from any channel
- * made in the last day, when the owner has ticked it. Not held for quiet hours: it
- * goes to the owner, never a guest.
+ * Owner-only alert for a direct website booking. OTA imports are already
+ * notified by the activity watcher; avoid sending a second Telegram alert.
  */
 async function queueOwnerAlert(booking: Booking, now: Date): Promise<boolean> {
-  // Off unless ticked in the console (Settings → messages that send themselves).
-  if (!autoSendKinds().includes("owner_new_booking")) return false;
-  const owner = toWhatsappNumber(ownerWhatsappNumber());
-  if (!owner || booking.createdAt.getTime() < now.getTime() - 24 * 60 * 60 * 1000) return false;
-  const spec = buildTemplate("owner_new_booking", booking);
-  return queueMessage({
-    bookingId: booking.id,
-    kind: "owner_new_booking",
-    toPhone: owner,
-    templateName: spec.name,
-    templateParams: spec.params,
-    preview: spec.preview,
-    sendAfter: now,
-    status: "pending",
-  });
+  if (booking.source !== "direct") return false;
+  if (booking.createdAt.getTime() < now.getTime() - 24 * 60 * 60 * 1000) return false;
+  await notifyOwner({
+    event: "booking_confirmed",
+    title: `New booking confirmed: ${booking.guestName ?? "Guest"}`,
+    body: `${booking.checkIn} → ${booking.checkOut} · ${booking.source} · ref ${booking.reference ?? "pending"}`,
+    href: `/admin/guests#stay-${booking.id}`,
+    dedupeKey: `booking-confirmed:${booking.id}`,
+  }, now);
+  return true;
 }
 
 /**
@@ -321,9 +316,18 @@ export type DrainResult = { attempted: number; sent: number; failed: number };
 export async function drainOutbox(now = new Date()): Promise<DrainResult> {
   const result: DrainResult = { attempted: 0, sent: 0, failed: 0 };
 
+  // Retire legacy owner_new_booking WhatsApp rows even in manual mode. Owner
+  // operations now use the owner-only Telegram alert outbox, never WhatsApp.
+  await pool.query(
+    `UPDATE whatsapp_messages
+       SET status = 'cancelled', error = 'Owner alerts now route through Telegram', updated_at = now()
+     WHERE kind = 'owner_new_booking' AND status IN ('draft', 'pending')`,
+  );
+
   // Manual mode: drafts wait for the owner to send them from their own WhatsApp.
   if (!guestApiSendingOn()) return result;
-  // Quiet hours hold every guest message; only the owner's own alerts go.
+
+  // Quiet hours hold every guest message.
   const quiet = istHourOf(now) >= QUIET_START_HOUR || istHourOf(now) < QUIET_END_HOUR;
 
   const due = await claimDueMessages(BATCH_SIZE, now, quiet ? ["owner_new_booking"] : undefined);
