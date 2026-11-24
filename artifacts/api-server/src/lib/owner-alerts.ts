@@ -6,6 +6,7 @@ import { logger } from "./logger";
 import { activePushTokens, forgetPushTokens } from "./owner-devices";
 import type { OwnerEvent } from "./owner-settings-rules";
 import { emailEnabledFor, pushEnabledFor, quietHoursNow } from "./owner-settings-state";
+import { ownerTelegramTarget, sendOwnerTelegramMessage } from "./telegram-owner";
 
 /**
  * Everything the owner is told about, in one place: a row in the app's alert
@@ -27,9 +28,19 @@ CREATE TABLE IF NOT EXISTS owner_alerts (
   pushed_to integer NOT NULL DEFAULT 0,
   emailed boolean NOT NULL DEFAULT false,
   created_at timestamptz NOT NULL DEFAULT now(),
-  read_at timestamptz
+  read_at timestamptz,
+  telegram_sent boolean NOT NULL DEFAULT false,
+  telegram_attempts integer NOT NULL DEFAULT 0,
+  telegram_last_attempt_at timestamptz,
+  telegram_last_error text
 );
+ALTER TABLE owner_alerts ADD COLUMN IF NOT EXISTS telegram_sent boolean NOT NULL DEFAULT false;
+ALTER TABLE owner_alerts ADD COLUMN IF NOT EXISTS telegram_attempts integer NOT NULL DEFAULT 0;
+ALTER TABLE owner_alerts ADD COLUMN IF NOT EXISTS telegram_last_attempt_at timestamptz;
+ALTER TABLE owner_alerts ADD COLUMN IF NOT EXISTS telegram_last_error text;
 CREATE INDEX IF NOT EXISTS owner_alerts_created_idx ON owner_alerts (created_at DESC);
+CREATE INDEX IF NOT EXISTS owner_alerts_telegram_pending_idx
+  ON owner_alerts (created_at) WHERE telegram_sent = false AND telegram_attempts < 10;
 `;
 
 let migrated = false;
@@ -44,6 +55,72 @@ export async function ensureOwnerAlertsTable(): Promise<boolean> {
     logger.error({ err: error }, "Could not create owner_alerts");
     return false;
   }
+}
+
+
+/**
+ * Claim then send one persisted alert. If the Telegram request fails, the
+ * row remains pending and the two-minute watcher will retry it. Claiming is
+ * atomic so notifyOwner and the watcher cannot send the same alert twice.
+ */
+async function deliverOwnerTelegramAlert(id: string): Promise<boolean> {
+  if (!ownerTelegramTarget()) return false;
+  const { rows } = await pool.query<{ title: string; body: string; href: string; attempts: number }>(
+    `UPDATE owner_alerts
+        SET telegram_attempts = telegram_attempts + 1,
+            telegram_last_attempt_at = now()
+      WHERE id = $1
+        AND telegram_sent = false
+        AND telegram_attempts < 10
+        AND (telegram_last_attempt_at IS NULL OR telegram_last_attempt_at < now() - interval '2 minutes')
+      RETURNING title, body, href, telegram_attempts AS attempts`,
+    [id],
+  );
+  const row = rows[0];
+  if (!row) return false;
+
+  const href = /^\/[A-Za-z0-9/?#=&._%-]*$/.test(row.href)
+    ? `https://rajkuthirhomestays.casa${row.href}`
+    : null;
+  const message = [
+    `🏡 Raj Kuthir · ${row.title}`,
+    row.body,
+    ...(href ? [`Open: ${href}`] : []),
+  ].filter(Boolean).join("\n").slice(0, 4000);
+  const sent = await sendOwnerTelegramMessage(message);
+  if (!sent.configured) return false;
+
+  await pool.query(
+    `UPDATE owner_alerts
+        SET telegram_sent = $2,
+            telegram_last_error = $3
+      WHERE id = $1`,
+    [id, sent.ok, sent.ok ? null : sent.reason],
+  );
+  return sent.ok;
+}
+
+/** Retry unsent owner alerts after a transient Telegram/API outage. */
+export async function flushPendingOwnerTelegramAlerts(limit = 20): Promise<{ attempted: number; sent: number }> {
+  if (!ownerTelegramTarget()) return { attempted: 0, sent: 0 };
+  const safeLimit = Math.max(1, Math.min(50, Math.floor(limit)));
+  const { rows } = await pool.query<{ id: string }>(
+    `SELECT id FROM owner_alerts
+      WHERE telegram_sent = false
+        AND telegram_attempts < 10
+        AND (telegram_last_attempt_at IS NULL OR telegram_last_attempt_at < now() - interval '2 minutes')
+      ORDER BY created_at ASC
+      LIMIT $1`,
+    [safeLimit],
+  );
+  let sent = 0;
+  for (const row of rows) {
+    if (await deliverOwnerTelegramAlert(row.id).catch((error) => {
+      logger.warn({ err: error instanceof Error ? error.message : "unknown" }, "Owner Telegram delivery failed");
+      return false;
+    })) sent += 1;
+  }
+  return { attempted: rows.length, sent };
 }
 
 export type OwnerAlertInput = {
@@ -67,11 +144,17 @@ export async function notifyOwner(input: OwnerAlertInput, now = new Date()): Pro
          ON CONFLICT (dedupe_key) DO NOTHING RETURNING id`,
         [input.event, input.title, input.body, input.href ?? "/admin", input.dedupeKey ?? null],
       );
-      if (!rows[0]) return { id: null, pushed: 0, emailed: false }; // already told
+      if (!rows[0]) return { id: null, pushed: 0, emailed: false }; // already recorded
       id = rows[0].id;
     }
   } catch (error) {
     logger.error({ err: error, event: input.event }, "Could not record an owner alert");
+  }
+
+  if (id) {
+    await deliverOwnerTelegramAlert(id).catch((error) => {
+      logger.warn({ err: error instanceof Error ? error.message : "unknown" }, "Owner Telegram delivery failed");
+    });
   }
 
   let pushed = 0;
