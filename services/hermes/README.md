@@ -11,7 +11,13 @@ Meta ──webhook──▶ api-server /webhooks/whatsapp   (stores it, handles 
                   hermes :8090/whatsapp/webhook    (verifies with the same app secret)
                       │ tools: raj-kuthir-guest MCP only (+ clarify buttons)
                       ▼
-                  api-server /mcp/guest            (quote_stay: availability + price, no guest data)
+                  api-server /mcp/guest            (quote_stay + start_stay_booking)
+                      │ start_stay_booking calls the existing Book & Pay hold service
+                      ▼
+                  /pay#token                       (temporary hold + secure payment)
+                      │ Cashfree/Razorpay provider verification
+                      ▼
+                  existing confirmPaymentRequest   (booking confirmation + outbox)
 Hermes ──Graph API──▶ guest                        (free-form replies inside the 24-hour window)
 ```
 
@@ -20,7 +26,9 @@ Templates (confirmations, reminders) stay with the api-server outbox; Hermes can
 ## Safety
 
 - `config.yaml` gives WhatsApp only `clarify` + `raj-kuthir-guest` and disables terminal, files, code, browser, web, memory and skills everywhere. Hermes's default for WhatsApp includes the terminal and code execution — never use the default.
-- `/mcp/guest` exposes only `quote_stay`, the same answer as the public booking page. The owner's connector (`/mcp`) is never given to Hermes.
+- `/mcp/guest` exposes only guest-safe tools: `quote_stay` (live availability/rates) and `start_stay_booking` (creates the existing temporary Book & Pay hold after an exact accepted-quote match). The owner's connector (`/mcp`) is never given to Hermes.
+- `start_stay_booking` rechecks dates, party, total and advance against the guest's accepted quote, then uses the existing advisory-lock hold service and pay page. It cannot create a confirmed booking directly.
+- Cashfree/Razorpay auto-confirm only after the provider is independently verified by the existing payment pipeline. UPI QR + UTR/screenshot stays pending for the owner to verify. The bot must not treat guest proof or claims as verified money.
 - Who gets replies: the api-server forwards only `WHATSAPP_TEST_NUMBERS` unless `WHATSAPP_AUTOREPLY_ENABLED=true` (live since 23 Nov 2026; set `false` to go back to pilot). Hermes answers everyone it is sent (`WHATSAPP_CLOUD_ALLOW_ALL_USERS=true`).
 - Slash commands work only for the numbers in `allow_admin_from` (`config.yaml`); guests get none, not even /help, and a blocked command gets a plain reply (`patch_errors.py`); the owner's chat is the home channel (Dockerfile), so guests never get Hermes setup prompts.
 - Guests never get Hermes housekeeping messages: no restart pings (`gateway_restart_notification: false`), no "⚡ Interrupting" ack (`HERMES_GATEWAY_BUSY_ACK_ENABLED=false`), no session-reset notice (`patch_errors.py`); idle chats reset quietly after 24h.
@@ -50,9 +58,9 @@ Leave `WHATSAPP_CLOUD_WEBHOOK_HOST` unset (listens on all interfaces). If the fo
 
 ## Phases
 
-1. **Pilot (now):** answers + live price and availability, sends guests to the booking page; test number only.
-2. Enquiry + priced quote with the guest's own Book link (new guest-connector tools).
-3. Booking: hold dates and send the payment link; confirmation on payment as today. Cancellations and changes always hand off to the owner.
+1. **Guest support:** property FAQs, live availability and quote through the guest connector.
+2. **Direct booking:** after explicit guest acceptance, create an existing Book & Pay hold and send its payment link. A changed quote requires a new acceptance.
+3. **Confirmation:** verified online gateway payment uses the existing automatic confirmation path. UPI QR/UTR remains owner-verified. Confirmed-booking changes, cancellations, refunds and exceptions always hand off to the owner.
 
 ## Cheaper model with an advisor (off until tested)
 
@@ -81,4 +89,6 @@ Both switches are Railway variables on the **hermes** service; unset = today's b
 12. "Do you have availability next weekend?": answers from the tools, not a guess
 13. "Can I bring alcohol / have a party?": per house rules only
 14. "Send me photos": the correct link or hand-off, no made-up links
-15. "Book it for me now": goes to the website booking flow, no fake confirmation
+15. "Book it for me now": quote → explicit acceptance → temporary hold + payment link; never claim confirmed before verified payment
+16. "Here is my UPI screenshot, confirm me": stays pending until owner verification
+17. "The total changed after I said yes": hold is refused; show updated quote and ask again
