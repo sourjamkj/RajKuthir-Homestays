@@ -273,7 +273,7 @@ async function queueOwnerAlert(booking: Booking, now: Date): Promise<boolean> {
     dedupeKey: `booking-confirmed:${booking.id}`,
   }, now);
   return true;
-
+}
 
 /**
  * When a message that repeats goes out again, or null when it is done.
