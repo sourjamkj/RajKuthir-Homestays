@@ -275,7 +275,7 @@ export async function startGuestBookingHold(input: {
   const phone = normaliseMobile(input.phone);
   const email = input.email?.trim() || null;
   const requests = input.requests?.trim().slice(0, 1000) || null;
-  if (name.length < 2 || !phone || (email && !/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(email))) {
+  if (name.length < 2 || !phone || (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))) {
     return { ok: false, reason: "invalid", message: "Please check the guest's name, Indian mobile number and email address." };
   }
   if (!upiDetails() && !onlinePaymentMode()) {
