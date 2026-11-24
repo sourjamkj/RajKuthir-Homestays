@@ -102,7 +102,7 @@ async function deliverOwnerTelegramAlert(id: string): Promise<boolean> {
 
 /** Retry unsent owner alerts after a transient Telegram/API outage. */
 export async function flushPendingOwnerTelegramAlerts(limit = 20): Promise<{ attempted: number; sent: number }> {
-  if (!ownerTelegramTarget()) return { attempted: 0, sent: 0 };
+  if (!ownerTelegramTarget() || !(await ensureOwnerAlertsTable())) return { attempted: 0, sent: 0 };
   const safeLimit = Math.max(1, Math.min(50, Math.floor(limit)));
   const { rows } = await pool.query<{ id: string }>(
     `SELECT id FROM owner_alerts
