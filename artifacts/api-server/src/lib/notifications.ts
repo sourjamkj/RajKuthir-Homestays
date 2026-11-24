@@ -316,15 +316,16 @@ export type DrainResult = { attempted: number; sent: number; failed: number };
 export async function drainOutbox(now = new Date()): Promise<DrainResult> {
   const result: DrainResult = { attempted: 0, sent: 0, failed: 0 };
 
-  // Manual mode: drafts wait for the owner to send them from their own WhatsApp.
-  if (!guestApiSendingOn()) return result;
-  // Retire legacy owner_new_booking WhatsApp rows. Owner operations now use
-  // the owner-only Telegram alert outbox, never the guest/caretaker sender.
+  // Retire legacy owner_new_booking WhatsApp rows even in manual mode. Owner
+  // operations now use the owner-only Telegram alert outbox, never WhatsApp.
   await pool.query(
     `UPDATE whatsapp_messages
        SET status = 'cancelled', error = 'Owner alerts now route through Telegram', updated_at = now()
      WHERE kind = 'owner_new_booking' AND status IN ('draft', 'pending')`,
   );
+
+  // Manual mode: drafts wait for the owner to send them from their own WhatsApp.
+  if (!guestApiSendingOn()) return result;
 
   // Quiet hours hold every guest message.
   const quiet = istHourOf(now) >= QUIET_START_HOUR || istHourOf(now) < QUIET_END_HOUR;
