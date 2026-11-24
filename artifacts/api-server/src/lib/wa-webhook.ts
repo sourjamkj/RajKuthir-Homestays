@@ -106,7 +106,7 @@ export async function storeInbound(msg: _InboundMessage): Promise<boolean> {
          updated_at = now()
        RETURNING phone
      )
-     SELECT phone FROM inserted`,
+     SELECT inserted.phone FROM inserted JOIN conversation USING (phone)`,
     [msg.waId, msg.phone, msg.type, msg.text, JSON.stringify(msg.payload), msg.timestamp],
   );
   return (result.rowCount ?? 0) > 0;
