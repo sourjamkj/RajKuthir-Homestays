@@ -8,8 +8,8 @@
  *   GET  /webhooks/whatsapp   — verification handshake
  *   POST /webhooks/whatsapp   — inbound messages and status callbacks
  *
- * The POST handler responds 200 immediately and processes async, as
- * Meta requires. It never blocks on database writes or bot replies.
+ * The POST handler verifies the signature and waits for durable storage
+ * before acknowledging. Bot/agent dispatch happens after the 200 response.
  */
 
 import { Router, type IRouter } from "express";
