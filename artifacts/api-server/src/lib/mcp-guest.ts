@@ -39,7 +39,19 @@ export function buildGuestMcpServer(): McpServer {
     async (args) => {
       const read = readParty(args);
       if (!read.ok) return { content: [{ type: "text" as const, text: read.error }], isError: true };
-      return json({ ...(await priceCheck(read.party)), acceptedParty: read.party });
+      const quote = await priceCheck(read.party);
+      return json({
+        ...quote,
+        ...(quote.available
+          ? {
+              acceptedQuote: {
+                ...read.party,
+                totalPaise: quote.totalPaise,
+                advancePaise: quote.advancePaise,
+              },
+            }
+          : {}),
+      });
     },
   );
 
