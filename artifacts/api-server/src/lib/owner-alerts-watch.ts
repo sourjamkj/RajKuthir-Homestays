@@ -2,7 +2,7 @@ import { pool } from "@workspace/db";
 
 import { listActivity } from "./activity-repo";
 import { logger } from "./logger";
-import { notifyOwner } from "./owner-alerts";
+import { flushPendingOwnerTelegramAlerts, notifyOwner } from "./owner-alerts";
 import { jobFailed, jobOk, jobStarted } from "./ops-watch";
 import { checkinTomorrowAlert, eventForActivity, isEveningRun, istTomorrow } from "./owner-alert-rules";
 
@@ -33,6 +33,11 @@ async function writeCursor(at: Date): Promise<void> {
 }
 
 export async function runOwnerAlertWatch(now = new Date()): Promise<void> {
+  // Owner Telegram is an outbox too: retry failed sends without blocking the
+  // activity cursor or losing alerts while Telegram/Railway is unavailable.
+  const telegram = await flushPendingOwnerTelegramAlerts(20);
+  if (telegram.sent) logger.info(telegram, "Owner Telegram alerts delivered");
+
   const cursor = await readCursor();
   if (!cursor) {
     await writeCursor(now);
