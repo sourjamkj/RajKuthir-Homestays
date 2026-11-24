@@ -1,5 +1,7 @@
 import { Router, type IRouter } from "express";
-import { requireAdmin } from "../lib/admin-auth";
+import { requireAdmin, sessionOf } from "../lib/admin-auth";
+import { audit } from "../lib/owner-devices";
+import type { Response } from "express";
 import { isWithin24h } from "../lib/wa-webhook-rules";
 import {
   getOrCreateConversation,
@@ -21,6 +23,16 @@ function phoneFromParam(value: unknown): string | null {
 function limitFromQuery(value: unknown, fallback = 100): number {
   const parsed = typeof value === "string" ? Number(value) : fallback;
   return Number.isInteger(parsed) && parsed > 0 ? Math.min(parsed, 200) : fallback;
+}
+
+function recordOwnerAudit(res: Response, action: string, detail: Record<string, unknown>): void {
+  const session = sessionOf(res);
+  void audit({
+    via: session.via,
+    deviceId: session.via === "app" ? session.deviceId : null,
+    action,
+    detail,
+  });
 }
 
 router.use("/admin/whatsapp", requireAdmin);
@@ -57,6 +69,7 @@ router.post("/admin/whatsapp/conversations/:phone/takeover", async (req, res) =>
   }
   await getOrCreateConversation(phone);
   await setConversationState(phone, "human");
+  recordOwnerAudit(res, "whatsapp.conversation.takeover", { phone });
   res.json({ phone, state: "human" });
 });
 
@@ -68,6 +81,7 @@ router.post("/admin/whatsapp/conversations/:phone/resume", async (req, res) => {
   }
   await getOrCreateConversation(phone);
   await setConversationState(phone, "bot");
+  recordOwnerAudit(res, "whatsapp.conversation.resume", { phone });
   res.json({ phone, state: "bot" });
 });
 
@@ -116,6 +130,11 @@ router.post("/admin/whatsapp/conversations/:phone/reply", async (req, res) => {
     payload: { source: "owner_inbox" },
   });
   await updateMessageStatus(result.providerMessageId, "sent", Math.floor(Date.now() / 1000));
+  recordOwnerAudit(res, "whatsapp.owner_reply", {
+    phone,
+    providerMessageId: result.providerMessageId,
+    characterCount: text.length,
+  });
   res.json({ sent: true, phone, state: "human", providerMessageId: result.providerMessageId });
 });
 
