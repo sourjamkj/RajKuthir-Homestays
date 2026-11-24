@@ -6,10 +6,10 @@ import { priceCheck, readParty, startGuestBookingHold } from "../routes/book";
 /**
  * The guest-facing connector for the WhatsApp agent (Hermes) at /mcp/guest.
  *
- * Unlike the owner's connector (mcp-tools.ts) it exposes only what any guest
- * may see on the public booking page: availability and the price for their
- * dates. No guest names, bookings, enquiries or changes. Later phases add
- * tools here (enquiry, quote, booking link) — never the owner's tools.
+ * Unlike the owner's connector (mcp-tools.ts), it exposes only guest-safe
+ * capabilities: live availability/pricing and a temporary Book & Pay hold
+ * for the guest's own accepted dates. It never exposes the owner's tools,
+ * guest lists, existing bookings, cancellations or modifications.
  */
 
 const ISO = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "YYYY-MM-DD");
@@ -81,7 +81,7 @@ export function buildGuestMcpServer(): McpServer {
           advancePaise: z.number().int().nonnegative().safe(),
         }),
       },
-      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: true },
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
     },
     async ({ acceptedQuote, ...input }) => {
       if (
