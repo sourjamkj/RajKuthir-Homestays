@@ -1,7 +1,7 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 
-import { priceCheck, readParty } from "../routes/book";
+import { priceCheck, readParty, startGuestBookingHold } from "../routes/book";
 
 /**
  * The guest-facing connector for the WhatsApp agent (Hermes) at /mcp/guest.
@@ -39,7 +39,71 @@ export function buildGuestMcpServer(): McpServer {
     async (args) => {
       const read = readParty(args);
       if (!read.ok) return { content: [{ type: "text" as const, text: read.error }], isError: true };
-      return json(await priceCheck(read.party));
+      return json({ ...(await priceCheck(read.party)), acceptedParty: read.party });
+    },
+  );
+
+  server.registerTool(
+    "start_stay_booking",
+    {
+      title: "Hold dates and create a payment link",
+      description:
+        "Use ONLY after the guest has explicitly accepted the exact quote from quote_stay. Copy the acceptedQuote object exactly from that tool result, and use the guest's current WhatsApp number as phone. This creates a temporary hold and secure Book & Pay link, NOT a confirmed booking. The server rechecks dates, party and price; if anything changed it refuses and returns the updated quote for the guest to accept again. Verified Cashfree/Razorpay online payment confirms automatically through the existing payment service. UPI QR/UTR or a screenshot is NOT verified payment and stays pending for owner verification. Never claim the booking is confirmed merely because a payment claim or screenshot was sent.",
+      inputSchema: {
+        name: z.string().trim().min(2).max(120),
+        phone: z.string().trim().min(8).max(20),
+        email: z.string().trim().email().max(200).optional(),
+        requests: z.string().trim().max(1000).optional(),
+        checkIn: ISO,
+        checkOut: ISO,
+        adults: z.number().int().min(1).max(5),
+        children: z.number().int().min(0).max(5),
+        pets: z.number().int().min(0).max(4),
+        acceptedQuote: z.object({
+          checkIn: ISO,
+          checkOut: ISO,
+          adults: z.number().int().min(1).max(5),
+          children: z.number().int().min(0).max(5),
+          pets: z.number().int().min(0).max(4),
+          totalPaise: z.number().int().positive().safe(),
+          advancePaise: z.number().int().nonnegative().safe(),
+        }),
+      },
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: true },
+    },
+    async ({ acceptedQuote, ...input }) => {
+      if (
+        acceptedQuote.checkIn !== input.checkIn ||
+        acceptedQuote.checkOut !== input.checkOut ||
+        acceptedQuote.adults !== input.adults ||
+        acceptedQuote.children !== input.children ||
+        acceptedQuote.pets !== input.pets
+      ) {
+        return { content: [{ type: "text" as const, text: "The stay details do not match the accepted quote. Re-check availability and ask the guest to accept the current quote." }], isError: true };
+      }
+
+      const result = await startGuestBookingHold({ ...input, acceptedQuote });
+      if (!result.ok) {
+        return {
+          content: [{ type: "text" as const, text: JSON.stringify(result) }],
+          isError: true,
+        };
+      }
+      return json({
+        holdCreated: true,
+        confirmed: false,
+        reference: result.reference,
+        payUrl: result.payUrl,
+        holdExpiresAt: result.holdExpiresAt,
+        totalPaise: result.totalPaise,
+        advancePaise: result.advancePaise,
+        resumed: result.resumed,
+        paymentInstructions: {
+          onlinePaymentAutoConfirmsOnlyAfterProviderVerification: result.onlinePayment,
+          upiAvailable: result.upiAvailable,
+          upiUtrOrScreenshotNeedsOwnerVerification: result.upiAvailable,
+        },
+      });
     },
   );
 
