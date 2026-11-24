@@ -63,13 +63,12 @@ export function verifySignature(rawBody: Buffer, signatureHeader: string | undef
   if (!signatureHeader) return false;
 
   const parts = signatureHeader.split("=");
-  if (parts.length !== 2 || parts[0] !== "sha256") return false;
+  if (parts.length !== 2 || parts[0] !== "sha256" || !/^[a-f0-9]{64}$/i.test(parts[1]!)) return false;
 
-  const expected = createHmac("sha256", secret).update(rawBody).digest("hex");
-  const received = parts[1]!;
-
-  if (expected.length !== received.length) return false;
-  return timingSafeEqual(Buffer.from(expected, "hex"), Buffer.from(received, "hex"));
+  const expected = createHmac("sha256", secret).update(rawBody).digest();
+  const received = Buffer.from(parts[1]!, "hex");
+  if (received.length !== expected.length) return false;
+  return timingSafeEqual(expected, received);
 }
 
 /* ------------------------------------------------------------------ *
@@ -140,6 +139,8 @@ export function parseWebhookPayload(body: unknown): ParsedInbound {
       if (value.messages) {
         for (const msg of value.messages) {
           if (!msg.id || !msg.from || !msg.timestamp) continue;
+          const timestamp = Number(msg.timestamp);
+          if (!Number.isFinite(timestamp) || timestamp <= 0) continue;
           const phone = toWhatsappNumber(msg.from);
           if (!phone) continue;
 
@@ -161,7 +162,7 @@ export function parseWebhookPayload(body: unknown): ParsedInbound {
             type: msg.type ?? "unknown",
             text,
             payload: msg,
-            timestamp: Number(msg.timestamp),
+            timestamp,
           });
         }
       }
@@ -170,10 +171,12 @@ export function parseWebhookPayload(body: unknown): ParsedInbound {
       if (value.statuses) {
         for (const st of value.statuses) {
           if (!st.id || !st.status || !st.timestamp) continue;
+          const timestamp = Number(st.timestamp);
+          if (!Number.isFinite(timestamp) || timestamp <= 0) continue;
           result.statuses.push({
             waId: st.id,
             status: st.status,
-            timestamp: Number(st.timestamp),
+            timestamp,
             errorCode: st.errors?.[0]?.code?.toString(),
             errorTitle: st.errors?.[0]?.title,
           });
