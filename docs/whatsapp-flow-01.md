@@ -26,6 +26,6 @@ Required existing settings remain `WHATSAPP_APP_SECRET`, `WHATSAPP_PHONE_NUMBER_
 
 - Invalid signatures return 401. Storage failures return 503 so Meta may retry.
 - Meta's inbound `from` number is used for association; no guest-supplied Flow field can choose the enquiry phone.
-- A unique WhatsApp message id makes enquiry creation and owner alerts idempotent. Flow submissions are never sent to Hermes; mixed batches forward only allowlisted non-Flow guest messages.
+- A unique WhatsApp message id makes enquiry creation and owner alerts idempotent. When Hermes is enabled for that sender, only the accepted Flow response is forwarded as its own filtered event so Hermes can request the matching quote; mixed batches never carry unrelated messages along with it.
 - Confirmation is sent only after the enquiry row is committed, and duplicate webhook deliveries do not send another confirmation.
 - The returned quote is advisory. The owner still handles the enquiry and booking through the existing process.
