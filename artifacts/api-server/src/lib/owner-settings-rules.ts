@@ -19,6 +19,7 @@ export type WhatsappMode = "manual" | "api";
 /** Everything the owner can be alerted about. Push wiring arrives in Phase 3. */
 export const OWNER_EVENTS = [
   "booking_hold",
+  "booking_confirmed",
   "payment_submitted",
   "enquiry",
   "ota_booking",
@@ -37,6 +38,7 @@ export type OwnerEvent = (typeof OWNER_EVENTS)[number];
 /** How each alert is named in Settings, and whether it is on until the owner says otherwise. */
 export const OWNER_EVENT_INFO: Record<OwnerEvent, { label: string; description: string; push: boolean; email: boolean }> = {
   booking_hold: { label: "New booking, payment pending", description: "A guest held dates on the website and has the QR to pay.", push: true, email: true },
+  booking_confirmed: { label: "New booking confirmed", description: "A booking has been confirmed after payment or owner action.", push: true, email: false },
   payment_submitted: { label: "Payment to confirm", description: "A guest says they have paid and sent the UPI reference.", push: true, email: true },
   enquiry: { label: "New enquiry", description: "An enquiry was added (you, or WhatsApp).", push: true, email: false },
   ota_booking: { label: "New OTA booking", description: "Booking.com, Airbnb or MakeMyTrip booked or closed nights.", push: true, email: false },
@@ -82,8 +84,8 @@ export const AUTO_SEND_INFO: Record<AutoSendKind, { label: string; description: 
   checkin_welcome: { label: "Check-in welcome", description: "Check-in day at 12 noon, with the Wi-Fi poster PDF (Wi-Fi QR code, contact numbers) and the house rules. Waits for ID verification." },
   checkout_today: { label: "Checkout reminder", description: "On check-out day at 10 am: call the caretaker so the villa is checked and the security deposit refunded smoothly." },
   owner_new_booking: {
-    label: "New booking alert to you (WhatsApp)",
-    description: "Every new booking from any channel, to your own WhatsApp number, at any hour. Needs the rk_owner_new_booking template approved by Meta.",
+    label: "New booking alert to you (Telegram)",
+    description: "Every new booking from any channel, sent to your private owner-only Telegram bot chat. Guests and the caretaker do not receive this alert.",
   },
   verification_reminder: {
     label: "ID verification reminder",
