@@ -75,6 +75,16 @@ describe("verifySignature", () => {
       setSecret(origSecret);
     }
   });
+
+  it("rejects a malformed hexadecimal signature without throwing", () => {
+    setSecret(SECRET);
+    try {
+      const body = Buffer.from('{"entry":[]}');
+      assert.equal(verifySignature(body, "sha256=" + "z".repeat(64)), false);
+    } finally {
+      setSecret(origSecret);
+    }
+  });
 });
 
 /* ------------------------------------------------------------------ *
