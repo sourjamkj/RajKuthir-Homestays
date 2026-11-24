@@ -46,7 +46,16 @@ Deny rules (`approvals.deny`) are glob matches on commands, so they're a second 
 | `GH_TOKEN` | the fine-grained token (without it Ryan only watches and reports) | **yes, owner enters** |
 | `RYAN_TOKEN` | a long random string (32+ chars) | **yes, owner enters** |
 
-On the **api-server**: `RYAN_TOKEN` (the same value). That switches on `/api/ops/digest`.
+On the **api-server**, add Railway variable references to the three existing variables on Ryan's service (use Railway's reference picker so the service name is exact):
+- `TELEGRAM_BOT_TOKEN` → Ryan's `TELEGRAM_BOT_TOKEN`
+- `TELEGRAM_ALLOWED_USERS` → Ryan's `TELEGRAM_ALLOWED_USERS`
+- `TELEGRAM_HOME_CHANNEL` → Ryan's `TELEGRAM_HOME_CHANNEL`
+
+The API uses this same bot only for outbound `sendMessage` alerts to the allow-listed positive numeric owner ID. It does not poll Telegram updates, create another bot, expose Telegram commands to caretakers or guests, or touch Ryan's incoming update loop. The owner alert outbox retries transient failures. Do not copy the token into source code.
+
+Also on the **api-server**: `RYAN_TOKEN` (the same value). That switches on `/api/ops/digest`.
+
+**Channel boundary:** Telegram is owner-only. WhatsApp is for guests, caretaker and Sobuj Potro Management. The caretaker alert job sends only to the caretaker's WhatsApp number; owner operational alerts are routed to Telegram and the owner app.
 
 5. Message the bot "status". A first-run "digest unreachable" message means the two `RYAN_TOKEN` values differ.
 
