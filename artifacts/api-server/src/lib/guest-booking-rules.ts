@@ -1,13 +1,33 @@
 /**
- * The guest agent must only start a hold for the exact total and advance the
- * guest accepted. A rate change between quote and hold requires a fresh yes.
+ * A guest-agent hold must match every material detail of the quote the guest
+ * accepted. Any date, party, total or advance drift requires a fresh yes.
  */
-export function acceptedQuoteMatches(input: {
-  acceptedTotalPaise: number;
-  acceptedAdvancePaise: number;
-}, current: { totalPaise: number; advancePaise: number }): boolean {
-  return Number.isSafeInteger(input.acceptedTotalPaise)
-    && Number.isSafeInteger(input.acceptedAdvancePaise)
-    && input.acceptedTotalPaise === current.totalPaise
-    && input.acceptedAdvancePaise === current.advancePaise;
+export type AcceptedGuestQuote = {
+  checkIn: string;
+  checkOut: string;
+  adults: number;
+  children: number;
+  pets: number;
+  totalPaise: number;
+  advancePaise: number;
+};
+
+export function acceptedQuoteMatches(
+  accepted: AcceptedGuestQuote,
+  current: AcceptedGuestQuote,
+): boolean {
+  const fields: Array<keyof AcceptedGuestQuote> = [
+    "checkIn",
+    "checkOut",
+    "adults",
+    "children",
+    "pets",
+    "totalPaise",
+    "advancePaise",
+  ];
+  return fields.every((field) =>
+    typeof accepted[field] === "number"
+      ? Number.isSafeInteger(accepted[field]) && accepted[field] === current[field]
+      : accepted[field] === current[field],
+  );
 }
