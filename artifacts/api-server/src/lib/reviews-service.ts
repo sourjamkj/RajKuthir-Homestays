@@ -5,7 +5,6 @@ import {
   bookings,
   db,
   googleReviews,
-  pool,
   type GoogleReview,
 } from "@workspace/db";
 
