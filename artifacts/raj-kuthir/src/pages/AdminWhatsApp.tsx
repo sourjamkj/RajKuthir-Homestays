@@ -5,6 +5,7 @@ import { CheckCircle2, Loader2, XCircle } from 'lucide-react';
 
 import { adminFetch, useAdminSession } from '@/lib/admin-api';
 import { AdminHeader } from '@/components/AdminHeader';
+import { AdminWhatsAppInbox } from '@/components/AdminWhatsAppInbox';
 import { AdminAutoSend } from '@/components/AdminAutoSend';
 import { manualWhatsappLink, type OutboxMessage, type SettingsView, type WhatsappMode } from '@workspace/admin-client';
 
@@ -146,6 +147,8 @@ export default function AdminWhatsApp() {
             ))}
           </div>
         </Section>
+
+        <AdminWhatsAppInbox enabled={signedIn} />
 
         <Section title="Messages" description="Every guest and owner message the site sends, newest first. Failed and waiting messages can be sent from here.">
           <div className="mb-4 flex flex-wrap gap-2" role="tablist">
