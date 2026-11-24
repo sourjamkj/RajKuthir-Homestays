@@ -32,6 +32,7 @@ import {
   type BookPaySettings,
 } from "../lib/book-pay-rules";
 import { startHold, type StartInput } from "../lib/book-pay-start";
+import { acceptedQuoteMatches } from "../lib/guest-booking-rules";
 import {
   findById,
   findByEnquiryId,
@@ -230,6 +231,119 @@ export async function priceCheck(party: Party) {
     onlineBooking: upiDetails() !== null || onlinePaymentMode() !== null,
   };
 }
+
+/**
+ * Start the same Book & Pay hold for the WhatsApp guest agent. Money, nights
+ * and availability are recalculated by this server; a changed quote is never
+ * silently charged. Verified online payment uses the existing auto-confirm
+ * webhook; UPI QR/UTR remains pending until owner verification.
+ */
+export async function startGuestBookingHold(input: {
+  name: string;
+  phone: string;
+  email?: string | null;
+  requests?: string | null;
+  checkIn: string;
+  checkOut: string;
+  adults: number;
+  children: number;
+  pets: number;
+  acceptedTotalPaise: number;
+  acceptedAdvancePaise: number;
+}): Promise<
+  | {
+      ok: true;
+      payUrl: string;
+      reference: string;
+      holdExpiresAt: string;
+      totalPaise: number;
+      advancePaise: number;
+      resumed: boolean;
+      onlinePayment: boolean;
+      upiAvailable: boolean;
+    }
+  | { ok: false; reason: "invalid" | "not_ready" | "rate_limited" | "quote_changed" | "unavailable" | "failed"; message: string; quote?: unknown; nextFree?: unknown }
+> {
+  const name = input.name.trim().slice(0, 120);
+  const phone = normaliseMobile(input.phone);
+  const email = input.email?.trim() || null;
+  const requests = input.requests?.trim().slice(0, 1000) || null;
+  if (name.length < 2 || !phone || (email && !/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(email))) {
+    return { ok: false, reason: "invalid", message: "Please check the guest's name, Indian mobile number and email address." };
+  }
+  if (!upiDetails() && !onlinePaymentMode()) {
+    return { ok: false, reason: "not_ready", message: "Online booking payments are not enabled right now. Please hand this enquiry to the host." };
+  }
+  if (startLimiter(`wa-agent:${phone}`)) {
+    return { ok: false, reason: "rate_limited", message: "Too many booking attempts for this phone number. Please contact the host." };
+  }
+
+  const read = readParty(input);
+  if (!read.ok) return { ok: false, reason: "invalid", message: read.error };
+
+  try {
+    const [plan, settings] = await Promise.all([getRatePlan(), getBookPaySettings()]);
+    const quote = priceParty(plan, read.party, settings);
+    if (!quote.ok) return { ok: false, reason: "unavailable", message: quote.reason };
+    if (!acceptedQuoteMatches(input, quote)) {
+      return {
+        ok: false,
+        reason: "quote_changed",
+        message: "The price or advance changed since the guest accepted the quote. Show the updated quote and ask for acceptance again.",
+        quote: {
+          totalPaise: quote.totalPaise,
+          advancePaise: quote.advancePaise,
+          balancePaise: quote.balancePaise,
+          nights: quote.nights,
+          peak: quote.peak,
+        },
+      };
+    }
+
+    const now = new Date();
+    const result = await startHold(
+      pgStartStore,
+      { ...read.party, name, phone, email, requests },
+      quote,
+      settings,
+      now,
+      todayInIndia(now),
+    );
+    if (!result.ok) {
+      return {
+        ok: false,
+        reason: result.status === 409 ? "unavailable" : "failed",
+        message: result.error,
+        ...(result.status === 409 ? { nextFree: result.nextFree } : {}),
+      };
+    }
+
+    logger.info(
+      { paymentRequestId: result.paymentRequestId, enquiryId: result.enquiryId },
+      result.resumed ? "WhatsApp agent resumed a Book & Pay hold" : "WhatsApp agent started a Book & Pay hold",
+    );
+    if (!result.resumed) void sendSummaryEmails(result.paymentRequestId);
+
+    return {
+      ok: true,
+      payUrl: `${SITE_ORIGIN}/pay#${result.token}`,
+      reference: result.reference,
+      holdExpiresAt: result.holdExpiresAt.toISOString(),
+      totalPaise: result.totalPaise,
+      advancePaise: result.advancePaise,
+      resumed: result.resumed ?? false,
+      onlinePayment: onlinePaymentMode() !== null,
+      upiAvailable: upiDetails() !== null,
+    };
+  } catch (error) {
+    if (isNotMigrated(error)) {
+      return { ok: false, reason: "not_ready", message: "Online booking is not ready yet. Please hand this enquiry to the host." };
+    }
+    logger.error({ err: error }, "WhatsApp agent Book & Pay start failed");
+    return { ok: false, reason: "failed", message: "Could not hold those dates just now. Please ask the guest to try again or speak to the host." };
+  }
+}
+
 
 router.post("/book/quote", async (req, res) => {
   res.setHeader("Cache-Control", "no-store");
